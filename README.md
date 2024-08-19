@@ -10,6 +10,9 @@
 |---------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
 
 
+
+
+
 ---
 
 <img src="https://github.com/anonfaded/FadCam/assets/124708903/d6f99201-65c7-4c93-bf13-d4a0d65172ac" style="width: 100px; height: auto;" >
@@ -46,6 +49,13 @@
     height="70"></a>
 
 <em>(coming soon on f-droid...)</em>
+
+<br>
+
+| ⭐ |<img src="https://github.com/user-attachments/assets/c730eda3-5887-458d-8df1-971a74807b73" style="width: 100px; height: auto;" > | *New app from FadSec-Lab suite:🎉* <br> Also, check out our new Windows app! Visit here: [FadCrypt](https://github.com/anonfaded/FadCrypt)  |
+|--|-------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+
+
 <br>
 </div>
 
@@ -142,6 +152,7 @@ FadCam is developed with the goal of providing a powerful, privacy-focused tool 
 - [en.xiaomitoday.it](https://en.xiaomitoday.it/fadcam-con-questa-app-diventi-un-agente-segreto.html)
 - [alternativeto.net](https://alternativeto.net/software/fadcam/about/)
 - [misa7atech.com](https://www.misa7atech.com/2024/08/BestPhoneApps13Aug24.html)
+- [mounirtech.com](https://www.mounirtech.com/2024/08/Best-new-apps-august-2024.html)
 
 
 
