@@ -25,7 +25,9 @@
 
 [![ko-fi badge](https://img.shields.io/badge/buy_me_a-coffee-red)](https://ko-fi.com/D1D510FNSV)
 
-<img alt="Discord" src="https://img.shields.io/discord/1263384048194027520?style=social&logo=discord&label=Join%20chat&color=red">
+[![Discord](https://img.shields.io/discord/1263384048194027520?label=Join%20Us%20on%20Discord&logo=discord)](https://discord.gg/kvAZvdkuuN )
+
+<!-- <img alt="Discord" src="https://img.shields.io/discord/1263384048194027520?style=social&logo=discord&label=Join%20chat&color=red"> -->
 
 
 
@@ -131,6 +133,7 @@ FadCam is developed with the goal of providing a powerful, privacy-focused tool 
 - [Tech Quirk on YouTube](https://www.youtube.com/shorts/4cQ2RpWHess)
 - [TechyNoob on YouTube](https://youtu.be/ahUmOhOc_cI?si=P5_MK5B7KiJV_2Ip)
 - [Luca Crocco on TikTok](https://www.tiktok.com/@lucacrocco96/video/7400823097613503777)
+- [TipTopTech on YouTube](https://youtu.be/SXHT25dNCrM?si=csEav5ZBYniJWT3J&t=177)
 <!-- - [EI Tech - Emanuele Iafulla on YouTube](https://youtu.be/n8k9J4GnoCY?si=D6RVGSD832jOFhiQ) -->
 
 ### Articles and Listings
