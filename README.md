@@ -13,6 +13,7 @@
 
 
 
+
 ---
 
 <img src="https://github.com/anonfaded/FadCam/assets/124708903/d6f99201-65c7-4c93-bf13-d4a0d65172ac" style="width: 100px; height: auto;" >
@@ -156,6 +157,7 @@ FadCam is developed with the goal of providing a powerful, privacy-focused tool 
 - [alternativeto.net](https://alternativeto.net/software/fadcam/about/)
 - [misa7atech.com](https://www.misa7atech.com/2024/08/BestPhoneApps13Aug24.html)
 - [mounirtech.com](https://www.mounirtech.com/2024/08/Best-new-apps-august-2024.html)
+- [androidtr.es](https://androidtr.es/las-8-mejores-aplicaciones-ocultas-de-codigo-abierto-para-android-y-hacks-secretos-que-te-dejaran-boquiabierto-2/)
 
 
 
