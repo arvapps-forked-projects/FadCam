@@ -158,6 +158,8 @@ FadCam is developed with the goal of providing a powerful, privacy-focused tool 
 - [misa7atech.com](https://www.misa7atech.com/2024/08/BestPhoneApps13Aug24.html)
 - [mounirtech.com](https://www.mounirtech.com/2024/08/Best-new-apps-august-2024.html)
 - [androidtr.es](https://androidtr.es/las-8-mejores-aplicaciones-ocultas-de-codigo-abierto-para-android-y-hacks-secretos-que-te-dejaran-boquiabierto-2/)
+- [gadgetstouse.com](https://gadgetstouse.com/blog/2024/08/22/record-video-with-screen-off-on-android/)
+<!-- - https://www.cityrumors.it/tecnologia/il-trucco-per-fare-video-di-nascosto-con-il-tuo-smartphone-tutti-lo-stanno-provando.html -->
 
 
 
@@ -184,6 +186,10 @@ Or:
     height="47"></a>
 
 <em>(coming soon on f-droid...)</em>
+
+**Downloads logs:**
+- 5k -> 10th Jul 2024 (1st month)
+- 10k -> 21 Aug 2024 (6th week)
 
 ## Features:
 
