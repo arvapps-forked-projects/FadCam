@@ -6,10 +6,17 @@
         <item>@item/quality_sd</item>
     </string-array>
 
+    <string-array name="languages_array">
+        <item>English (English) 🇬🇧</item> <!-- British flag -->
+        <item>Chinese (中文) 🇨🇳</item> <!-- Chinese flag -->
+        <item>Arabic (العربية) 🇸🇦</item> <!-- Saudi Arabian flag -->
+    </string-array>
+
+
     <string-array name="watermark_options">
-        <item>Time with Fadcam</item>
-        <item>Timestamp</item>
-        <item>No Watermark</item>
+        <item>@string/array_watermark_time_fadcam</item>
+        <item>@string/array_watermark_timeonly</item>
+        <item>@string/array_watermark_nomark</item>
     </string-array>
 
     <string-array name="watermark_values">

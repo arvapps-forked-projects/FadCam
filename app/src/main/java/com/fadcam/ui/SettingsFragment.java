@@ -1,17 +1,18 @@
 package com.fadcam.ui;
 
-import com.fadcam.ui.LocationHelper;
-
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,6 +25,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
+import com.fadcam.MainActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
@@ -31,6 +33,8 @@ import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.fadcam.R;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
+
+import java.util.Locale;
 
 public class SettingsFragment extends Fragment {
 
@@ -48,15 +52,21 @@ public class SettingsFragment extends Fragment {
     private static final String QUALITY_FHD = "FHD";
     static final String PREF_LOCATION_DATA = "location_data";
 
+    private static final String PREFS_NAME = "app_prefs";
+    private static final String LANGUAGE_KEY = "language";
+
     private static final int REQUEST_PERMISSIONS = 1;
     private static final String PREF_FIRST_LAUNCH = "first_launch";
+
+    MaterialButtonToggleGroup cameraSelectionToggle;
+    View view;
 
     private void vibrateTouch() {
         // Haptic Feedback
         Vibrator vibrator = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
         if (vibrator != null && vibrator.hasVibrator()) {
             VibrationEffect effect = null;
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK);
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -79,8 +89,29 @@ public class SettingsFragment extends Fragment {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        syncCameraSwitch(view, cameraSelectionToggle);
+    }
+
+    @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_settings, container, false);
+        view = inflater.inflate(R.layout.fragment_settings, container, false);
+
+
+        // Initialize shared preferences
+        sharedPreferences = requireActivity().getPreferences(Context.MODE_PRIVATE);
+
+        // Setup  language selection spinner items with array resource
+        Spinner languageSpinner = view.findViewById(R.id.language_spinner);
+        ArrayAdapter<CharSequence> languageAdapter  = ArrayAdapter.createFromResource(
+                getContext(), R.array.languages_array, android.R.layout.simple_spinner_item);
+        languageAdapter .setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        languageSpinner.setAdapter(languageAdapter );
+
+
+
+
 
         sharedPreferences = requireActivity().getPreferences(Context.MODE_PRIVATE);
 
@@ -89,7 +120,7 @@ public class SettingsFragment extends Fragment {
         MaterialButton readmeButton = view.findViewById(R.id.readme_button);
         readmeButton.setOnClickListener(v -> showReadmeDialog());
 
-        MaterialButtonToggleGroup cameraSelectionToggle = view.findViewById(R.id.camera_selection_toggle);
+        cameraSelectionToggle = view.findViewById(R.id.camera_selection_toggle);
         // Setup spinner items with array resource
         Spinner qualitySpinner = view.findViewById(R.id.quality_spinner);
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
@@ -106,6 +137,9 @@ public class SettingsFragment extends Fragment {
         // Setup watermark option spinner
         Spinner watermarkSpinner = view.findViewById(R.id.watermark_spinner);
         setupWatermarkSpinner(view, watermarkSpinner);
+
+        // Set up spinner based on saved language preference
+        setupLanguageSpinner(languageSpinner);
 
 //        // Set up location toggle group
 //        MaterialButtonToggleGroup locationToggleGroup = view.findViewById(R.id.location_toggle_group);
@@ -150,8 +184,8 @@ public class SettingsFragment extends Fragment {
 
     private void showLocationPermissionDialog(MaterialSwitch locationSwitch) {
         new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Location Permission")
-                .setMessage("This app needs location permission to add location data to videos. Please grant the permission.")
+                .setTitle(getString(R.string.location_permission_title)) // Use string resource for title
+                .setMessage(getString(R.string.location_permission_description))
                 .setPositiveButton("Grant", (dialog, which) -> requestLocationPermission())
                 .setNegativeButton("Cancel", (dialog, which) -> {
                     locationSwitch.setChecked(false); // Disable the switch if the user cancels
@@ -211,11 +245,30 @@ public class SettingsFragment extends Fragment {
             }
         }
     }
+    //To sync with the camera switch button on main page...
+    private void syncCameraSwitch(View view, MaterialButtonToggleGroup cameraSelectionToggle){
 
-
-
-
-
+        MaterialButton backCameraButton = view.findViewById(R.id.button_back_camera);
+        MaterialButton frontCameraButton = view.findViewById(R.id.button_front_camera);
+        String currentCameraSelection = sharedPreferences.getString(PREF_CAMERA_SELECTION, CAMERA_BACK);
+        if (currentCameraSelection.equals(CAMERA_FRONT)) {
+            cameraSelectionToggle.check(R.id.button_front_camera);
+            updateButtonAppearance(frontCameraButton, true);
+            updateButtonAppearance(backCameraButton, false);
+        } else {
+            cameraSelectionToggle.check(R.id.button_back_camera);
+            updateButtonAppearance(backCameraButton, true);
+            updateButtonAppearance(frontCameraButton, false);
+        }
+        cameraSelectionToggle.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (isChecked) {
+                String selectedCamera = (checkedId == R.id.button_front_camera) ? CAMERA_FRONT : CAMERA_BACK;
+                sharedPreferences.edit().putString(PREF_CAMERA_SELECTION, selectedCamera).apply();
+                updateButtonAppearance(backCameraButton, checkedId == R.id.button_back_camera);
+                updateButtonAppearance(frontCameraButton, checkedId == R.id.button_front_camera);
+            }
+        });
+    }
 
 
 
@@ -351,5 +404,74 @@ public class SettingsFragment extends Fragment {
         startActivity(intent);
     }
 
+
+    private void saveLanguagePreference(String languageCode) {
+        SharedPreferences prefs = requireActivity().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(LANGUAGE_KEY, languageCode);
+        editor.apply();
+        Log.d("SettingsFragment", "Language preference saved: " + languageCode);
+    }
+
+    private void setupLanguageSpinner(Spinner languageSpinner) {
+        String savedLanguageCode = sharedPreferences.getString(LANGUAGE_KEY, Locale.getDefault().getLanguage());
+        int selectedIndex = getLanguageIndex(savedLanguageCode);
+        languageSpinner.setSelection(selectedIndex);
+
+        languageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String languageCode = getLanguageCode(position);
+                if (!languageCode.equals(savedLanguageCode)) {
+                    saveLanguagePreference(languageCode);
+                    ((MainActivity) requireActivity()).applyLanguage(languageCode);  // This will recreate the activity if the language is different
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // Do nothing
+            }
+        });
+    }
+
+
+
+
+
+
+    private int getLanguageIndex(String languageCode) {
+        switch (languageCode) {
+            case "zh":
+                return 1;
+            case "ar":
+                return 2;
+            default:
+                return 0; // Default to English
+        }
+    }
+
+    private String getLanguageCode(int position) {
+        switch (position) {
+            case 1:
+                return "zh";
+            case 2:
+                return "ar";
+            default:
+                return "en";
+        }
+    }
+
+    private void applyLanguage(String languageCode) {
+        Log.d("SettingsFragment", "Applying new language: " + languageCode);
+        Locale locale = new Locale(languageCode);
+        Locale.setDefault(locale);
+        Configuration config = new Configuration();
+        config.setLocale(locale);
+        getActivity().getResources().updateConfiguration(config, getActivity().getResources().getDisplayMetrics());
+
+        // Restart the activity or fragment to apply changes
+        requireActivity().recreate();
+    }
 
 }

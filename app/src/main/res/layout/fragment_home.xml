@@ -67,9 +67,10 @@
                     android:id="@+id/tvStorageInfo"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="-70dp"
+                    android:layout_marginHorizontal="0dp"
                     android:layout_gravity="center"
                     android:layout_marginTop="8dp"
+                    android:padding="8dp"
                     android:text="Storage: 0 GB / 0 GB" />
 
             </LinearLayout>
@@ -95,7 +96,7 @@
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="89dp"
+                    android:layout_height="99dp"
                     android:orientation="vertical"
                     android:padding="6dp">
 
@@ -132,9 +133,9 @@
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="60dp"
+                    android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:padding="5dp">
+                    android:padding="8dp">
 
                     <ImageView
                         android:layout_width="28dp"
@@ -166,9 +167,9 @@
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="54dp"
+                    android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:padding="5dp">
+                    android:padding="6dp">
 
                     <ImageView
                         android:layout_width="28dp"
@@ -245,7 +246,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="Preview Area"
+                android:text="@string/ui_preview_area"
                 android:textColor="@color/material_on_surface_stroke"
                 android:textSize="24sp" />
 
@@ -267,18 +268,31 @@
             android:id="@+id/buttonStartStop"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Start"
+            android:layout_marginEnd="8dp"
             android:drawableLeft="@drawable/ic_play"
-            android:layout_marginEnd="8dp"/>
+            android:text="@string/button_start" />
 
         <Button
             android:id="@+id/buttonPauseResume"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Pause"
-            android:drawableLeft="@drawable/ic_pause"
             android:layout_marginStart="8dp"
+            android:drawableLeft="@drawable/ic_pause"
+            android:enabled="false"
+            android:text="@string/button_pause" />
             android:enabled="false"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonCamSwitch"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            app:icon="@drawable/cam_switch"
+            app:iconSize="24dp"
+            android:paddingLeft="12dp"
+            android:paddingRight="0dp"
+            app:cornerRadius="15dp" />
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
