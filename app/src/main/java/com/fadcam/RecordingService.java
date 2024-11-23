@@ -11,16 +11,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CameraCharacteristics;
 import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.util.Range;
 import android.view.Surface;
@@ -73,6 +76,10 @@ public class RecordingService extends Service {
     private File tempFileBeingProcessed;
 
     private RecordingState recordingState = RecordingState.NONE;
+
+    private CameraManager torchManager;
+    private String torchCameraId;
+    private boolean isTorchOn = false;
 
     public boolean isRecording() {
         return recordingState.equals(RecordingState.IN_PROGRESS);
@@ -131,6 +138,30 @@ public class RecordingService extends Service {
 
                         if (!isWorkingInProgress()) {
                             stopSelf();
+                        }
+                        break;
+                    case Constants.INTENT_ACTION_TOGGLE_TORCH:
+                        toggleTorch();
+                        return START_STICKY;
+                    case Constants.INTENT_ACTION_TORCH_RECORDING:
+                        if (cameraDevice != null) {
+                            try {
+                                isTorchOn = !isTorchOn;
+                                captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
+                                    isTorchOn ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
+                                captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, null);
+                                
+                                // Broadcast state change
+                                Intent torchIntent = new Intent(Constants.BROADCAST_TORCH_STATE_CHANGED);
+                                torchIntent.putExtra("torch_state", isTorchOn);
+                                sendBroadcast(torchIntent);
+                                
+                                Log.d(TAG, "Recording camera torch turned " + (isTorchOn ? "ON" : "OFF"));
+                            } catch (CameraAccessException e) {
+                                Log.e(TAG, "Error toggling torch during recording: " + e.getMessage());
+                            }
+                        } else {
+                            Log.e(TAG, "Cannot toggle torch - camera not initialized");
                         }
                         break;
                 }
@@ -801,5 +832,51 @@ public class RecordingService extends Service {
 
     private int getCameraFrameRate() {
         return sharedPreferences.getInt(Constants.PREF_VIDEO_FRAME_RATE, Constants.DEFAULT_VIDEO_FRAME_RATE);
+    }
+
+    private void toggleTorch() {
+        try {
+            if (torchManager == null) {
+                torchManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+            }
+
+            // Get selected torch source from preferences
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            String selectedTorchSource = prefs.getString("selected_torch_source", null);
+            
+            // If no source selected, find first available torch
+            if (selectedTorchSource == null) {
+                for (String id : torchManager.getCameraIdList()) {
+                    if (torchManager.getCameraCharacteristics(id)
+                            .get(CameraCharacteristics.FLASH_INFO_AVAILABLE)) {
+                        selectedTorchSource = id;
+                        break;
+                    }
+                }
+            }
+            
+            if (selectedTorchSource != null) {
+                isTorchOn = !isTorchOn;
+                if (isTorchOn) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        int intensity = prefs.getInt("torch_intensity", 1);
+                        try {
+                            torchManager.turnOnTorchWithStrengthLevel(selectedTorchSource, intensity);
+                        } catch (Exception e) {
+                            // Fallback if intensity control fails
+                            torchManager.setTorchMode(selectedTorchSource, true);
+                        }
+                    } else {
+                        torchManager.setTorchMode(selectedTorchSource, true);
+                    }
+                } else {
+                    torchManager.setTorchMode(selectedTorchSource, false);
+                }
+                
+                Log.d(TAG, "Recording torch turned " + (isTorchOn ? "ON" : "OFF") + " using source: " + selectedTorchSource);
+            }
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Error accessing torch during recording: " + e.getMessage());
+        }
     }
 }

@@ -206,4 +206,12 @@
     <string name="notification_video_recording">Video recording</string>
     <string name="notification_video_recording_progress_description">Recording is in progress</string>
     <string name="notification_video_recording_paused_description">Recording is paused</string>
+    <string name="torch_options_title">Torch Options</string>
+    <string name="torch_select_source">Select Torch Source:</string>
+    <string name="torch_back">Back Torch</string>
+    <string name="torch_front">Front Torch</string>
+    <string name="torch_apply">Apply</string>
+    <string name="torch_cancel">Cancel</string>
+    <string name="torch_recording_note">Cannot change torch while recording</string>
+    <string name="torch_both">Both Torches</string>
 </resources>

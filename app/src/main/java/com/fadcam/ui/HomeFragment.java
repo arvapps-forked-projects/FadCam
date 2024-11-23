@@ -6,6 +6,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -13,6 +14,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.SurfaceTexture;
 import android.media.CamcorderProfile;
@@ -27,6 +29,7 @@ import android.os.StatFs;
 import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.text.Html;
 import android.text.Spanned;
@@ -38,6 +41,9 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -52,6 +58,8 @@ import com.fadcam.Constants;
 import com.fadcam.R;
 import com.fadcam.RecordingService;
 import com.fadcam.RecordingState;
+import com.fadcam.services.TorchService;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
@@ -70,6 +78,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraAccessException;
 
 public class HomeFragment extends Fragment {
 
@@ -131,6 +143,14 @@ public class HomeFragment extends Fragment {
     private BroadcastReceiver broadcastOnRecordingPaused;
     private BroadcastReceiver broadcastOnRecordingStopped;
     private BroadcastReceiver broadcastOnRecordingStateCallback;
+
+    private MaterialButton buttonTorchSwitch;
+
+    private CameraManager cameraManager;
+    private String cameraId;
+    private boolean isTorchOn = false;
+
+    private BroadcastReceiver torchReceiver;
 
     // important
     private void requestEssentialPermissions() {
@@ -568,6 +588,26 @@ public class HomeFragment extends Fragment {
         fetchRecordingState();
 
         updateStats();
+
+        // Initialize the receiver if null
+        if (torchReceiver == null) {
+            torchReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    // Your existing receiver code
+                }
+            };
+        }
+        
+        // Register receiver with version check
+        IntentFilter filter = new IntentFilter(Constants.BROADCAST_TORCH_STATE_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(torchReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                requireContext().registerReceiver(torchReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            }
+        }
     }
 
     @Override
@@ -575,6 +615,15 @@ public class HomeFragment extends Fragment {
         super.onPause();
         //locationHelper.stopLocationUpdates();
         Log.d(TAG, "HomeFragment paused.");
+
+        // Only unregister if receiver exists
+        if (torchReceiver != null) {
+            try {
+                requireContext().unregisterReceiver(torchReceiver);
+            } catch (IllegalArgumentException e) {
+                Log.e(TAG, "Receiver was not registered: " + e.getMessage());
+            }
+        }
     }
 
 //    @Override
@@ -698,6 +747,10 @@ public class HomeFragment extends Fragment {
         setupButtonListeners();
         setupLongPressListener();
         updatePreviewVisibility();
+
+        buttonTorchSwitch = view.findViewById(R.id.buttonTorchSwitch);
+        initializeTorch();
+        setupTorchButton();
     }
 
     private void setupTextureView(@NonNull View view) {
@@ -1308,5 +1361,221 @@ public class HomeFragment extends Fragment {
 
     public boolean isPaused() {
         return recordingState.equals(RecordingState.PAUSED);
+    }
+
+    private void initializeTorch() {
+        cameraManager = (CameraManager) requireContext().getSystemService(Context.CAMERA_SERVICE);
+        try {
+            cameraId = getCameraWithFlash();
+            if (cameraId == null) {
+                Log.d(TAG, "No camera with flash found");
+                buttonTorchSwitch.setEnabled(false);
+                buttonTorchSwitch.setVisibility(View.GONE);
+            } else {
+                Log.d(TAG, "Flash available on camera: " + cameraId);
+                buttonTorchSwitch.setEnabled(true);
+                buttonTorchSwitch.setVisibility(View.VISIBLE);
+            }
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Camera access error: " + e.getMessage());
+            e.printStackTrace();
+            buttonTorchSwitch.setEnabled(false);
+            buttonTorchSwitch.setVisibility(View.GONE);
+        }
+    }
+
+    private void setupTorchButton() {
+        buttonTorchSwitch = requireView().findViewById(R.id.buttonTorchSwitch);
+        
+        // Set default torch source if none selected
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        if (prefs.getString("selected_torch_source", null) == null) {
+            try {
+                String defaultTorchId = getCameraWithFlash();
+                if (defaultTorchId != null) {
+                    prefs.edit()
+                        .putString("selected_torch_source", defaultTorchId)
+                        .putBoolean("both_torches_enabled", false)
+                        .apply();
+                    Log.d(TAG, "Set default torch source: " + defaultTorchId);
+                }
+            } catch (CameraAccessException e) {
+                Log.e(TAG, "Error setting default torch source: " + e.getMessage());
+            }
+        }
+
+        // Setup click listener for torch toggle
+        buttonTorchSwitch.setOnClickListener(v -> {
+            Intent intent = new Intent(requireContext(), TorchService.class);
+            intent.setAction(Constants.INTENT_ACTION_TOGGLE_TORCH);
+            requireContext().startService(intent);
+            vibrateTouch();
+        });
+
+        // Setup long press listener for torch options
+        buttonTorchSwitch.setOnLongClickListener(v -> {
+            showTorchOptionsDialog();
+            vibrateTouch();
+            return true;
+        });
+
+        // Register torch state receiver
+        if (torchReceiver == null) {
+            torchReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    boolean torchState = intent.getBooleanExtra("torch_state", false);
+                    buttonTorchSwitch.setIconResource(torchState ? 
+                        R.drawable.ic_flashlight_on : R.drawable.ic_flashlight_off);
+                    
+                    // Update icon and background tints
+                    buttonTorchSwitch.setIconTint(ColorStateList.valueOf(
+                        ContextCompat.getColor(requireContext(), 
+                            torchState ? R.color.torch_on : R.color.torch_off)
+                    ));
+                    buttonTorchSwitch.setBackgroundTintList(ColorStateList.valueOf(
+                        ContextCompat.getColor(requireContext(), 
+                            android.R.color.transparent)
+                    ));
+                    buttonTorchSwitch.setAlpha(torchState ? 1.0f : 0.7f);
+                }
+            };
+        }
+
+        // Register the receiver with proper checks
+        IntentFilter filter = new IntentFilter(Constants.BROADCAST_TORCH_STATE_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(torchReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                requireContext().registerReceiver(torchReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            }
+        }
+    }
+    
+    private void showTorchOptionsDialog() {
+        // Check if recording is in progress first
+        if (isRecordingInProgress()) {
+            Toast.makeText(requireContext(), R.string.torch_recording_note, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        CameraManager cameraManager = (CameraManager) requireContext().getSystemService(Context.CAMERA_SERVICE);
+        try {
+            List<String> torchSources = new ArrayList<>();
+            boolean hasMultipleTorches = false;
+            boolean hasBackTorch = false;
+            boolean hasFrontTorch = false;
+
+            // Check available torch sources
+            for (String cameraId : cameraManager.getCameraIdList()) {
+                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                int facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                
+                if (hasFlash != null && hasFlash) {
+                    torchSources.add(cameraId);
+                    if (facing == CameraCharacteristics.LENS_FACING_BACK) {
+                        hasBackTorch = true;
+                    } else if (facing == CameraCharacteristics.LENS_FACING_FRONT) {
+                        hasFrontTorch = true;
+                    }
+                }
+            }
+
+            hasMultipleTorches = hasBackTorch && hasFrontTorch;
+            Log.d(TAG, "Torch sources found: Back=" + hasBackTorch + ", Front=" + hasFrontTorch);
+
+            View dialogView = getLayoutInflater().inflate(R.layout.dialog_torch_options, null);
+            RadioGroup torchGroup = dialogView.findViewById(R.id.torch_group);
+
+            // Setup torch source options
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
+            String currentTorchSource = prefs.getString("selected_torch_source", null);
+            boolean currentBothTorches = prefs.getBoolean("both_torches_enabled", false);
+
+            // Add individual torch options
+            for (String sourceId : torchSources) {
+                RadioButton rb = new RadioButton(requireContext());
+                CameraCharacteristics chars = cameraManager.getCameraCharacteristics(sourceId);
+                int facing = chars.get(CameraCharacteristics.LENS_FACING);
+                rb.setText(facing == CameraCharacteristics.LENS_FACING_BACK ? 
+                    getString(R.string.torch_back) : getString(R.string.torch_front));
+                rb.setTag(sourceId);
+                torchGroup.addView(rb);
+                
+                if (sourceId.equals(currentTorchSource) && !currentBothTorches) {
+                    rb.setChecked(true);
+                }
+            }
+
+            // Add "Both Torches" option if multiple torches available
+            if (hasMultipleTorches) {
+                RadioButton bothTorches = new RadioButton(requireContext());
+                bothTorches.setText(R.string.torch_both);
+                bothTorches.setTag("both");
+                torchGroup.addView(bothTorches);
+                
+                if (currentBothTorches) {
+                    bothTorches.setChecked(true);
+                }
+                Log.d(TAG, "Added 'Both Torches' option");
+            }
+
+            // Select first source if none selected
+            if (currentTorchSource == null && !currentBothTorches && torchGroup.getChildCount() > 0) {
+                ((RadioButton) torchGroup.getChildAt(0)).setChecked(true);
+            }
+
+            new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.torch_options_title)
+                .setView(dialogView)
+                .setPositiveButton(R.string.torch_apply, (dialog, which) -> {
+                    RadioButton selectedSource = dialogView.findViewById(torchGroup.getCheckedRadioButtonId());
+                    if (selectedSource != null) {
+                        String selectedSourceId = (String) selectedSource.getTag();
+                        boolean isBothSelected = "both".equals(selectedSourceId);
+                        
+                        // Save settings
+                        SharedPreferences.Editor editor = prefs.edit();
+                        editor.putBoolean("both_torches_enabled", isBothSelected);
+                        if (!isBothSelected) {
+                            editor.putString("selected_torch_source", selectedSourceId);
+                        }
+                        editor.apply();
+                        
+                        Log.d(TAG, "Saved torch settings - Both: " + isBothSelected + 
+                              ", Source: " + selectedSourceId);
+                    }
+                })
+                .setNegativeButton(R.string.torch_cancel, null)
+                .show();
+
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Error accessing camera: " + e.getMessage());
+        }
+    }
+
+    private String getCameraWithFlash() throws CameraAccessException {
+        for (String id : cameraManager.getCameraIdList()) {
+            CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+            Boolean flashAvailable = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+            if (flashAvailable != null && flashAvailable) {
+                Log.d(TAG, "Found camera with flash: " + id);
+                return id;
+            }
+        }
+        Log.d(TAG, "No camera with flash found");
+        return null;
+    }
+
+    private boolean isRecordingInProgress() {
+        ActivityManager manager = (ActivityManager) requireContext().getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (RecordingService.class.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
