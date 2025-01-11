@@ -29,11 +29,26 @@ public class Log {
 
     private static Uri fileUri;
 
+    private static boolean isDebugEnabled = false;
+
     public static void init(Context context)
     {
         Log.context = context;
+        
+        // Check SharedPreferences for debug setting
+        SharedPreferencesManager sharedPreferencesManager = SharedPreferencesManager.getInstance(context);
+        isDebugEnabled = sharedPreferencesManager.isDebugLoggingEnabled();
 
-        createHtmlFile(context, "debug.html");
+        if (isDebugEnabled) {
+            createHtmlFile(context, "debug.html");
+        }
+    }
+
+    public static void setDebugEnabled(boolean enabled) {
+        isDebugEnabled = enabled;
+        if (enabled) {
+            createHtmlFile(context, "debug.html");
+        }
     }
 
     private static String getCurrentTimeStamp() {
@@ -42,16 +57,22 @@ public class Log {
     }
 
     public static void d(String tag, String message) {
+        if (!isDebugEnabled) return;
+        
         String logMessage = "<font color=\"34495e\">" + getCurrentTimeStamp() + " INFO: [" + tag + "]" + message + "</font>";
         appendHtmlToFile(logMessage);
     }
 
     public static void w(String tag, String message) {
+        if (!isDebugEnabled) return;
+        
         String logMessage = "<font color=\"f1c40f\">" + getCurrentTimeStamp() + " WARNING: [" + tag + "]" + message + "</font>";
         appendHtmlToFile(logMessage);
     }
 
     public static void e(String tag, Object... objects) {
+        if (!isDebugEnabled) return;
+        
         StringBuilder message = new StringBuilder();
         for(Object object: objects)
         {
@@ -75,21 +96,24 @@ public class Log {
 
     public static Uri createHtmlFile(Context context, String fileName) {
         try {
-            Uri existingFileUri = checkIfFileExists(context, fileName);
+            // Use a static filename for debug log
+            String debugFileName = "FADCAM_debug.html";
+
+            Uri existingFileUri = checkIfFileExists(context, debugFileName);
 
             if (existingFileUri != null) {
                 return existingFileUri;
             }
 
             ContentValues contentValues = new ContentValues();
-            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, debugFileName);
             contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "text/html");
             contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/FadCam");
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 fileUri = context.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues);
             } else {
-                fileUri = Uri.parse("file://" + context.getExternalFilesDir(null).getPath() + "/Download/" + fileName);
+                fileUri = Uri.parse("file://" + context.getExternalFilesDir(null).getPath() + "/Download/" + debugFileName);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -99,6 +123,8 @@ public class Log {
     }
 
     public static void appendHtmlToFile(String htmlContent) {
+        if (!isDebugEnabled) return;
+        
         OutputStream outputStream = null;
 
         try {
