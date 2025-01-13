@@ -184,8 +184,8 @@
     <string name="array_watermark_time_fadcam">Time with Fadcam</string>
     <string name="array_watermark_timeonly">Timestamp</string>
     <string name="array_watermark_nomark">No Watermark</string>
-    <string name="recent_features">• New UI design\n• Videos now save internally in the app\n• Option to save videos to gallery\n• Customizable watermarking\n• ExoPlayer integration for better playback\n• Location data in watermarks\n• Dynamic watermark options\n• Long press feedback with animations\n• Date and Time widget customization</string>
-    <string name="upcoming_features">• Auto-scheduled recordings \n• Auto-uploading to Google Drive \n• Custom app icons \n• App lock for enhanced privacy \n• In-app video editor for simple tasks like trimming \n• And many more exciting features!</string>
+    <string name="recent_features" translatable="false">• Added 3 new shortcuts: Start, Stop Recording, and Torch Toggle (long press app icon to access)\n• Thumbnails now show hours, minutes, and seconds\n• Torch works seamlessly during recording\n• Enhanced video management with sorting options\n• Refreshed flashlight shortcut icon\n• AMOLED black theme for better visuals\n• Improved renaming functionality and crash fixes</string>
+    <string name="upcoming_features" translatable="false">• Auto-scheduled recordings \n• Auto-uploading to Google Drive \n• Custom app icons \n• App lock for enhanced privacy \n• In-app video editor for simple tasks like trimming \n• And many more exciting features!</string>
     <string name="toast_video_not_found">Error: Video not found</string>
     <string name="toast_video_saved">Video saved to FadCam folder in Downloads</string>
     <string name="toast_video_save_fail">Failed to save video</string>
@@ -248,6 +248,9 @@
     <string name="records_options_title">Records Options</string>
     <string name="setting_theme_title">App Theme</string>
     <string name="note_theme">Choose your preferred app theme</string>
+<!-- Below are the start and stop shortcut texts for the shortcuts that appears when we long press on app icon   -->
+    <string name="start_recording">Start</string>
+    <string name="stop_recording">Stop</string>
     <string-array name="theme_options">
         <item>Dark Mode</item>
         <item>AMOLED Black</item>

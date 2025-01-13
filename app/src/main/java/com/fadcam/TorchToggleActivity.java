@@ -4,10 +4,17 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.WindowManager;
+import android.widget.Toast;
 
+import com.fadcam.services.RecordingService;
 import com.fadcam.services.TorchService;
+import com.fadcam.SharedPreferencesManager;
+
+import java.util.Random;
 
 public class TorchToggleActivity extends Activity {
     private static final String TAG = "TorchToggleActivity";
@@ -15,62 +22,54 @@ public class TorchToggleActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // Prevent the activity from being visible or interactive
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-
-        // Prevent app from coming to foreground
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        
-        Log.d(TAG, "TorchToggleActivity onCreate called");
-        Log.d(TAG, "Intent: " + getIntent());
 
         try {
-            // Create an intent for TorchService
-            Intent torchIntent = new Intent(this, TorchService.class);
-            torchIntent.setAction(Constants.INTENT_ACTION_TOGGLE_TORCH);
+            SharedPreferencesManager sharedPreferencesManager = SharedPreferencesManager.getInstance(this);
+            Intent intent;
 
-            // Log service start attempt
-            Log.d(TAG, "Attempting to start TorchService");
-            
-            // Start service based on Android version
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Log.d(TAG, "Starting foreground service");
-                startForegroundService(torchIntent);
+            // If recording is in progress, use RecordingService
+            if (sharedPreferencesManager.isRecordingInProgress()) {
+                intent = new Intent(this, RecordingService.class);
+                intent.setAction(Constants.INTENT_ACTION_TOGGLE_RECORDING_TORCH);
             } else {
-                Log.d(TAG, "Starting service");
-                startService(torchIntent);
+                // If not recording, use TorchService
+                intent = new Intent(this, TorchService.class);
+                intent.setAction(Constants.INTENT_ACTION_TOGGLE_TORCH);
             }
 
-            // Log success
-            Log.d(TAG, "TorchService started successfully");
-        } catch (Exception e) {
-            // Log any errors
-            Log.e(TAG, "Error starting TorchService", e);
-        }
+            // Start the appropriate service
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
 
-        // Always finish the activity immediately
-        finish();
-        
-        // Prevent any animation
-        overridePendingTransition(0, 0);
+        } catch (Exception e) {
+            Log.e(TAG, "Error toggling torch", e);
+            showTorchErrorToast();
+        } finally {
+            moveTaskToBack(true);
+            finish();
+        }
+    }
+
+    private void showTorchErrorToast() {
+        String[] errorMessages = getResources().getStringArray(R.array.torch_error_messages);
+        String humorousMessage = errorMessages[new Random().nextInt(errorMessages.length)];
+        new Handler(Looper.getMainLooper()).post(() -> 
+            Toast.makeText(this, humorousMessage, Toast.LENGTH_LONG).show()
+        );
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        // Ensure the activity is completely hidden
         finish();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        // Prevent app from coming to foreground
         moveTaskToBack(true);
     }
 }

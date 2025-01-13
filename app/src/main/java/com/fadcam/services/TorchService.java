@@ -18,19 +18,17 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
-import android.preference.PreferenceManager;
 import android.util.Log;
-import android.widget.Toast;
 
 import androidx.core.app.NotificationCompat;
 
 import com.fadcam.Constants;
 import com.fadcam.R;
+import com.fadcam.SharedPreferencesManager;
 import com.fadcam.ui.HomeFragment;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.Random;
 
 public class TorchService extends Service {
     private static final String TAG = "TorchService";
@@ -51,6 +49,57 @@ public class TorchService extends Service {
         homeFragmentRef = new WeakReference<>(fragment);
     }
 
+    // In TorchService.java
+    private void toggleTorchInternal() {
+        try {
+            SharedPreferencesManager sharedPreferencesManager = SharedPreferencesManager.getInstance(this);
+            
+            // If recording is in progress, delegate to RecordingService
+            if (sharedPreferencesManager.isRecordingInProgress()) {
+                Intent intent = new Intent(this, RecordingService.class);
+                intent.setAction(Constants.INTENT_ACTION_TOGGLE_RECORDING_TORCH);
+                startService(intent);
+                return;
+            }
+
+            // Get the new torch state (opposite of current state)
+            boolean newState = !isTorchOn.get();
+
+            // Check if "both torches" option is enabled
+            boolean bothTorchesEnabled = sharedPreferences.getBoolean(Constants.PREF_BOTH_TORCHES_ENABLED, false);
+
+            if (bothTorchesEnabled) {
+                // Get all camera IDs with flash
+                for (String cameraId : cameraManager.getCameraIdList()) {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                    Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    if (hasFlash != null && hasFlash) {
+                        try {
+                            cameraManager.setTorchMode(cameraId, newState);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error toggling torch for camera " + cameraId + ": " + e.getMessage());
+                        }
+                    }
+                }
+            } else {
+                // Single torch mode - use selected source
+                selectedTorchSource = sharedPreferences.getString(Constants.PREF_SELECTED_TORCH_SOURCE, null);
+                if (selectedTorchSource != null) {
+                    cameraManager.setTorchMode(selectedTorchSource, newState);
+                }
+            }
+
+            // Update state and UI regardless of mode
+            isTorchOn.set(newState);
+            updateUIAndBroadcastState(newState);
+            manageServiceNotification(newState);
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error toggling torch", e);
+        }
+    }
+
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -58,7 +107,7 @@ public class TorchService extends Service {
         // Initialize system services
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        sharedPreferences = android.preference.PreferenceManager.getDefaultSharedPreferences(this);
 
         // Create notification channel for Android Oreo and above
         createNotificationChannel();
@@ -106,29 +155,72 @@ public class TorchService extends Service {
         return START_STICKY;
     }
 
-    private void toggleTorchInternal() {
+    // private void toggleTorchInternal() {
+    //     try {
+    //         // Check if camera is already in use
+    //         if (isCameraInUse()) {
+    //             Log.w(TAG, "Camera is currently in use. Cannot toggle torch.");
+    //             return;
+    //         }
+
+    //         // Toggle torch state atomically
+    //         boolean newState = !isTorchOn.get();
+    //         selectedTorchSource = sharedPreferences.getString(Constants.PREF_SELECTED_TORCH_SOURCE, null);
+
+    //         if (selectedTorchSource != null) {
+    //             // Safely toggle torch
+    //             try {
+    //                 cameraManager.setTorchMode(selectedTorchSource, newState);
+    //                 isTorchOn.set(newState);
+
+    //                 // Update UI and broadcast state
+    //                 updateUIAndBroadcastState(newState);
+
+    //                 // Manage foreground service and notification
+    //                 manageServiceNotification(newState);
+
+    //                 Log.d(TAG, "Torch turned " + (newState ? "ON" : "OFF"));
+    //             } catch (CameraAccessException e) {
+    //                 Log.e(TAG, "Camera access error: Cannot toggle torch", e);
+    //             }
+    //         } else {
+    //             Log.w(TAG, "No torch source selected");
+    //         }
+    //     } catch (Exception e) {
+    //         Log.e(TAG, "Unexpected error in torch toggle", e);
+    //     }
+    // }
+
+    // Check if camera is currently in use
+    private boolean isCameraInUse() {
         try {
-            // Toggle torch state atomically
-            boolean newState = !isTorchOn.get();
-            selectedTorchSource = sharedPreferences.getString(Constants.PREF_SELECTED_TORCH_SOURCE, null);
+            String[] cameraIds = cameraManager.getCameraIdList();
+            for (String cameraId : cameraIds) {
+                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                
+                // Check if the camera has a flash unit
+                Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                if (hasFlash == null || !hasFlash) {
+                    continue; // Skip cameras without flash
+                }
 
-            if (selectedTorchSource != null) {
-                // Safely toggle torch
-                cameraManager.setTorchMode(selectedTorchSource, newState);
-                isTorchOn.set(newState);
+                // Check if the camera is in use by checking its state
+                Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                
+                // Log camera details for debugging
+                Log.d(TAG, "Checking camera: " + cameraId + 
+                      ", Lens Facing: " + (lensFacing != null ? lensFacing : "Unknown") + 
+                      ", Has Flash: " + hasFlash);
 
-                // Update UI and broadcast state
-                updateUIAndBroadcastState(newState);
-
-                // Manage foreground service and notification
-                manageServiceNotification(newState);
-
-                Log.d(TAG, "Torch turned " + (newState ? "ON" : "OFF"));
+                // You might want to add more sophisticated checks based on your app's specific use case
+                // For now, we'll just log the camera details
             }
         } catch (CameraAccessException e) {
-            Log.e(TAG, "Camera access error: " + e.getMessage());
-            showTorchErrorToast(e.getMessage());
+            Log.e(TAG, "Error checking camera availability", e);
         }
+        
+        // If you want to prevent torch toggle in certain scenarios, modify the return logic
+        return false;
     }
 
     private void updateUIAndBroadcastState(boolean state) {
@@ -179,17 +271,6 @@ public class TorchService extends Service {
             // Stop foreground service
             stopForeground(true);
         }
-    }
-
-    private void showTorchErrorToast(String errorMessage) {
-        // Use string resources for torch error messages
-        String[] errorMessages = getResources().getStringArray(R.array.torch_error_messages);
-        String humorousMessage = errorMessages[new Random().nextInt(errorMessages.length)];
-        
-        Handler handler = new Handler(Looper.getMainLooper());
-        handler.post(() -> {
-            Toast.makeText(this, humorousMessage, Toast.LENGTH_LONG).show();
-        });
     }
 
     @Override
