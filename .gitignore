@@ -41,3 +41,4 @@ app/**/build/
 # Keystore files
 *.jks
 *.keystore
+repomix-output.md
