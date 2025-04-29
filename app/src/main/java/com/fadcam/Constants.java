@@ -57,5 +57,24 @@ public abstract class Constants {
     public static final boolean DEFAULT_PREVIEW_ENABLED = true;
 
     public static final String INTENT_ACTION_TOGGLE_RECORDING_TORCH = "com.fadcam.TOGGLE_RECORDING_TORCH";
+    // Broadcast action sent by RecordingService when video processing is done
+    public static final String ACTION_RECORDING_COMPLETE = "com.fadcam.RECORDING_COMPLETE";
+    // Extra key for the URI of the final or temporary file (as String)
+    public static final String EXTRA_RECORDING_URI_STRING = "com.fadcam.EXTRA_RECORDING_URI_STRING";
+    // Extra key indicating if processing was successful
+    public static final String EXTRA_RECORDING_SUCCESS = "com.fadcam.EXTRA_RECORDING_SUCCESS";
+
+    // Broadcast action sent by SettingsFragment when storage location pref changes
+    public static final String ACTION_STORAGE_LOCATION_CHANGED = "com.fadcam.STORAGE_LOCATION_CHANGED";
+
+    // Broadcast Actions for Video Processing State
+    public static final String ACTION_PROCESSING_STARTED = "com.fadcam.PROCESSING_STARTED";
+    public static final String ACTION_PROCESSING_FINISHED = "com.fadcam.PROCESSING_FINISHED"; // Can replace COMPLETE if always sent AFTER processing
+
+    // Extra key for the URI of the file being processed (usually the temp file)
+    public static final String EXTRA_PROCESSING_URI_STRING = "com.fadcam.EXTRA_PROCESSING_URI_STRING";
+
+    // SharedPreferences key for opened videos
+    public static final String PREF_OPENED_VIDEO_URIS = "opened_video_uris";
 
 }
