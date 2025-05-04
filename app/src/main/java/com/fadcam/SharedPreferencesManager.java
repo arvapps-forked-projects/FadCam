@@ -200,6 +200,14 @@ public class SharedPreferencesManager {
     public void setRecordingInProgress(boolean isInProgress) {
         sharedPreferences.edit().putBoolean(Constants.PREF_IS_RECORDING_IN_PROGRESS, isInProgress).apply();
     }
+
+    public boolean isRecordAudioEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_RECORD_AUDIO, Constants.DEFAULT_RECORD_AUDIO);
+    }
+
+    public void setRecordAudioEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_RECORD_AUDIO, enabled).apply();
+    }
     // --- End Other methods ---
 
     public static final String PREF_IS_PREVIEW_ENABLED = "isPreviewEnabled"; // Check constant exists
@@ -227,5 +235,24 @@ public class SharedPreferencesManager {
         sharedPreferences.edit().putString(Constants.PREF_SELECTED_BACK_CAMERA_ID, cameraId).apply();
         Log.d("SharedPrefs", "Saved selected back camera ID: " + cameraId);
     }
+
+    // --- Audio Settings ---
+    public int getAudioBitrate() {
+        return sharedPreferences.getInt(Constants.PREF_AUDIO_BITRATE, Constants.DEFAULT_AUDIO_BITRATE);
+    }
+    public void setAudioBitrate(int bitrate) {
+        sharedPreferences.edit().putInt(Constants.PREF_AUDIO_BITRATE, bitrate).apply();
+    }
+    public int getAudioSamplingRate() {
+        return sharedPreferences.getInt(Constants.PREF_AUDIO_SAMPLING_RATE, Constants.DEFAULT_AUDIO_SAMPLING_RATE);
+    }
+    public void setAudioSamplingRate(int samplingRate) {
+        sharedPreferences.edit().putInt(Constants.PREF_AUDIO_SAMPLING_RATE, samplingRate).apply();
+    }
+    public void resetAudioSettingsToDefault() {
+        setAudioBitrate(Constants.DEFAULT_AUDIO_BITRATE);
+        setAudioSamplingRate(Constants.DEFAULT_AUDIO_SAMPLING_RATE);
+    }
+    // --- End Audio Settings ---
 
 }
