@@ -656,7 +656,7 @@ public class SettingsFragment extends Fragment {
             return;
         }
 
-        Log.i(TAG, "=== Starting Back Camera Detection ===");
+        Log.i(TAG, "=== Starting Back Camera Detection (Including Logical) ===");
         try {
             String[] cameraIds = manager.getCameraIdList();
             Log.d(TAG, "System reported Camera IDs: " + Arrays.toString(cameraIds));
@@ -675,14 +675,13 @@ public class SettingsFragment extends Fragment {
                     }
                     Log.d(TAG, "ID " + id + ": Passed LENS_FACING_BACK check.");
 
-                    // 2. Check Physical vs Logical (Re-enabled - If you only want physical)
-                    boolean isLogical = false;
+                    // 2. Determine if it's a Logical Camera
+                    boolean isLogicalCamera = false;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         Set<String> physicalIds = characteristics.getPhysicalCameraIds();
                         if (physicalIds != null && !physicalIds.isEmpty()){
-                            Log.w(TAG,"ID " + id + " is a LOGICAL camera (contains physical IDs: " + physicalIds + "). Skipping physical-only listing.");
-                            isLogical = true;
-                            continue; // Skip LOGICAL cameras if only physical lenses are desired
+                            isLogicalCamera = true;
+                            Log.d(TAG,"ID " + id + " is a LOGICAL camera (contains physical IDs: " + physicalIds + "). Will be included.");
                         } else {
                             Log.d(TAG,"ID " + id + ": Confirmed as physical (or pre-Android P).");
                         }
@@ -692,62 +691,65 @@ public class SettingsFragment extends Fragment {
                     float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
                     Float focalLength = null;
                     if (focalLengths != null && focalLengths.length > 0) {
-                        focalLength = focalLengths[0];
+                        focalLength = focalLengths[0]; // Use the first reported focal length
                         Log.d(TAG,"ID " + id + ": Focal length reported: " + focalLength);
                     } else {
                         Log.w(TAG, "ID " + id + ": No focal length info available.");
                     }
 
-                    // 4. Determine Display Name *** REFINED LABELLING ***
-                    String baseName;
-                    String lensHint = "";
+                    // 4. Determine Display Name
+                    StringBuilder displayNameBuilder = new StringBuilder();
+                    boolean isDefaultCamera = id.equals(Constants.DEFAULT_BACK_CAMERA_ID);
 
-                    // Special Case: Default Main Camera
-                    if (id.equals(Constants.DEFAULT_BACK_CAMERA_ID)) {
-                        baseName = "Main";
-                        // Optionally ADD a hint only if its focal length is *unusual* for a main cam
-                        // For example, if focalLength is very low (<22) or very high (>60), maybe hint it.
-                        // Otherwise, leave the "Main" label clean. Let's skip hints for "Main" for now.
-                        // if (focalLength != null){
-                        //     if(focalLength <= 22f) lensHint = "(Wide Focus?)";
-                        //     else if(focalLength >= 70f) lensHint = "(Zoom Focus?)";
-                        // }
+                    if (isDefaultCamera) {
+                        displayNameBuilder.append("Main");
+                    } else {
+                        displayNameBuilder.append("Camera");
+                    }
+                    displayNameBuilder.append(" (").append(id).append(")");
 
-                    } else { // Other Back Cameras
-                        baseName = "Camera";
-                        // Apply hints more accurately
+                    if (isLogicalCamera) {
+                        displayNameBuilder.append(" (Logical)");
+                    }
+
+                    // Only add focal length hints for non-default cameras
+                    if (!isDefaultCamera) {
                         if (focalLength != null) {
-                            if (focalLength <= 22f) lensHint = "(Ultra Wide)"; // More confident below 22
-                                // Skip "(Wide?)" as non-main lenses in 22-35 range are less common or might just be standard
-                            else if (focalLength >= 60f) lensHint = "(Telephoto)"; // More confident above 60/70
-                            else lensHint = "(Auxiliary)"; // Default hint if focal length present but not distinct
-                        } else {
-                            lensHint = "(Auxiliary)"; // Hint if no focal length data
+                            if (focalLength <= 22f) { // Example threshold for Ultra Wide
+                                displayNameBuilder.append(" (Ultra Wide)");
+                            } else if (focalLength >= 50f && focalLength <= 85f) { // Example for Portrait/Short Tele
+                                displayNameBuilder.append(" (Portrait/Zoom)");
+                            } else if (focalLength > 60f) { // Example threshold for Telephoto
+                                displayNameBuilder.append(" (Telephoto)");
+                            } else if (!isLogicalCamera) {
+                                // For non-default, non-logical, physical cameras without specific focal length match
+                                // displayNameBuilder.append(" (Auxiliary)"); // Kept commented as per previous logic
+                            }
+                        } else if (!isLogicalCamera) {
+                            // For non-default, non-logical, physical cameras with NO focal length
+                            // displayNameBuilder.append(" (Auxiliary)"); // Kept commented as per previous logic
                         }
                     }
 
-                    // Construct Final Name: e.g., "Main (0)", "Camera (2) (Ultra Wide)", "Camera (3) (Auxiliary)"
-                    String finalDisplayName = baseName + " (" + id + ") " + lensHint;
-
                     // 5. Add to the list
-                    availableBackCameras.add(new CameraIdInfo(id, finalDisplayName.trim()));
-                    Log.i(TAG, ">>> ADDED Physical Back Camera: ID=" + id + ", Assigned Name=" + finalDisplayName.trim() + " <<<");
-
+                    String finalDisplayName = displayNameBuilder.toString().trim().replaceAll("\\s+", " ");
+                    availableBackCameras.add(new CameraIdInfo(id, finalDisplayName));
+                    Log.i(TAG, ">>> ADDED Back Camera: ID=" + id + ", Assigned Name=" + finalDisplayName + " <<<");
 
                 } catch (CameraAccessException | IllegalArgumentException e) {
                     Log.e(TAG, "!!! Skipping ID " + id + ": Could not access characteristics.", e);
-                } catch (AssertionError e) {
-                    Log.e(TAG,"!!! Skipping ID " + id + ": AssertionError checking physical IDs?", e);
+                } catch (AssertionError e) { // Catch assertion errors from getPhysicalCameraIds on some devices
+                    Log.e(TAG,"!!! Skipping ID " + id + ": AssertionError checking physical IDs for " + id, e);
                 }
                 Log.d(TAG,"--- Finished checking ID: " + id + " ---");
             } // End loop
 
             Collections.sort(availableBackCameras, Comparator.comparing(info -> info.id));
-            Log.i(TAG, "=== Finished Detection. Final PHYSICAL Back Camera List Size: " + availableBackCameras.size() + " ===");
+            Log.i(TAG, "=== Finished Detection. Final Back Camera List (includes logical cameras if present) Size: " + availableBackCameras.size() + " ===");
 
         } catch (CameraAccessException e) {
             Log.e(TAG, "!!! CRITICAL ERROR getting camera ID list !!!", e);
-            availableBackCameras.clear();
+            availableBackCameras.clear(); // Clear list on critical error
         }
     }
 
@@ -1351,6 +1353,7 @@ public class SettingsFragment extends Fragment {
             case "tr": return 4;
             case "ps": return 5;
             case "in": return 6;
+            case "it": return 7; // Added for Italian
             default: return 0; // Default to English if unknown
         }
     }
@@ -1365,6 +1368,7 @@ public class SettingsFragment extends Fragment {
             case 4: return "tr";
             case 5: return "ps";
             case 6: return "in";
+            case 7: return "it"; // Added for Italian
             default: return "en"; // Default to English on error
         }
     }
@@ -2029,27 +2033,21 @@ public class SettingsFragment extends Fragment {
         Log.d(TAG_SETTINGS, "FPS Query: Hardware reported AE ranges for ID " + targetCameraId + ": " + Arrays.toString(hardwareFpsRanges));
 
         // Filter the predefined options based on hardware ranges
+        Set<Integer> hardwareMaxFpsValues = new HashSet<>();
+        for (Range<Integer> range : hardwareFpsRanges) {
+            if (range != null && range.getUpper() != null) {
+                hardwareMaxFpsValues.add(range.getUpper());
+            }
+        }
+
         List<Integer> finalSupportedRates = new ArrayList<>();
         int[] predefinedOptions = getResources().getIntArray(R.array.video_framerate_options);
 
         for (int option : predefinedOptions) {
-            boolean supported = false;
-            for (Range<Integer> range : hardwareFpsRanges) {
-                // A predefined FPS option is supported if it's less than or equal to the MAX of *any* reported range.
-                // This is a common interpretation. Some might argue it needs to be >= min AND <= max.
-                // Let's stick to the simpler check first: Can the hardware potentially reach this rate?
-                if (range != null && range.getUpper() != null && option <= range.getUpper()) {
-                    // Optional stricter check: && option >= range.getLower()
-                    supported = true;
-                    Log.v(TAG_SETTINGS, "FPS Query: Option " + option + " IS potentially supported by range " + range);
-                    break; // No need to check other ranges for this option
-                }
-            }
-            if (supported) {
+            // An option is supported if it's one of the max values reported by hardware AND in our predefined list.
+            if (hardwareMaxFpsValues.contains(option)) {
                 finalSupportedRates.add(option);
-                Log.v(TAG_SETTINGS,"FPS Query: Adding option " + option + " to final list.");
-            } else {
-                Log.v(TAG_SETTINGS,"FPS Query: Option " + option + " is NOT supported by any hardware range upper bound.");
+                Log.v(TAG_SETTINGS,"FPS Query: Adding option " + option + " as it's a hardware max and predefined.");
             }
         }
 

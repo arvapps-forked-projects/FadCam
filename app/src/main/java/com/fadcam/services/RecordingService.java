@@ -100,11 +100,10 @@ public class RecordingService extends Service {
     private RecordingState recordingState = RecordingState.NONE;
     private boolean isProcessingWatermark = false; // Flag for FFmpeg processing
 
-    // Torch related (from previous implementations)
-    private CameraManager torchManager;
-    private String torchCameraId; // Might be used by torch logic
-    private boolean isTorchOn = false;
-    private boolean isRecordingTorchEnabled = false; // Tracks state of torch during recording
+    // ----- Fix Start for this class (RecordingService) -----
+    // Re-introduce isRecordingTorchEnabled to manage torch state *during an active recording session only*
+    private boolean isRecordingTorchEnabled = false;
+    // ----- Fix Ended for this class (RecordingService) -----
 
     private CameraManager cameraManager; // Primary camera manager
     private Handler backgroundHandler; // For camera operations
@@ -147,14 +146,25 @@ public class RecordingService extends Service {
         String action = intent.getAction();
         switch (action) {
             case Constants.INTENT_ACTION_START_RECORDING:
-                // *** REMOVED isWorkingInProgress check, only check current RECORDING state ***
+                // ----- Fix Start for this method(onStartCommand)-----
                 if (recordingState != RecordingState.NONE) {
-                    Log.w(TAG,"Start requested, but already RECORDING/PAUSED. State: " + recordingState + ". Ignoring.");
+                    Log.w(TAG,"Start requested, but already RECORDING/PAUSED/STARTING. State: " + recordingState + ". Ignoring.");
+                // ----- Fix Ended for this method(onStartCommand)-----
                     broadcastOnRecordingStateCallback(); // Notify UI of current state
                     return START_STICKY; // Remain active
                 }
                 // Check for processing flag is NO LONGER DONE HERE. Allow start attempt.
                 Log.i(TAG,"Handling START_RECORDING intent. Service recording state is NONE.");
+                // ----- Fix Start for this method(onStartCommand)-----
+                recordingState = RecordingState.STARTING; // Set state to STARTING
+                // ----- Fix Ended for this method(onStartCommand)-----
+
+                // ----- Fix Start for this method(onStartCommand)-----
+                // Re-introduce retrieval of initial torch state from intent
+                isRecordingTorchEnabled = intent.getBooleanExtra(Constants.INTENT_EXTRA_INITIAL_TORCH_STATE, false);
+                Log.d(TAG, "Initial torch state for recording session: " + isRecordingTorchEnabled);
+                // ----- Fix Ended for this method(onStartCommand)-----
+
                 setupSurfaceTexture(intent);
                 setupRecordingInProgressNotification(); // Show notification immediately
                 startRecording(); // Attempt to start hardware recording
@@ -166,7 +176,10 @@ public class RecordingService extends Service {
             case Constants.INTENT_ACTION_CHANGE_SURFACE:       setupSurfaceTexture(intent); if (isRecording() || isPaused()) { createCameraPreviewSession(); } break;
             case Constants.INTENT_ACTION_STOP_RECORDING:       stopRecording(); break;
             case Constants.BROADCAST_ON_RECORDING_STATE_REQUEST: Log.d(TAG,"Resp state request"); broadcastOnRecordingStateCallback(); if (!isWorkingInProgress()) { stopSelf(); } break;
+            // ----- Fix Start for this method(onStartCommand)-----
+            // Re-introduce handling of INTENT_ACTION_TOGGLE_RECORDING_TORCH
             case Constants.INTENT_ACTION_TOGGLE_RECORDING_TORCH: toggleRecordingTorch(); break;
+            // ----- Fix Ended for this method(onStartCommand)-----
             default: Log.w(TAG, "Unknown action: " + action); break;
         }
         return START_STICKY;
@@ -211,6 +224,11 @@ public class RecordingService extends Service {
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG,"Permissions missing, cannot start recording.");
             Toast.makeText(this,"Permissions required for recording", Toast.LENGTH_LONG).show();
+            // ----- Fix Start for this method(startRecording)-----
+            if (recordingState == RecordingState.STARTING) {
+                recordingState = RecordingState.NONE;
+            }
+            // ----- Fix Ended for this method(startRecording)-----
             stopSelf();
             return;
         }
@@ -219,13 +237,25 @@ public class RecordingService extends Service {
             setupMediaRecorder(); // Configure the recorder + storage path/URI
             if (mediaRecorder == null) { // Check if setup failed
                 Log.e(TAG, "startRecording: MediaRecorder setup failed.");
+                // ----- Fix Start for this method(startRecording)-----
+                if (recordingState == RecordingState.STARTING) {
+                    recordingState = RecordingState.NONE;
+                }
+                // ----- Fix Ended for this method(startRecording)-----
                 return; // setupMediaRecorder handles errors/stopping service
             }
             openCamera(); // Open camera to start the capture session
         } catch (Exception e) {
             Log.e(TAG, "Error starting recording process", e);
+            // ----- Fix Start for this method(startRecording)-----
+            if (recordingState == RecordingState.STARTING) {
+                recordingState = RecordingState.NONE;
+            }
+            // ----- Fix Ended for this method(startRecording)-----
             releaseRecordingResources(); // Clean up on failure
+            // ----- Fix Start for this method(startRecording)-----
             Toast.makeText(this,"Error starting recording", Toast.LENGTH_LONG).show();
+            // ----- Fix Ended for this method(startRecording)-----
             stopSelf();
         }
     }
@@ -236,8 +266,10 @@ public class RecordingService extends Service {
      */
     private void stopRecording() {
         Log.i(TAG, ">> stopRecording sequence initiated. Current state: " + recordingState);
-        if (recordingState == RecordingState.NONE) { // Already stopped (or never started)
-            Log.w(TAG, "stopRecording called but state is already NONE.");
+        // ----- Fix Start for this method(stopRecording)-----
+        if (recordingState == RecordingState.NONE && !isProcessingWatermark) { // Already stopped (or never started) AND not processing
+            Log.w(TAG, "stopRecording called but state is already NONE and not processing.");
+        // ----- Fix Ended for this method(stopRecording)-----
             // Ensure pref is consistent and check if service should stop
             sharedPreferencesManager.setRecordingInProgress(false);
             if (!isWorkingInProgress()) stopSelf();
@@ -317,12 +349,14 @@ public class RecordingService extends Service {
     private void checkIfServiceCanStop() {
         // Read volatile flag and check state atomically as best as possible
         boolean isProcessing = isProcessingWatermark;
-        boolean isRecordingActive = (recordingState != RecordingState.NONE);
+        // ----- Fix Start for this method(checkIfServiceCanStop)-----
+        boolean isRecordingActiveOrStarting = (recordingState == RecordingState.IN_PROGRESS || recordingState == RecordingState.PAUSED || recordingState == RecordingState.STARTING);
 
         Log.d(TAG, "checkIfServiceCanStop: RecordingState=" + recordingState + ", isProcessing=" + isProcessing);
 
-        // If NOT currently recording/paused AND NOT currently processing...
-        if (!isRecordingActive && !isProcessing) {
+        // If NOT currently recording/paused/starting AND NOT currently processing...
+        if (!isRecordingActiveOrStarting && !isProcessing) {
+        // ----- Fix Ended for this method(checkIfServiceCanStop)-----
             Log.i(TAG, "No active recording or background processing detected. Stopping service.");
             // Add a slight delay before stopping? Optional, might help ensure broadcasts are fully handled.
             // new Handler(Looper.getMainLooper()).postDelayed(this::stopSelf, 100);
@@ -1037,6 +1071,11 @@ public class RecordingService extends Service {
         public void onDisconnected(@NonNull CameraDevice camera) {
             Log.w(TAG, "Camera " + camera.getId() + " disconnected.");
             releaseRecordingResources(); // Cleanup everything if camera disconnects
+            // ----- Fix Start for this method(onDisconnected)-----
+            if (recordingState == RecordingState.STARTING) {
+                recordingState = RecordingState.NONE;
+            }
+            // ----- Fix Ended for this method(onDisconnected)-----
             // Possibly notify UI or attempt restart? For now, just stop.
             stopSelf();
         }
@@ -1044,6 +1083,11 @@ public class RecordingService extends Service {
         public void onError(@NonNull CameraDevice camera, int error) {
             Log.e(TAG, "Camera " + camera.getId() + " error: " + error);
             releaseRecordingResources(); // Cleanup on error
+            // ----- Fix Start for this method(onError)-----
+            if (recordingState == RecordingState.STARTING) {
+                recordingState = RecordingState.NONE;
+            }
+            // ----- Fix Ended for this method(onError)-----
             Toast.makeText(RecordingService.this,"Camera error: "+error, Toast.LENGTH_LONG).show();
             stopSelf();
         }
@@ -1128,15 +1172,19 @@ public class RecordingService extends Service {
             try {
                 // Start the repeating request (includes preview and feeds recorder)
                 captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO); // Use auto mode
-                // Apply recording torch state IF it was toggled before session configured
+                // ----- Fix Start for this method(onConfigured)-----
+                // Re-introduce setting FLASH_MODE based on the session's torch state
                 captureRequestBuilder.set(CaptureRequest.FLASH_MODE, isRecordingTorchEnabled ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
+                // ----- Fix Ended for this method(onConfigured)-----
 
                 session.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
                 Log.d(TAG,"Repeating request started.");
 
 
                 // Now that the session is configured and request running, handle recording state
-                if (recordingState == RecordingState.NONE) { // This is the initial start
+                // ----- Fix Start for this method(onConfigured)-----
+                if (recordingState == RecordingState.STARTING) { // This is the initial start
+                // ----- Fix Ended for this method(onConfigured)-----
                     recordingStartTime = SystemClock.elapsedRealtime();
                     mediaRecorder.start(); // START RECORDING
                     recordingState = RecordingState.IN_PROGRESS;
@@ -1165,6 +1213,12 @@ public class RecordingService extends Service {
         @Override
         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
             Log.e(TAG, "Capture session configuration failed: " + session);
+            // ----- Fix Start for this method(onConfigureFailed)-----
+            if (recordingState == RecordingState.STARTING) {
+                Log.w(TAG, "Configuration failed during STARTING state, resetting to NONE.");
+                recordingState = RecordingState.NONE;
+            }
+            // ----- Fix Ended for this method(onConfigureFailed)-----
             stopRecording(); // Stop if session configuration fails
         }
         @Override
@@ -1700,36 +1754,43 @@ public class RecordingService extends Service {
 
 
     // --- Torch Logic ---
+    // ----- Fix Start for this class (RecordingService) -----
+    // Re-introduce toggleRecordingTorch method
     private void toggleRecordingTorch() {
         if (captureRequestBuilder != null && captureSession != null && cameraDevice != null) {
-            try {
-                isRecordingTorchEnabled = !isRecordingTorchEnabled; // Toggle the state
-                Log.d(TAG,"Toggling recording torch. New state: "+ isRecordingTorchEnabled);
+            if (recordingState == RecordingState.IN_PROGRESS || recordingState == RecordingState.PAUSED) {
+                try {
+                    isRecordingTorchEnabled = !isRecordingTorchEnabled; // Toggle the state for the session
+                    Log.d(TAG,"Toggling recording torch via CaptureRequest. New state: "+ isRecordingTorchEnabled);
 
-                captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
-                        isRecordingTorchEnabled ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
+                    captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
+                            isRecordingTorchEnabled ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
 
-                // Apply the change by updating the repeating request
-                captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
-                Log.d(TAG, "Recording torch repeating request updated.");
+                    // Apply the change by updating the repeating request
+                    captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+                    Log.d(TAG, "Recording torch repeating request updated.");
 
-                // Broadcast state change TO THE UI if needed (though UI might request it directly?)
-                Intent intent = new Intent(Constants.BROADCAST_ON_TORCH_STATE_CHANGED);
-                intent.putExtra(Constants.INTENT_EXTRA_TORCH_STATE, isRecordingTorchEnabled);
-                sendBroadcast(intent);
+                    // Broadcast state change TO THE UI so it can update its torch button
+                    Intent intent = new Intent(Constants.BROADCAST_ON_TORCH_STATE_CHANGED);
+                    intent.putExtra(Constants.INTENT_EXTRA_TORCH_STATE, isRecordingTorchEnabled);
+                    sendBroadcast(intent);
 
-            } catch (CameraAccessException e) {
-                Log.e(TAG, "Could not toggle recording torch: " + e.getMessage());
-                isRecordingTorchEnabled = !isRecordingTorchEnabled; // Revert state on error
-            } catch(IllegalStateException e) {
-                Log.e(TAG,"Could not toggle recording torch - session/camera closed?", e);
-                isRecordingTorchEnabled = !isRecordingTorchEnabled; // Revert state on error
+                } catch (CameraAccessException e) {
+                    Log.e(TAG, "Could not toggle recording torch via CaptureRequest: " + e.getMessage());
+                    isRecordingTorchEnabled = !isRecordingTorchEnabled; // Revert state on error
+                } catch(IllegalStateException e) {
+                    Log.e(TAG,"Could not toggle recording torch via CaptureRequest - session/camera closed?", e);
+                    isRecordingTorchEnabled = !isRecordingTorchEnabled; // Revert state on error
+                }
+            } else {
+                Log.w(TAG, "Cannot toggle recording torch via CaptureRequest - not IN_PROGRESS or PAUSED. State: " + recordingState);
+                // If not recording, HomeFragment should handle torch directly via CameraManager.setTorchMode()
             }
         } else {
-            Log.w(TAG, "Cannot toggle recording torch - session, request builder, or camera device is null.");
+            Log.w(TAG, "Cannot toggle recording torch via CaptureRequest - session, request builder, or camera device is null.");
         }
     }
-    // --- End Torch Logic ---
+    // ----- Fix Ended for this class (RecordingService) -----
 
     // --- Status Check ---
     public boolean isRecording() {
@@ -1742,7 +1803,9 @@ public class RecordingService extends Service {
 
     // Combined status check
     public boolean isWorkingInProgress() {
-        return isProcessingWatermark || recordingState != RecordingState.NONE;
+        // ----- Fix Start for this method(isWorkingInProgress)-----
+        return isProcessingWatermark || recordingState == RecordingState.IN_PROGRESS || recordingState == RecordingState.PAUSED || recordingState == RecordingState.STARTING;
+        // ----- Fix Ended for this method(isWorkingInProgress)-----
     }
     // --- End Status Check ---
 }

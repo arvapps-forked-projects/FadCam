@@ -7,6 +7,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Size;
 import android.widget.Toast;
+import android.media.MediaScannerConnection;
+import android.util.Log;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -127,5 +129,45 @@ public class Utils {
         Handler handler = new Handler(Looper.getMainLooper());
         handler.postDelayed(toast::cancel, 500); // 500ms = half second
         toast.show();
+    }
+
+    /**
+     * Shows a toast message for 0.5 second duration (shorter than Android's default SHORT duration).
+     * Example usage:  Utils.showQuickToast(this, "Recording started");
+     * @param context The context in which to show the toast
+     * @param message The string message to display
+     */
+    public static void showQuickToast(Context context, String message) {
+        Toast toast = Toast.makeText(context, message, Toast.LENGTH_SHORT);
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.postDelayed(toast::cancel, 500); // 500ms = half second
+        toast.show();
+    }
+
+    /**
+     * Scans a file using MediaScannerConnection to make it visible in the MediaStore (e.g., Gallery).
+     * @param context The application context.
+     * @param filePath The absolute path of the file to scan.
+     */
+    public static void scanFileWithMediaStore(Context context, String filePath) {
+        if (context == null || filePath == null || filePath.isEmpty()) {
+            Log.w("Utils", "scanFileWithMediaStore: Context or filePath is null/empty.");
+            return;
+        }
+        Log.d("Utils", "Scanning file with MediaStore: " + filePath);
+        try {
+            MediaScannerConnection.scanFile(context.getApplicationContext(), // Use application context
+                    new String[]{filePath},
+                    null, // MIME types (null to infer)
+                    (path, uri) -> {
+                        if (uri != null) {
+                            Log.i("Utils", "MediaScanner finished scanning " + path + ". URI: " + uri);
+                        } else {
+                            Log.w("Utils", "MediaScanner finished scanning " + path + ", but MediaStore URI is null. File might not be recognized or already scanned.");
+                        }
+                    });
+        } catch (Exception e) {
+            Log.e("Utils", "Error during MediaScannerConnection.scanFile for path: " + filePath, e);
+        }
     }
 }

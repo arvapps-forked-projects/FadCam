@@ -94,11 +94,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import android.graphics.drawable.Drawable;
+import android.widget.ImageView; // <<< ADD IMPORT FOR ImageView
+import androidx.fragment.app.FragmentManager; // <<< ADD IMPORT FOR FragmentManager
+import androidx.fragment.app.FragmentTransaction; // <<< ADD IMPORT FOR FragmentTransaction
 
 public class HomeFragment extends Fragment {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
+
+    // ----- Fix Start for this method(fields)-----
+    private static final String[] CLOCK_COLOR_NAMES = {"Purple", "Blue", "Green", "Teal", "Orange", "Red", "Dark Grey", "App Theme Dark"};
+    private static final String[] CLOCK_COLOR_HEX_VALUES = {"#673AB7", "#2196F3", "#4CAF50", "#009688", "#FF9800", "#F44336", "#424242", "#302745"};
+    // ----- Fix Ended for this method(fields)-----
 
     private long recordingStartTime;
     private long videoBitrate;
@@ -163,6 +171,9 @@ public class HomeFragment extends Fragment {
 
     private BroadcastReceiver torchReceiver;
 
+    // ----- Fix Start for this method(fields)-----
+    private Surface textureViewSurface; // To hold the Surface from TextureView
+    // ----- Fix Ended for this method(fields)-----
 
 
     // --- Fields Needed for Stats Update ---
@@ -280,66 +291,82 @@ public class HomeFragment extends Fragment {
 
     private void setupLongPressListener() {
         cardPreview.setOnLongClickListener(v -> {
-            if (isRecording()) {
-                // Start scaling down animation
-                cardPreview.animate()
-                        .scaleX(0.9f)
-                        .scaleY(0.9f)
-                        .setDuration(100) // Reduced duration for quicker scale-down
-                        .start();
+            // ----- Fix Start for this method(setupLongPressListener_SequentialAnimation)-----
+            // 1. Perform haptic feedback
+            performHapticFeedback();
 
-                // Perform haptic feedback
-                performHapticFeedback();
+            // 2. Unified Card Bounce Animation (Down then Up)
+            AnimatorSet cardBounceAnim = new AnimatorSet();
+            ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(cardPreview, "scaleX", 0.9f);
+            ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(cardPreview, "scaleY", 0.9f);
+            scaleDownX.setDuration(50); // Fast scale down
+            scaleDownY.setDuration(50);
 
-                // Execute the task immediately
-                isPreviewEnabled = !isPreviewEnabled;
-                updatePreviewVisibility();
-                savePreviewState();
-                String message = isPreviewEnabled ? "Preview enabled" : "Preview disabled";
-                Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+            ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(cardPreview, "scaleX", 1.0f);
+            ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(cardPreview, "scaleY", 1.0f);
+            scaleUpX.setDuration(70); // Fast rebound
+            scaleUpY.setDuration(70);
 
-                // Scale back up quickly with a wobble effect
-                cardPreview.postDelayed(() -> {
-                    cardPreview.animate()
-                            .scaleX(1.0f)
-                            .scaleY(1.0f)
-                            .setDuration(50) // Shorter duration for quicker scale-up
-                            .start();
-                }, 60); // No Delay to ensure it happens after the initial scaling down
+            cardBounceAnim.play(scaleDownX).with(scaleDownY); // Play scale down
+            cardBounceAnim.play(scaleUpX).with(scaleUpY).after(scaleDownX); // Play scale up immediately after scale down completes
 
-            } else {
-                // Handling when recording is not active
+            cardBounceAnim.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    super.onAnimationEnd(animation);
 
-                // Show random funny message
-                showRandomMessage();
+                    // 3. Core logic: toggle preview, update UI, save state (runs AFTER card bounce)
+                    isPreviewEnabled = !isPreviewEnabled;
+                    updatePreviewVisibility(); // This is the main visual change for enabling/disabling preview
+                    savePreviewState();
 
+                    // 4. Surface handling logic OR placeholder animations (also runs AFTER card bounce)
+                    if (isRecordingOrPaused()) { // Only update service if recording/paused
+                        if (isPreviewEnabled) {
+                            if (textureView != null && textureView.isAvailable() && textureViewSurface != null) {
+                                Log.d(TAG, "Preview enabled (post-anim): TextureView available, sending surface to service.");
+                                updateServiceWithCurrentSurface(textureViewSurface);
+                            } else {
+                                Log.d(TAG, "Preview enabled (post-anim): TextureView not yet available, will send surface on callback.");
+                            }
+                        } else {
+                            Log.d(TAG, "Preview disabled (post-anim): Sending null surface to service.");
+                            updateServiceWithCurrentSurface(null);
+                        }
+                    } else {
+                        // Logic for when NOT recording/paused: Show random message and animate placeholder
+                        Log.d(TAG, "Long press on preview (post-anim) while not recording/paused. Applying placeholder animations.");
+                        showRandomMessage(); // Show random message on the placeholder
 
-                // Ensure the placeholder is visible
-                tvPreviewPlaceholder.setVisibility(View.VISIBLE);
-                tvPreviewPlaceholder.setPadding(16, tvPreviewPlaceholder.getPaddingTop(), 16, tvPreviewPlaceholder.getPaddingBottom());
-                performHapticFeedback();
+                        if (tvPreviewPlaceholder != null) {
+                            tvPreviewPlaceholder.setVisibility(View.VISIBLE); // Ensure placeholder is visible
 
-                // Trigger the red blinking animation
-                tvPreviewPlaceholder.setBackgroundColor(Color.RED);
-                tvPreviewPlaceholder.postDelayed(() -> {
-                    tvPreviewPlaceholder.setBackgroundColor(Color.TRANSPARENT);
-                }, 100); // Blinking duration
+                            // Red blinking animation for placeholder
+                            tvPreviewPlaceholder.setBackgroundColor(Color.RED);
+                            tvPreviewPlaceholder.postDelayed(() -> {
+                                if (tvPreviewPlaceholder != null) { // Check again in case fragment is destroyed
+                                   tvPreviewPlaceholder.setBackgroundColor(Color.TRANSPARENT);
+                                }
+                            }, 100); // Blink duration
 
-                // Wobble animation
-                ObjectAnimator scaleXUp = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 1.1f);
-                ObjectAnimator scaleYUp = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 1.1f);
-                ObjectAnimator scaleXDown = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 1.0f);
-                ObjectAnimator scaleYDown = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 1.0f);
-
-                scaleXUp.setDuration(50);
-                scaleYUp.setDuration(50);
-                scaleXDown.setDuration(50);
-                scaleYDown.setDuration(50);
-
-                AnimatorSet wobbleSet = new AnimatorSet();
-                wobbleSet.play(scaleXUp).with(scaleYUp).before(scaleXDown).before(scaleYDown);
-                wobbleSet.start();
-            }
+                            // Wobble animation for placeholder
+                            ObjectAnimator pScaleXUp = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 1.1f);
+                            ObjectAnimator pScaleYUp = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 1.1f);
+                            ObjectAnimator pScaleXDown = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 1.0f);
+                            ObjectAnimator pScaleYDown = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 1.0f);
+                            pScaleXUp.setDuration(50);
+                            pScaleYUp.setDuration(50);
+                            pScaleXDown.setDuration(50);
+                            pScaleYDown.setDuration(50);
+                            AnimatorSet wobbleSet = new AnimatorSet();
+                            wobbleSet.play(pScaleXUp).with(pScaleYUp).before(pScaleXDown).before(pScaleYDown);
+                            wobbleSet.start();
+                        }
+                    }
+                }
+            });
+            cardBounceAnim.start(); // Start the card bounce animation
+            // ----- Fix Ended for this method(setupLongPressListener_SequentialAnimation)-----
             return true;
         });
     }
@@ -773,6 +800,7 @@ public class HomeFragment extends Fragment {
         Log.d(TAG, "onResume: Triggering stats update.");
         updateStats();
         updateTorchUI(isTorchOn);
+        updatePreviewVisibility(); // ADDED: Ensure preview visibility is correctly set on resume
     }
 
     // Inside HomeFragment.java
@@ -832,13 +860,25 @@ public class HomeFragment extends Fragment {
                 @Override
                 public void onReceive(Context context, Intent i) {
                     if (!isAdded() || i == null) return;
-                    Log.d(TAG, "Received BROADCAST_ON_RECORDING_STARTED");
-                    // Get start time, call onRecordingStarted to update UI
+                    Log.d(TAG, "Received BROADCAST_ON_RECORDING_STARTED (New Handler)");
+                    
                     recordingStartTime = i.getLongExtra(Constants.INTENT_EXTRA_RECORDING_START_TIME, SystemClock.elapsedRealtime());
-                    onRecordingStarted(true); // true for initial toast
+                    
+                    // Perform non-UI actions previously in onRecordingStarted(true)
+                    acquireWakeLock();
+                    setVideoBitrate();
+                    
+                    // Call the main UI state updater
+                    handleServiceStateUpdate(RecordingState.IN_PROGRESS); 
+
+                    // Handle the toast
+                    if(isAdded() && getContext() != null) { 
+                       vibrateTouch();
+                       Toast.makeText(getContext(), R.string.video_recording_started, Toast.LENGTH_SHORT).show();
+                    }
                 }
             };
-            Log.d(TAG,"Initialized broadcastOnRecordingStarted receiver");
+            Log.d(TAG,"Initialized broadcastOnRecordingStarted receiver (New Handler)");
         }
         // Initialize Receiver for RESUME action
         if (broadcastOnRecordingResumed == null) {
@@ -955,7 +995,9 @@ public class HomeFragment extends Fragment {
             buttonPauseResume.setIcon(AppCompatResources.getDrawable(requireContext(), R.drawable.ic_play)); // Show Play icon for RESUME
 
             buttonCamSwitch.setEnabled(false); // Disable CAM SWITCH
-            if(buttonTorchSwitch != null) buttonTorchSwitch.setEnabled(false); // Disable TORCH when paused
+            // ----- Fix Start for this method(setUIForRecordingPaused_torchButton)-----
+            if(buttonTorchSwitch != null) buttonTorchSwitch.setEnabled(getCameraWithFlashQuietly() != null); // Enable TORCH if available, even when paused
+            // ----- Fix Ended for this method(setUIForRecordingPaused_torchButton)-----
 
             // Manage preview and timers
             updatePreviewVisibility(); stopUpdatingInfo(); // Show placeholder/last frame, stop timers
@@ -1184,6 +1226,24 @@ public class HomeFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        Log.d(TAG, "onViewCreated: View created.");
+
+        // Initialize SharedPreferencesManager
+        sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
+
+        // Initialize ExecutorService
+        if (executorService == null || executorService.isShutdown()) {
+            executorService = Executors.newSingleThreadExecutor();
+        }
+
+        initializeViews(view);
+        setupTextureView(view);
+        setupButtonListeners();
+        setupLongPressListener(); // For Easter eggs on title
+        setupClockLongPressListener(); // For display options on clock
+        setupAppLogoLongPressListener(view); // <<< CALL NEW METHOD
+
+        vibrator = (Vibrator) requireActivity().getSystemService(Context.VIBRATOR_SERVICE);
         TorchService.setHomeFragment(this);
         
         // Add this debug code
@@ -1206,35 +1266,6 @@ public class HomeFragment extends Fragment {
         Log.d(TAG, "onViewCreated: Loaded isPreviewEnabled state = " + isPreviewEnabled);
         // --- END FIX ---
 
-        setupTextureView(view);
-
-        tvStorageInfo = view.findViewById(R.id.tvStorageInfo);
-        tvPreviewPlaceholder = view.findViewById(R.id.tvPreviewPlaceholder);
-
-        buttonStartStop = view.findViewById(R.id.buttonStartStop);
-        buttonPauseResume = view.findViewById(R.id.buttonPauseResume);
-        buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
-
-        tvTip = view.findViewById(R.id.tvTip);
-        tvStats = view.findViewById(R.id.tvStats);
-
-        // Initialize views
-        cardClock = view.findViewById(R.id.cardClock);
-        tvClock = view.findViewById(R.id.tvClock);
-        tvDateEnglish = view.findViewById(R.id.tvDateEnglish);
-        tvDateArabic = view.findViewById(R.id.tvDateArabic);
-
-        // Set up long press listener for clock widget
-        setupClockLongPressListener();
-
-
-
-
-        cardPreview = view.findViewById(R.id.cardPreview);
-        vibrator = (Vibrator) requireContext().getSystemService(Context.VIBRATOR_SERVICE);
-
-        isPreviewEnabled = sharedPreferencesManager.isPreviewEnabled();
-
         resetTimers();
         copyFontToInternalStorage();
         updateStorageInfo();
@@ -1256,6 +1287,30 @@ public class HomeFragment extends Fragment {
         buttonTorchSwitch = view.findViewById(R.id.buttonTorchSwitch);
         initializeTorch();
         setupTorchButton();
+
+        // ----- Fix Start for this method(onViewCreated)-----
+        // Apply saved clock card color
+        applyClockCardColor(sharedPreferencesManager.getClockCardColor());
+        // ----- Fix Ended for this method(onViewCreated)-----
+
+        // Attempt to find camera with flash
+        try {
+            cameraId = getCameraWithFlash();
+            if (cameraId == null) {
+                Log.d(TAG, "No camera with flash found");
+                buttonTorchSwitch.setEnabled(false);
+                buttonTorchSwitch.setVisibility(View.GONE);
+            } else {
+                Log.d(TAG, "Flash available on camera: " + cameraId);
+                buttonTorchSwitch.setEnabled(true);
+                buttonTorchSwitch.setVisibility(View.VISIBLE);
+            }
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Camera access error: " + e.getMessage());
+            e.printStackTrace();
+            buttonTorchSwitch.setEnabled(false);
+            buttonTorchSwitch.setVisibility(View.GONE);
+        }
     }
 
     private void setupTextureView(@NonNull View view) {
@@ -1263,10 +1318,16 @@ public class HomeFragment extends Fragment {
         textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
             public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surfaceTexture, int width, int height) {
-                surfaceTexture.setDefaultBufferSize(720, 1080);
-                textureView.setVisibility(View.INVISIBLE);
-
-                fetchRecordingState();
+                Log.d(TAG, "onSurfaceTextureAvailable: SurfaceTexture is now available.");
+                // ----- Fix Start for this method(onSurfaceTextureAvailable)-----
+                textureViewSurface = new Surface(surfaceTexture);
+                if (isPreviewEnabled && isRecordingOrPaused()) {
+                    Log.d(TAG, "onSurfaceTextureAvailable: Preview enabled and recording active, sending surface to service.");
+                    updateServiceWithCurrentSurface(textureViewSurface);
+                } else {
+                    Log.d(TAG, "onSurfaceTextureAvailable: Preview not enabled or not recording/paused, not sending surface yet.");
+                }
+                // ----- Fix Ended for this method(onSurfaceTextureAvailable)-----
             }
 
             @Override
@@ -1274,7 +1335,19 @@ public class HomeFragment extends Fragment {
 
             @Override
             public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surface) {
-                return false;
+                Log.d(TAG, "onSurfaceTextureDestroyed: SurfaceTexture is being destroyed.");
+                // ----- Fix Start for this method(onSurfaceTextureDestroyed)-----
+                if (textureViewSurface != null) {
+                    if (isRecordingOrPaused()) {
+                        Log.d(TAG, "onSurfaceTextureDestroyed: Recording active, sending null surface to service.");
+                        updateServiceWithCurrentSurface(null);
+                    }
+                    textureViewSurface.release();
+                    textureViewSurface = null;
+                    Log.d(TAG, "onSurfaceTextureDestroyed: Released local textureViewSurface.");
+                }
+                // ----- Fix Ended for this method(onSurfaceTextureDestroyed)-----
+                return true; // Surface is released by the listener
             }
 
             @Override
@@ -1354,66 +1427,84 @@ public class HomeFragment extends Fragment {
     // --- Start Recording ---
     // Inside HomeFragment.java
     private void startRecording() {
-        if (!isAdded() || getActivity() == null) {
-            Log.w(TAG, "startRecording called but fragment/activity not attached.");
+        if (getContext() == null) {
+            Log.e(TAG, "Context is null, cannot start recording.");
+            return;
+        }
+        performHapticFeedback();
+
+        if (!areEssentialPermissionsGranted()) {
+            Log.w(TAG, "Essential permissions not granted. Cannot start recording.");
+            // ----- Fix Start for this method(startRecording_correctString)-----
+            Utils.showQuickToast(getContext(), getString(R.string.essential_permissions_missing));
+            // ----- Fix Ended for this method(startRecording_correctString)-----
+            requestEssentialPermissions(); // Re-trigger permission request
             return;
         }
 
-        // Prevent starting only if already actively recording/paused
-        if (recordingState != RecordingState.NONE) {
-            Log.w(TAG, "Start: Already recording/paused (State: " + recordingState + "). Ignoring request.");
-            Utils.showQuickToast(requireContext(), R.string.recording_already_active);
-            return;
-        }
-
-        Log.i(TAG, ">> startRecording user action");
-        SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
-        Surface surfaceToSend = (surfaceTexture != null) ? new Surface(surfaceTexture) : null;
-
-        // *** FIX: Set initial preview visibility based on preference BEFORE sending intent ***
-        try {
-            if (isPreviewEnabled) { // Only show TextureView if preview IS enabled
-                if (textureView != null) textureView.setVisibility(View.VISIBLE);
-                if (tvPreviewPlaceholder != null) tvPreviewPlaceholder.setVisibility(View.GONE);
-                Log.d(TAG,"Start: Preview enabled, showing TextureView.");
-            } else { // Keep TextureView hidden if preview is DISABLED
-                if (textureView != null) textureView.setVisibility(View.INVISIBLE); // Or GONE
-                if (tvPreviewPlaceholder != null) {
-                    tvPreviewPlaceholder.setVisibility(View.VISIBLE);
-                    // Optionally set text indicating recording started without preview
-                    // tvPreviewPlaceholder.setText("Recording starting...");
-                }
-                Log.d(TAG,"Start: Preview disabled, keeping TextureView hidden.");
+        // Check for SAF permission before starting recording if custom storage is selected
+        String storageMode = sharedPreferencesManager.getStorageMode();
+        if (SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode)) {
+            String customUriString = sharedPreferencesManager.getCustomStorageUri();
+            if (customUriString == null || !hasSafPermission(Uri.parse(customUriString))) {
+                // ----- Fix Start for this method(startRecording_safPermissionString)-----
+                Utils.showQuickToast(getContext(), getString(R.string.saf_permission_missing_dialog_instructions));
+                // ----- Fix Ended for this method(startRecording_safPermissionString)-----
+                // Guide user to grant permission via settings or a dedicated button
+                // Potentially open a dialog or navigate to settings fragment
+                new MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(getString(R.string.saf_permission_missing_dialog_title))
+                        .setMessage(getString(R.string.saf_permission_missing_dialog_message_for_start_recording))
+                        .setPositiveButton(getString(R.string.grant_permission_button), (dialog, which) -> {
+                            // Intent to open document tree, user selects directory
+                            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
+                                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                            // Optionally, you can suggest a starting URI
+                            // intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, someDefaultUri);
+                            startActivityForResult(intent, Constants.REQUEST_CODE_OPEN_DOCUMENT_TREE_FOR_SAF);
+                        })
+                        .setNegativeButton(getString(R.string.universal_cancel), null)
+                        .show();
+                return;
             }
-            // --- END FIX ---
+        }
 
-            // Disable buttons temporarily while intent is processed
-            disableInteractionButtons();
-            Log.d(TAG, "Start: Buttons temporarily disabled.");
-        } catch(Exception e) { Log.e(TAG,"Err setting initial UI state for start",e);}
+        if (isMyServiceRunning(RecordingService.class)) {
+            Log.w(TAG, "Start requested, but service appears to be already running or starting. Current state: " + recordingState);
+            // Query the service for its actual state if unsure
+            Intent queryIntent = new Intent(getContext(), RecordingService.class);
+            queryIntent.setAction(Constants.BROADCAST_ON_RECORDING_STATE_REQUEST);
+            ContextCompat.startForegroundService(getContext(), queryIntent);
+            // UI should update based on the broadcast from the service
+            return; // Don't try to start again if it might be running
+        }
 
+        Log.d(TAG, "startRecording: Starting RecordingService.");
+        Intent serviceIntent = new Intent(getContext(), RecordingService.class);
+        serviceIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
 
-        Intent startIntent = new Intent(getActivity(), RecordingService.class);
-        startIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
-        if (surfaceToSend != null) {
-            startIntent.putExtra("SURFACE", surfaceToSend);
-            Log.d(TAG,"Start: Surface available, adding to intent.");
+        // ----- Fix Start for this method(startRecording_passTorchState)-----
+        // Pass current torch state (from HomeFragment's perspective) to the service
+        // The service will use this to set the initial FLASH_MODE in its CaptureRequest if it starts successfully.
+        Log.d(TAG, "Passing initial torch state to service: " + isTorchOn);
+        serviceIntent.putExtra(Constants.INTENT_EXTRA_INITIAL_TORCH_STATE, isTorchOn);
+        // ----- Fix Ended for this method(startRecording_passTorchState)-----
+
+        // Pass the surface if preview is enabled and surface is valid
+        if (isPreviewEnabled && textureViewSurface != null && textureViewSurface.isValid()) {
+            Log.d(TAG, "Preview enabled, passing valid surface to service.");
+            serviceIntent.putExtra("SURFACE", textureViewSurface);
         } else {
-            startIntent.removeExtra("SURFACE");
-            Log.w(TAG,"Start: Surface not available now, sending intent without it.");
+            Log.w(TAG, "Preview disabled or surface invalid. Service will start without preview surface.");
+            serviceIntent.putExtra("SURFACE", (Surface) null); // Explicitly pass null
         }
 
-        try {
-            requireActivity().startService(startIntent);
-            Log.i(TAG, "Sent START_RECORDING intent. Waiting for service confirmation...");
-            // UI waits for BROADCAST_ON_RECORDING_STARTED
-        } catch (Exception e) {
-            Log.e(TAG, "Error sending START_RECORDING intent: ", e);
-            Toast.makeText(getContext(), "Error starting recording", Toast.LENGTH_SHORT).show();
-            // Reset UI immediately if intent sending fails
-            resetUIButtonsToIdleState();
-            Log.d(TAG, "startRecording intent failed: Reset UI.");
-        }
+        ContextCompat.startForegroundService(getContext(), serviceIntent);
+        // UI state changes will be handled by broadcast receivers
+        // setUIForRecordingActive(); // Move UI update to onRecordingStarted broadcast receiver
+        Log.d(TAG, "startRecording: RecordingService start initiated.");
     }
 
     // Inside HomeFragment.java
@@ -1446,10 +1537,10 @@ public class HomeFragment extends Fragment {
                 Log.v(TAG,"Disabled: Camera Switch Button");
             } else Log.w(TAG,"buttonCamSwitch is null in disableInteractionButtons");
 
-            if (buttonTorchSwitch != null) {
-                buttonTorchSwitch.setEnabled(false); // Also disable torch during these states
-                Log.v(TAG,"Disabled: Torch Button");
-            } else Log.w(TAG,"buttonTorchSwitch is null in disableInteractionButtons");
+            // if (buttonTorchSwitch != null) {
+            //     buttonTorchSwitch.setEnabled(false); // Also disable torch during these states
+            //     Log.v(TAG,"Disabled: Torch Button");
+            // } else Log.w(TAG,"buttonTorchSwitch is null in disableInteractionButtons");
 
             Log.d(TAG,"Interaction buttons disabled.");
 
@@ -1462,9 +1553,6 @@ public class HomeFragment extends Fragment {
     private void updateRecordingSurface()
     {
         SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
-
-        tvPreviewPlaceholder.setVisibility(View.GONE);
-        textureView.setVisibility(View.VISIBLE);
 
         Intent startIntent = new Intent(getActivity(), RecordingService.class);
         startIntent.setAction(Constants.INTENT_ACTION_CHANGE_SURFACE);
@@ -1496,11 +1584,16 @@ public class HomeFragment extends Fragment {
     }
 
     private void setupClockLongPressListener() {
-        cardClock.setOnLongClickListener(v -> {
-            addWobbleAnimation(); // This will perform the wobble animation
-            showDisplayOptionsDialog(); // This will show the dialog to choose display options
-            return true; // Indicate the long press was handled
-        });
+        if (cardClock != null) {
+            cardClock.setOnLongClickListener(v -> {
+                performHapticFeedback();
+                // ----- Fix Start for this method(setupClockLongPressListener)-----
+                // Show existing display options and new color chooser
+                showClockAppearanceDialog();
+                // ----- Fix Ended for this method(setupClockLongPressListener)-----
+                return true;
+            });
+        }
     }
 
     private void addWobbleAnimation() {
@@ -1553,19 +1646,28 @@ public class HomeFragment extends Fragment {
     }
 
     private void showDisplayOptionsDialog() {
+        // ----- Fix Start for this method(showDisplayOptionsDialog_revert)-----
+        final String[] items = {
+                getString(R.string.dialog_clock_timeonly),
+                getString(R.string.dialog_clock_englishtime),
+                getString(R.string.dialog_clock_Islamic_calendar) // This was likely intended to be the "Everything" option
+        };
+        // The mapping of options to array indices for `setSingleChoiceItems` is:
+        // 0 -> Time Only
+        // 1 -> Time and English Date (Day/Month)
+        // 2 -> Time, English Date, and Hijri Date (Everything)
+        int currentOption = getCurrentDisplayOption(); // This returns 0, 1, or 2
+
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(getString(R.string.dialog_clock_title))
-                .setSingleChoiceItems(new String[]{
-                        getString(R.string.dialog_clock_timeonly),
-                        getString(R.string.dialog_clock_englishtime),
-                        getString(R.string.dialog_clock_Islamic_calendar)
-                }, getCurrentDisplayOption(), (dialog, which) -> {
-                    saveDisplayOption(which);
+                .setSingleChoiceItems(items, currentOption, (dialog, which) -> {
+                    saveDisplayOption(which); // Save the selected index (0, 1, or 2)
                     updateClock(); // Update the widget based on the selected option
                     dialog.dismiss();
                 })
-                .setPositiveButton("OK", null)
+                .setNegativeButton(R.string.universal_cancel, null) // Changed from OK to Cancel, and removed positive button action
                 .show();
+        // ----- Fix Ended for this method(showDisplayOptionsDialog_revert)-----
     }
 
     private int getCurrentDisplayOption() {
@@ -2115,93 +2217,144 @@ public class HomeFragment extends Fragment {
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private void setupTorchButton() {
-        buttonTorchSwitch = requireView().findViewById(R.id.buttonTorchSwitch);
-
-        // Set default torch source if none selected
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
-        if (prefs.getString(Constants.PREF_SELECTED_TORCH_SOURCE, null) == null) {
-            try {
-                String defaultTorchId = getCameraWithFlash();
-                if (defaultTorchId != null) {
-                    prefs.edit()
-                            .putString(Constants.PREF_SELECTED_TORCH_SOURCE, defaultTorchId)
-                            .putBoolean(Constants.PREF_BOTH_TORCHES_ENABLED, false)
-                            .apply();
-                }
-            } catch (CameraAccessException e) {
-                Log.e(TAG, "Error setting default torch source: " + e.getMessage());
-            }
+        if (buttonTorchSwitch == null) {
+            Log.e(TAG, "buttonTorchSwitch is null, cannot set up listener.");
+            return;
         }
 
-        // Setup click listener for torch toggle
+        // Initial state update
+        // updateTorchButtonState(isTorchOn); // This might be called too early, consider moving or ensuring isTorchOn is accurate
+
         buttonTorchSwitch.setOnClickListener(v -> {
-            SharedPreferencesManager sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
-            
-            Intent intent;
-            if (sharedPreferencesManager.isRecordingInProgress()) {
-                // If recording, use RecordingService
-                intent = new Intent(requireContext(), RecordingService.class);
-                intent.setAction(Constants.INTENT_ACTION_TOGGLE_RECORDING_TORCH);
-            } else {
-                // If not recording, use TorchService
-                intent = new Intent(requireContext(), TorchService.class);
-                intent.setAction(Constants.INTENT_ACTION_TOGGLE_TORCH);
+            // ----- Fix Start for this method(setupTorchButton_onClick)-----
+            if (!isAdded() || getContext() == null) {
+                Log.w(TAG, "Torch button clicked, but fragment not fully ready.");
+                return;
             }
-            
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                requireContext().startForegroundService(intent);
+
+            if (isRecordingOrPaused()) {
+                Log.d(TAG, "Recording active. Sending toggle intent to RecordingService. Current isTorchOn (UI state): " + isTorchOn);
+                Intent serviceIntent = new Intent(getContext(), RecordingService.class);
+                serviceIntent.setAction(Constants.INTENT_ACTION_TOGGLE_RECORDING_TORCH);
+                try {
+                    ContextCompat.startForegroundService(getContext(), serviceIntent);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error starting RecordingService for torch toggle", e);
+                }
             } else {
-                requireContext().startService(intent);
+                Log.d(TAG, "Not recording. Toggling torch directly. Current isTorchOn: " + isTorchOn);
+                // Assuming toggleTorch() correctly handles CameraManager.setTorchMode,
+                // updates isTorchOn field, and calls updateTorchUI().
+                toggleTorch();
             }
+            // ----- Fix Ended for this method(setupTorchButton_onClick)-----
         });
 
-        // Setup long press listener
-        buttonTorchSwitch.setOnLongClickListener(v -> {
-            showTorchOptionsDialog();
-            vibrateTouch();
-            return true;
-        });
+        // Initialize and register the broadcast receiver for torch state changes from the service
+        // This is important for when the service toggles the torch (e.g., during recording)
+        // and the UI needs to reflect that change.
+        if (torchReceiver == null) { // Ensure it's initialized only once
+            initializeTorchReceiver();
+        }
+        if (getContext() != null && !isTorchReceiverRegistered) { // Check context and registration status
+            ContextCompat.registerReceiver(
+                    requireContext(),
+                    torchReceiver,
+                    new IntentFilter(Constants.BROADCAST_ON_TORCH_STATE_CHANGED),
+                    ContextCompat.RECEIVER_NOT_EXPORTED
+            );
+            isTorchReceiverRegistered = true;
+            Log.d(TAG, "Torch state change receiver registered in setupTorchButton.");
+        }
+         // Fetch initial torch state and update UI (if not already handled by onResume/onStart)
+        // This part might need careful placement depending on overall lifecycle management
+        // For now, assuming 'isTorchOn' is correctly initialized elsewhere (e.g. initializeTorch())
+        // and 'updateTorchUI' correctly updates the button.
+        // updateTorchUI(isTorchOn); // This updates the button drawable
+    }
 
-        // Register torch state receiver
-        if (torchReceiver == null) {
-            try {
-                // First try to unregister any existing receiver
-                requireContext().unregisterReceiver(torchReceiver);
-            } catch (IllegalArgumentException e) {
-                // Ignore if not registered
+    // Ensure toggleTorch method exists and correctly uses CameraManager.setTorchMode
+    // and updates the local isTorchOn variable and calls updateTorchUI.
+    // Example (ensure your actual toggleTorch matches this logic):
+    private void toggleTorch() {
+        if (cameraManager == null) {
+            Log.e(TAG, "CameraManager not available to toggle torch.");
+            return;
+        }
+        String currentCameraId = getCameraIdForTorch(); // Helper to get current camera ID
+        if (currentCameraId == null) {
+            Log.e(TAG, "No valid camera ID found for torch.");
+            return;
+        }
+
+        try {
+            isTorchOn = !isTorchOn;
+            cameraManager.setTorchMode(currentCameraId, isTorchOn);
+            Log.d(TAG, "Torch toggled directly via CameraManager. New state: " + isTorchOn + " for camera " + currentCameraId);
+            updateTorchUI(isTorchOn); // Update button appearance and any other UI
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Failed to toggle torch directly", e);
+            isTorchOn = !isTorchOn; // Revert state on error
+            updateTorchUI(isTorchOn); // Update UI back
+            Utils.showQuickToast(getContext(), "Error toggling torch.");
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Failed to toggle torch: Camera device " + currentCameraId + " is no longer connected or available.",e);
+            // This can happen if the camera is closed or in use by another app.
+            // Reset torch state and UI.
+            isTorchOn = false;
+            updateTorchUI(false);
+            Utils.showQuickToast(getContext(), "Torch unavailable.");
+        }
+    }
+
+    private String getCameraIdForTorch() {
+        // This method should return the ID of the camera that HomeFragment
+        // is currently configured to use for its general operations (like preview if it had one, or torch).
+        // It might be based on SharedPreferencesManager.getCameraSelection() and SharedPreferencesManager.getSelectedBackCameraId()
+        // This is a simplified placeholder. You need to ensure this returns the correct, active camera ID.
+        if(this.cameraId != null) return this.cameraId; // If HomeFragment already has a determined primary camera ID
+
+        // Fallback or more complex logic to determine the appropriate camera ID:
+        try {
+            if (cameraManager == null && getContext() != null) {
+                 cameraManager = (CameraManager) getContext().getSystemService(Context.CAMERA_SERVICE);
             }
-            
-            torchReceiver = new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    if (Constants.BROADCAST_ON_TORCH_STATE_CHANGED.equals(intent.getAction())) {
-                        boolean torchState = intent.getBooleanExtra(Constants.INTENT_EXTRA_TORCH_STATE, false);
-                        isTorchOn = torchState;
-                        Log.d("TorchDebug", "Received broadcast - Torch state: " + torchState);
-                        
-                        requireActivity().runOnUiThread(() -> {
-                            try {
-                                buttonTorchSwitch.setIcon(AppCompatResources.getDrawable(
-                                    requireContext(),
-                                    R.drawable.ic_flashlight_on
-                                ));
-                                buttonTorchSwitch.setSelected(isTorchOn);
-                                buttonTorchSwitch.setEnabled(true);
-                            } catch (Exception e) {
-                                Log.e("TorchDebug", "Error updating torch icon: " + e.getMessage());
-                            }
-                        });
+            if (cameraManager == null) return null;
+
+            CameraType selectedType = sharedPreferencesManager.getCameraSelection();
+            if (selectedType == CameraType.FRONT) {
+                for (String id : cameraManager.getCameraIdList()) {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                    Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                    Boolean flashAvailable = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT && flashAvailable != null && flashAvailable) {
+                        return id;
                     }
                 }
-            };
-            
-            IntentFilter filter = new IntentFilter(Constants.BROADCAST_ON_TORCH_STATE_CHANGED);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                requireContext().registerReceiver(torchReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                requireContext().registerReceiver(torchReceiver, filter);
+            } else { // BACK
+                String preferredBackId = sharedPreferencesManager.getSelectedBackCameraId();
+                if(preferredBackId != null){
+                     CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(preferredBackId);
+                     Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                     Boolean flashAvailable = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                     if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK && flashAvailable != null && flashAvailable) {
+                         return preferredBackId;
+                     }
+                }
+                // Fallback to default back camera if preferred is not suitable or not found
+                for (String id : cameraManager.getCameraIdList()) {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                    Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                    Boolean flashAvailable = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK && flashAvailable != null && flashAvailable) {
+                        return id; // Return first available back camera with flash
+                    }
+                }
             }
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Error accessing camera for torch ID", e);
         }
+        return null; // No suitable camera found
     }
 
     private void updateTorchButtonState(boolean isOn) {
@@ -2344,17 +2497,194 @@ public class HomeFragment extends Fragment {
         if (isAdded() && getActivity() != null) {
             getActivity().runOnUiThread(() -> {
                 try {
+                    // Ensure buttonTorchSwitch is not null
+                    if (buttonTorchSwitch == null) {
+                        Log.w("TorchDebug", "updateTorchUI: buttonTorchSwitch is null, cannot update.");
+                        return;
+                    }
+
                     buttonTorchSwitch.setIcon(AppCompatResources.getDrawable(
                         requireContext(),
-                        R.drawable.ic_flashlight_on
+                        R.drawable.ic_flashlight_on // Icon itself might not need to change, selector handles tint
                     ));
-                    buttonTorchSwitch.setSelected(isOn);
-                    buttonTorchSwitch.setEnabled(true);
-                    Log.d("TorchDebug", "Torch UI updated, isOn: " + isOn);
+                    buttonTorchSwitch.setSelected(isOn); // This controls the visual feedback (e.g., tint)
+                    // DO NOT set enabled state here; it's handled by recording state UI methods.
+                    Log.d("TorchDebug", "Torch UI updated (selected state): " + isOn + ", Enabled: " + buttonTorchSwitch.isEnabled());
                 } catch (Exception e) {
                     Log.e("TorchDebug", "Error updating torch UI: " + e.getMessage());
                 }
             });
         }
     }
+
+    private void setupAppLogoLongPressListener(View view) {
+        ImageView appLogo = view.findViewById(R.id.ivAppTitle);
+        if (appLogo != null) {
+            appLogo.setOnLongClickListener(v -> {
+                performHapticFeedback();
+                Log.i(TAG, "App logo long-pressed. Navigating to TrashFragment manually.");
+                // ----- Fix Start for this method (setupAppLogoLongPressListener) -----
+                // Navigate to TrashFragment manually
+                try {
+                    TrashFragment trashFragment = new TrashFragment();
+                    FragmentManager fragmentManager = getParentFragmentManager(); // Use getParentFragmentManager
+                    FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+
+                    // ----- Fix Start for this navigation block -----
+                    // Make the overlay container visible
+                    View overlayContainer = requireActivity().findViewById(R.id.overlay_fragment_container);
+                    if (overlayContainer != null) {
+                        overlayContainer.setVisibility(View.VISIBLE);
+                    } else {
+                        Log.e(TAG, "R.id.overlay_fragment_container not found in MainActivity! Cannot show TrashFragment.");
+                        Toast.makeText(getContext(), "Error opening trash (container not found).", Toast.LENGTH_SHORT).show();
+                        return true; // Consume click but don't proceed
+                    }
+
+                    fragmentTransaction.replace(R.id.overlay_fragment_container, trashFragment);
+                    // ----- Fix Ended for this navigation block -----
+                    fragmentTransaction.addToBackStack(null); 
+                    fragmentTransaction.commit();
+                } catch (Exception e) {
+                    Log.e(TAG, "Manual navigation to TrashFragment failed.", e);
+                    Toast.makeText(getContext(), "Error opening trash.", Toast.LENGTH_SHORT).show();
+                }
+                // ----- Fix Ended for this method (setupAppLogoLongPressListener) -----
+                return true; // Consume the long click
+            });
+        }
+    }
+
+    // ----- Fix Start for this class (HomeFragment) -----
+    private void initializeViews(View view) {
+        Log.d(TAG, "initializeViews: Finding UI elements.");
+        tvStorageInfo = view.findViewById(R.id.tvStorageInfo);
+        tvPreviewPlaceholder = view.findViewById(R.id.tvPreviewPlaceholder);
+        buttonStartStop = view.findViewById(R.id.buttonStartStop);
+        buttonPauseResume = view.findViewById(R.id.buttonPauseResume);
+        buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
+        cardPreview = view.findViewById(R.id.cardPreview); // Assuming R.id.cardPreview exists
+        vibrator = (Vibrator) requireActivity().getSystemService(Context.VIBRATOR_SERVICE);
+
+        // Clock related views
+        cardClock = view.findViewById(R.id.cardClock); // Corrected ID
+        tvClock = view.findViewById(R.id.tvClock);
+        tvDateEnglish = view.findViewById(R.id.tvDateEnglish);
+        tvDateArabic = view.findViewById(R.id.tvDateArabic);
+
+        // Tip view
+        tvTip = view.findViewById(R.id.tvTip);
+
+        // Stats view
+        tvStats = view.findViewById(R.id.tvStats); // Assuming R.id.tvStats for video count/size
+
+        // Torch button (already initialized elsewhere, but good to have it consistently)
+        buttonTorchSwitch = view.findViewById(R.id.buttonTorchSwitch);
+
+        // Initialize other views as needed here.
+        // textureView is handled by setupTextureView
+    }
+    // ----- Fix Ended for this class (HomeFragment) -----
+
+    // ----- Fix Start for this method(isRecordingOrPaused)-----
+    private boolean isRecordingOrPaused() {
+        return recordingState == RecordingState.IN_PROGRESS || recordingState == RecordingState.PAUSED;
+    }
+    // ----- Fix Ended for this method(isRecordingOrPaused)-----
+
+    // ----- Fix Start for this method(updateServiceWithCurrentSurface)-----
+    // This method replaces/refines the old updateRecordingSurface
+    private void updateServiceWithCurrentSurface(@Nullable Surface surfaceToUse) {
+        if (!isAdded() || getContext() == null) {
+            Log.w(TAG, "updateServiceWithCurrentSurface: Fragment not added or context is null, cannot send surface update.");
+            return;
+        }
+
+        Intent intent = new Intent(getContext(), RecordingService.class);
+        intent.setAction(Constants.INTENT_ACTION_CHANGE_SURFACE);
+        if (surfaceToUse != null && surfaceToUse.isValid()) {
+            intent.putExtra("SURFACE", surfaceToUse);
+            Log.d(TAG, "updateServiceWithCurrentSurface: Sending new VALID surface to RecordingService.");
+        } else {
+            intent.putExtra("SURFACE", (Surface) null); 
+            Log.d(TAG, "updateServiceWithCurrentSurface: Sending NULL surface to RecordingService (preview disabled or surface invalid/destroyed).");
+        }
+        // Use requireContext() for starting service if preferred and appropriate for fragment version
+        Context context = getContext();
+        if (context != null) {
+            context.startService(intent);
+        }
+    }
+    // ----- Fix Ended for this method(updateServiceWithCurrentSurface)-----
+
+    // ----- Fix Start for this class (HomeFragment) -----
+    private boolean isMyServiceRunning(Class<?> serviceClass) {
+        if (getContext() == null) {
+            return false;
+        }
+        ActivityManager manager = (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+        if (manager == null) {
+            return false;
+        }
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // ----- Fix Ended for this class (HomeFragment) -----
+
+    // ----- Fix Start for this class (HomeFragment_clock_color_picker) -----
+    private void applyClockCardColor(String colorHex) {
+        if (cardClock != null && colorHex != null) {
+            try {
+                cardClock.setCardBackgroundColor(Color.parseColor(colorHex));
+                Log.d(TAG, "Applied clock card color: " + colorHex);
+            } catch (IllegalArgumentException e) {
+                Log.e(TAG, "Invalid color hex for clock card: " + colorHex, e);
+                // Optionally apply default color if parse fails
+                cardClock.setCardBackgroundColor(Color.parseColor(SharedPreferencesManager.DEFAULT_CLOCK_CARD_COLOR));
+            }
+        }
+    }
+
+    private void showClockAppearanceDialog() {
+        final String[] appearanceOptions = {"Change Clock Display", "Change Clock Color"};
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Clock Appearance")
+                .setItems(appearanceOptions, (dialog, which) -> {
+                    if (which == 0) { // Change Clock Display
+                        showDisplayOptionsDialog();
+                    } else if (which == 1) { // Change Clock Color
+                        showClockColorChooserDialog();
+                    }
+                })
+                .setNegativeButton(R.string.universal_cancel, null)
+                .show();
+    }
+
+    private void showClockColorChooserDialog() {
+        String currentSelectedColorHex = sharedPreferencesManager.getClockCardColor();
+        int currentSelectedColorIndex = -1;
+        for (int i = 0; i < CLOCK_COLOR_HEX_VALUES.length; i++) {
+            if (CLOCK_COLOR_HEX_VALUES[i].equalsIgnoreCase(currentSelectedColorHex)) {
+                currentSelectedColorIndex = i;
+                break;
+            }
+        }
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Choose Clock Background Color")
+                .setSingleChoiceItems(CLOCK_COLOR_NAMES, currentSelectedColorIndex, (dialog, which) -> {
+                    String selectedColorHex = CLOCK_COLOR_HEX_VALUES[which];
+                    sharedPreferencesManager.setClockCardColor(selectedColorHex);
+                    applyClockCardColor(selectedColorHex);
+                    Log.d(TAG, "User selected clock color: " + CLOCK_COLOR_NAMES[which] + " (" + selectedColorHex + ")");
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.universal_cancel, null)
+                .show();
+    }
+    // ----- Fix Ended for this class (HomeFragment_clock_color_picker) -----
 }

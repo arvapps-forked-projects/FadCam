@@ -44,6 +44,7 @@ import com.fadcam.SharedPreferencesManager; // Import your manager
 import com.fadcam.Utils;
 import com.fadcam.ui.VideoItem; // Import the new VideoItem class
 import com.fadcam.ui.RecordsAdapter; // Ensure adapter import is correct
+import com.fadcam.utils.TrashManager; // <<< ADD IMPORT FOR TrashManager
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -71,6 +72,7 @@ import android.content.IntentFilter;
 
 import java.util.Set; // Need Set import
 import java.util.HashSet; // Need HashSet import
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout; // ADD THIS IMPORT
 
 public class RecordsFragment extends Fragment implements
         RecordsAdapter.OnVideoClickListener,
@@ -85,8 +87,10 @@ public class RecordsFragment extends Fragment implements
     // ** NEW: Set to track URIs currently being processed **
     private Set<Uri> currentlyProcessingUris = new HashSet<>();
     private static final String TAG = "RecordsFragment";
-    private AlertDialog progressDialog; // Field to hold the dialog
+    private AlertDialog progressDialog; // Field to hold the dialog for Save to Gallery
+    private AlertDialog moveTrashProgressDialog; // Changed from ProgressDialog to AlertDialog
     private RecyclerView recyclerView;
+    private SwipeRefreshLayout swipeRefreshLayout; // ADD THIS FIELD
     private LinearLayout emptyStateContainer; // Add field for the empty state layout
     private RecordsAdapter recordsAdapter;
     private boolean isGridView = true;
@@ -102,7 +106,6 @@ public class RecordsFragment extends Fragment implements
     private SharedPreferencesManager sharedPreferencesManager;
     private SpacesItemDecoration itemDecoration; // Keep a reference
     private ProgressBar loadingIndicator; // *** ADD field for ProgressBar ***
-    private boolean needsRefreshOnResume = false;
     private MaterialToolbar toolbar;
     private CharSequence originalToolbarTitle;
 
@@ -120,6 +123,97 @@ public class RecordsFragment extends Fragment implements
         } else {
             Log.w(TAG,"onDeletionFinishedCheckEmptyState called but view is null.");
         }
+    }
+
+    // *** NEW: Implement onMoveToTrashRequested from RecordActionListener ***
+    @Override
+    public void onMoveToTrashRequested(VideoItem videoItem) {
+        if (videoItem == null || videoItem.uri == null) {
+            Log.e(TAG, "onMoveToTrashRequested: Received null videoItem or URI.");
+            if (getContext() != null) {
+                Toast.makeText(getContext(), getString(R.string.delete_video_error_null_toast), Toast.LENGTH_SHORT).show();
+            }
+            onMoveToTrashFinished(false, "Error: Null item provided.");
+            return;
+        }
+
+        Log.i(TAG, "Delete requested for: " + videoItem.displayName);
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(getString(R.string.delete_video_dialog_title))
+                .setMessage(getString(R.string.delete_video_dialog_message, videoItem.displayName))
+                .setNegativeButton(getString(R.string.universal_cancel), (dialog, which) -> {
+                    onMoveToTrashFinished(false, getString(R.string.delete_video_cancelled_toast));
+                })
+                .setPositiveButton(getString(R.string.video_menu_del), (dialog, which) -> {
+                    if (executorService == null || executorService.isShutdown()) {
+                        executorService = Executors.newSingleThreadExecutor();
+                    }
+                    executorService.submit(() -> {
+                        boolean success = moveToTrashVideoItem(videoItem);
+                        final String message = success ? getString(R.string.delete_video_success_toast, videoItem.displayName) :
+                                getString(R.string.delete_video_fail_toast, videoItem.displayName);
+                        onMoveToTrashFinished(success, message);
+
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                if (success) {
+                                    loadRecordsList(); // Refresh the list
+                                }
+                                if (isInSelectionMode && selectedUris.contains(videoItem.uri)) {
+                                     selectedUris.remove(videoItem.uri);
+                                     if(selectedUris.isEmpty()) {
+                                         exitSelectionMode();
+                                     } else {
+                                         updateUiForSelectionMode();
+                                     }
+                                }
+                            });
+                        }
+                    });
+                })
+                .show();
+    }
+
+    @Override
+    public void onMoveToTrashStarted(String videoName) {
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            if (moveTrashProgressDialog != null && moveTrashProgressDialog.isShowing()) {
+                moveTrashProgressDialog.dismiss(); // Dismiss previous if any
+            }
+
+            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
+            LayoutInflater inflater = LayoutInflater.from(getContext());
+            View dialogView = inflater.inflate(R.layout.dialog_progress, null); // Assuming R.layout.dialog_progress exists
+
+            TextView progressText = dialogView.findViewById(R.id.progress_text); // Assuming R.id.progress_text exists in dialog_progress.xml
+            if (progressText != null) {
+                progressText.setText(getString(R.string.delete_video_progress, videoName));
+            }
+
+            builder.setView(dialogView);
+            builder.setCancelable(false); // User cannot cancel this
+
+            moveTrashProgressDialog = builder.create();
+            if (!moveTrashProgressDialog.isShowing()) {
+                moveTrashProgressDialog.show();
+            }
+        });
+    }
+
+    @Override
+    public void onMoveToTrashFinished(boolean success, String message) {
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            if (moveTrashProgressDialog != null && moveTrashProgressDialog.isShowing()) {
+                moveTrashProgressDialog.dismiss();
+                moveTrashProgressDialog = null; // Clear reference
+            }
+            if (getContext() != null && message != null && !message.isEmpty()) {
+                Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     // *** Register in onStart ***
@@ -152,22 +246,10 @@ public class RecordsFragment extends Fragment implements
                             return;
                         }
 
-                        if (Constants.ACTION_RECORDING_COMPLETE.equals(intent.getAction())) {
-                            boolean success = intent.getBooleanExtra(Constants.EXTRA_RECORDING_SUCCESS, false);
-                            String uriString = intent.getStringExtra(Constants.EXTRA_RECORDING_URI_STRING);
-                            Log.i(TAG, "Received ACTION_RECORDING_COMPLETE. Success: " + success + ", URI: " + uriString + ". Setting refresh flag.");
-
-                            // Set the flag indicating a refresh is needed
-                            needsRefreshOnResume = true;
-
-                            // OPTIONAL: If the fragment is currently visible (resumed), trigger the load immediately
-                            if (isResumed()) {
-                                Log.d(TAG, "Fragment is resumed, triggering immediate load list from broadcast receiver.");
-                                loadRecordsList();
-                                needsRefreshOnResume = false; // Reset flag as we loaded immediately
-                            } else {
-                                Log.d(TAG, "Fragment not resumed, refresh will happen in onResume.");
-                            }
+                        if (Constants.ACTION_STORAGE_LOCATION_CHANGED.equals(intent.getAction())) {
+                            Log.i(TAG, "Received ACTION_STORAGE_LOCATION_CHANGED. Refreshing list.");
+                            // If storage location changed, we should definitely reload the list.
+                            loadRecordsList();
                         }
                     }
                 };
@@ -298,40 +380,39 @@ public class RecordsFragment extends Fragment implements
         super.onViewCreated(view, savedInstanceState);
         Log.d(TAG, "onViewCreated: View hierarchy created. Finding views and setting up.");
 
-        // --- Perform ALL findViewById calls here ---
+        sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
+        toolbar = view.findViewById(R.id.topAppBar); 
+        if (toolbar != null && getActivity() instanceof AppCompatActivity) {
+            AppCompatActivity activity = (AppCompatActivity) getActivity();
+            activity.setSupportActionBar(toolbar);
+            originalToolbarTitle = getString(R.string.records_title); 
+            toolbar.setTitle(originalToolbarTitle);
+        } else {
+            Log.e(TAG, "Toolbar is null or activity is not AppCompatActivity in RecordsFragment.");
+        }
+        setHasOptionsMenu(true); 
+
+        loadingIndicator = view.findViewById(R.id.loading_indicator); 
         recyclerView = view.findViewById(R.id.recycler_view_records);
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout); 
+        emptyStateContainer = view.findViewById(R.id.empty_state_container);
         fabToggleView = view.findViewById(R.id.fab_toggle_view);
         fabDeleteSelected = view.findViewById(R.id.fab_delete_selected);
-        emptyStateContainer = view.findViewById(R.id.empty_state_container);
-        loadingIndicator = view.findViewById(R.id.loading_indicator);
-        toolbar = view.findViewById(R.id.topAppBar);
 
-        // --- Basic safety checks ---
-        if (recyclerView == null || fabToggleView == null || fabDeleteSelected == null || toolbar == null) {
-            Log.e(TAG, "onViewCreated: CRITICAL - One or more essential views not found!");
-            // You might want to show an error message or prevent further setup
-            Toast.makeText(getContext(),"Layout Error", Toast.LENGTH_SHORT).show();
-            return;
+        setupRecyclerView();
+        setupFabListeners();
+        updateFabIcons(); // Set initial FAB icon based on isGridView
+
+        // Setup SwipeRefreshLayout
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> {
+                Log.d(TAG, "Swipe to refresh triggered.");
+                loadRecordsList(); // Call your existing method to load/refresh records
+                // The setRefreshing(false) will be called at the end of loadRecordsList
+            });
+        } else {
+            Log.e(TAG, "SwipeRefreshLayout is null after findViewById!");
         }
-
-
-        // --- Setup Components using the found views ---
-        if (getActivity() instanceof AppCompatActivity) {
-            ((AppCompatActivity) getActivity()).setSupportActionBar(toolbar);
-            if (originalToolbarTitle == null) { originalToolbarTitle = toolbar.getTitle(); }
-            if (originalToolbarTitle == null || originalToolbarTitle.length() == 0){ originalToolbarTitle = getString(R.string.records_title); } // Use default/string res
-            // Initial toolbar state might need to be set depending on selection mode persistence logic
-            updateUiForSelectionMode(); // Set initial toolbar based on mode
-        }
-
-        // Initialize adapter and RecyclerView
-        setupRecyclerView(); // Safe to call now
-
-        // Setup FAB listeners
-        setupFabListeners(); // Safe to call now
-
-        // Set initial FAB icons
-        updateFabIcons();
 
         // --- Initial Data Load ---
         // Load data *after* adapter is set up
@@ -350,30 +431,28 @@ public class RecordsFragment extends Fragment implements
     @Override
     public void onResume() {
         super.onResume();
-        Log.d(TAG, "onResume: Fragment resumed. Checking refresh flag. Flag is: " + needsRefreshOnResume);
+        Log.i(TAG, "LOG_LIFECYCLE: onResume called.");
+
+        // ----- Fix Start for this method (onResume_toolbar_and_menu_refresh) -----
+        // Re-assert toolbar and invalidate options menu
+        if (toolbar != null && getActivity() instanceof AppCompatActivity) {
+            AppCompatActivity activity = (AppCompatActivity) getActivity();
+            activity.setSupportActionBar(toolbar); // Re-set the support action bar
+            toolbar.setTitle(originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title));
+            activity.invalidateOptionsMenu(); // Tell the activity to redraw the options menu
+            Log.d(TAG, "Toolbar re-set and options menu invalidated in onResume.");
+        } else {
+            Log.w(TAG, "Could not re-set toolbar in onResume - toolbar or activity null/invalid.");
+        }
+        // ----- Fix Ended for this method (onResume_toolbar_and_menu_refresh) -----
 
         // Add null check for safety
         if (sharedPreferencesManager == null && getContext() != null) {
             sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
         }
 
-
-        // If a refresh is needed (flagged by the broadcast receiver)
-        if (needsRefreshOnResume) {
-            Log.i(TAG, "Needs refresh flag is set, calling loadRecordsList from onResume.");
-            loadRecordsList(); // Load the fresh list
-            needsRefreshOnResume = false; // Reset the flag now that we've refreshed
-        } else {
-            // Optional: Consider if a refresh is needed for other reasons on resume,
-            // e.g., if settings like sort order could have changed while away.
-            // For now, only refresh if flagged by completion.
-            Log.d(TAG, "No refresh needed on resume based on flag.");
-            // **Crucial:** If no load happened, ensure the current view state is correct
-            // in case the adapter has data but the RecyclerView was hidden.
-            if (getView() != null && recordsAdapter != null && recordsAdapter.getItemCount() > 0) {
-                updateUiVisibility();
-            }
-        }
+        Log.i(TAG, "LOG_REFRESH: Calling loadRecordsList() from onResume.");
+        loadRecordsList(); // RESTORED: Always reload the list when the fragment resumes
     }
 
     @Override
@@ -578,126 +657,135 @@ public class RecordsFragment extends Fragment implements
 
     @SuppressLint("NotifyDataSetChanged")
     private void loadRecordsList() {
-        Log.d(TAG, "loadRecordsList: Starting.");
-        // 0. PREPARE UI FOR LOADING (Show spinner, hide content)
-        if (getView() == null) { // Extra safety check: ensure view is available
-            Log.e(TAG,"loadRecordsList called but fragment view is null.");
-            return;
+        Log.i(TAG, "LOG_LOAD_RECORDS: loadRecordsList START. Current sort: " + currentSortOption);
+        if (loadingIndicator != null) {
+            loadingIndicator.setVisibility(View.VISIBLE);
+            Log.d(TAG, "LOG_LOAD_RECORDS: Loading indicator VISIBLE.");
+        }
+        if (recyclerView != null) {
+            recyclerView.setVisibility(View.GONE);
+            Log.d(TAG, "LOG_LOAD_RECORDS: RecyclerView GONE.");
+        }
+        if (emptyStateContainer != null) {
+            emptyStateContainer.setVisibility(View.GONE);
+            Log.d(TAG, "LOG_LOAD_RECORDS: Empty state GONE.");
         }
 
-        // Show loading, hide others - Perform UI updates immediately on the current thread
-        if (loadingIndicator != null) loadingIndicator.setVisibility(View.VISIBLE);
-        if (recyclerView != null) recyclerView.setVisibility(View.GONE);
-        if (emptyStateContainer != null) emptyStateContainer.setVisibility(View.GONE);
-        if (fabDeleteSelected != null) fabDeleteSelected.setVisibility(View.GONE); // Hide delete fab during load
-        selectedVideosUris.clear(); // Clear any existing selection state
+        executorService.execute(() -> {
+            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Background execution START.");
+            final List<VideoItem> loadedItems = new ArrayList<>();
+            List<VideoItem> tempCacheVideos = getTempCacheRecordsList(); // Get temp videos first, as they might be relevant for both internal and SAF paths
+            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Fetched " + tempCacheVideos.size() + " temp cache videos.");
 
-        // Ensure executor service is ready
-        if (executorService == null || executorService.isShutdown()) {
-            Log.w(TAG, "loadRecordsList: ExecutorService was null or shutdown, re-initializing.");
-            executorService = Executors.newSingleThreadExecutor();
-        }
+            String safUriString = sharedPreferencesManager.getCustomStorageUri();
+            boolean loadedFromSaf = false;
 
-        executorService.submit(() -> {
-            Log.d(TAG, "loadRecordsList (Background Thread): Started loading files.");
-            // 1. Load from Primary Location (Internal or SAF)
-            List<VideoItem> primaryItems; // Declare list
-            String storageMode = sharedPreferencesManager.getStorageMode();
-            String customUriString = sharedPreferencesManager.getCustomStorageUri();
-            Log.d(TAG, "loadRecordsList (Background Thread): Mode="+storageMode+", URI="+customUriString);
-
-            if (SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode) && customUriString != null) {
-                Uri treeUri = null;
-                boolean isValidUri = false;
+            if (safUriString != null) {
+                Log.d(TAG, "LOG_LOAD_RECORDS_BG: SAF URI configured: " + safUriString);
                 try {
-                    treeUri = Uri.parse(customUriString);
-                    isValidUri = true;
-                } catch (Exception e) { Log.e(TAG,"Error parsing custom storage URI string", e);}
-
-                if (isValidUri && hasSafPermission(treeUri)) {
-                    primaryItems = getSafRecordsList(treeUri);
-                } else {
-                    // Handle permission or invalid URI error (show toast/dialog later on UI thread if needed)
-                    if(isValidUri) Log.e(TAG, "Permission/Read error for custom SAF location: " + customUriString);
-                    else Log.e(TAG,"Invalid Custom URI string: " + customUriString);
-                    primaryItems = new ArrayList<>();
+                    Uri treeUri = Uri.parse(safUriString);
+                    if (hasSafPermission(treeUri)) {
+                        Log.i(TAG, "LOG_LOAD_RECORDS_BG: Valid SAF custom location. Loading ONLY from SAF.");
+                        List<VideoItem> safVideos = getSafRecordsList(treeUri);
+                        Log.d(TAG, "LOG_LOAD_RECORDS_BG: Fetched " + safVideos.size() + " SAF videos.");
+                        loadedItems.addAll(safVideos);
+                        loadedFromSaf = true;
+                    } else {
+                        Log.w(TAG, "LOG_LOAD_RECORDS_BG: No persistent permission for SAF URI: " + safUriString + ". Falling back to internal storage.");
+                        // Optionally, notify the user or clear the invalid preference here.
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "LOG_LOAD_RECORDS_BG: Error processing SAF URI: " + safUriString + ". Falling back to internal storage.", e);
                 }
-            } else { // Internal Storage mode or Custom mode with null URI
-                primaryItems = getInternalRecordsList();
+            } else {
+                Log.d(TAG, "LOG_LOAD_RECORDS_BG: No SAF URI configured. Using internal storage.");
             }
 
-            // 2. Load from Temp Cache Location
-            List<VideoItem> tempItems = getTempCacheRecordsList();
+            if (!loadedFromSaf) {
+                Log.i(TAG, "LOG_LOAD_RECORDS_BG: Loading from internal storage.");
+                List<VideoItem> internalVideos = getInternalRecordsList();
+                Log.d(TAG, "LOG_LOAD_RECORDS_BG: Fetched " + internalVideos.size() + " internal videos.");
+                loadedItems.addAll(internalVideos);
+            }
 
-            // 3. Combine Lists
-            List<VideoItem> combinedItems = combineVideoLists(primaryItems, tempItems);
+            // Add temp cache videos to the primary list (SAF or Internal)
+            // Ensure no duplicates if a temp video somehow also got listed by primary storage methods (unlikely but good practice)
+            for(VideoItem tempVideo : tempCacheVideos){
+                if(!loadedItems.contains(tempVideo)){
+                    loadedItems.add(tempVideo);
+                    Log.d(TAG, "LOG_LOAD_RECORDS_BG: Added temp cache video " + tempVideo.displayName + " to final list.");
+                }
+            }
+            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Total items before sort (after potentially adding temp cache): " + loadedItems.size());
 
-            // 4. Sort the combined list
-            sortItems(combinedItems, currentSortOption);
+            sortItems(loadedItems, currentSortOption);
+            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Total items after sort: " + loadedItems.size());
 
-            // 5. Create final list copy for the UI thread
-            final List<VideoItem> finalItems = new ArrayList<>(combinedItems);
-            Log.d(TAG, "loadRecordsList (Background Thread): Loading complete. Total items: " + finalItems.size());
-
-
-            // 6. UPDATE UI ON COMPLETION (Post back to Main Thread)
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
-                    Log.d(TAG, "loadRecordsList (UI Thread): Updating UI.");
-                    videoItems = finalItems; // Update the main list reference in the fragment
-
-                    // Update adapter data FIRST
+                    Log.i(TAG, "LOG_LOAD_RECORDS_UI: Updating UI on main thread. Item count to display: " + loadedItems.size());
+                    videoItems.clear();
+                    videoItems.addAll(loadedItems);
+                    Log.d(TAG, "LOG_LOAD_RECORDS_UI: videoItems list updated in fragment. Size: " + videoItems.size());
                     if (recordsAdapter != null) {
-                        // Clear adapter's processing state before feeding new data
-                        currentlyProcessingUris.clear(); // Also clear fragment's tracker on full reload
-                        recordsAdapter.updateProcessingUris(currentlyProcessingUris);
-                        recordsAdapter.updateRecords(videoItems);
-                        Log.d(TAG, "loadRecordsList (UI Thread): Adapter updated.");
+                        recordsAdapter.updateRecords(videoItems); // <--- Ensure this call happens
+                        // notifyDataSetChanged is called within updateRecords in the adapter, so not strictly needed here again if that's the case.
+                        // However, explicitly calling it here can be a safeguard or if adapter's updateRecords changes.
+                        // For now, let's assume updateRecords handles the notification.
+                        // recordsAdapter.notifyDataSetChanged(); // This might be redundant if updateRecords already does it.
+                        Log.d(TAG, "LOG_LOAD_RECORDS_UI: Adapter updated with new records. Adapter item count: " + (recordsAdapter != null ? recordsAdapter.getItemCount() : "null adapter"));
                     } else {
-                        Log.e(TAG, "Adapter was null during UI update.");
-                        // Try to set it up again if it became null somehow
-                        setupRecyclerView();
-                        if (recordsAdapter != null) recordsAdapter.updateRecords(videoItems);
+                        Log.w(TAG, "LOG_LOAD_RECORDS_UI: recordsAdapter is NULL when trying to update and notify.");
                     }
-
-                    // Then update visibility based on the final data
                     updateUiVisibility();
-
-                    // Hide loading indicator LAST
-                    if (loadingIndicator != null) loadingIndicator.setVisibility(View.GONE);
-
-                    Log.i(TAG, "Records list updated. Total Count: " + videoItems.size());
+                    if (loadingIndicator != null) {
+                        loadingIndicator.setVisibility(View.GONE);
+                        Log.d(TAG, "LOG_LOAD_RECORDS_UI: Loading indicator GONE.");
+                    }
+                    if (swipeRefreshLayout != null) {
+                        swipeRefreshLayout.setRefreshing(false);
+                        Log.d(TAG, "LOG_LOAD_RECORDS_UI: SwipeRefreshLayout refreshing set to false.");
+                    }
                 });
             } else {
-                Log.e(TAG, "Activity was null when trying to update UI post-load.");
+                Log.w(TAG,"LOG_LOAD_RECORDS_BG: Activity is null, cannot update UI after loading records.");
             }
-        }); // End of submit lambda
-    } // End of loadRecordsList
+            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Background execution END.");
+        });
+        Log.d(TAG, "LOG_LOAD_RECORDS: loadRecordsList END (background task launched).");
+    }
 
 
     // Ensure updateUiVisibility is defined correctly:
     private void updateUiVisibility() {
-        if (getView() == null) return; // Check if fragment view exists
+        if (getView() == null) {
+            Log.w(TAG, "LOG_UI_VISIBILITY: getView() is null. Cannot update UI visibility.");
+            return;
+        }
 
-        // Get the current count directly from the adapter if possible, or fragment's list
-        boolean isEmpty = (recordsAdapter != null) ?
-                recordsAdapter.getItemCount() == 0 :
-                videoItems.isEmpty();
+        boolean isEmpty;
+        if (recordsAdapter != null) {
+            isEmpty = recordsAdapter.getItemCount() == 0;
+            Log.d(TAG, "LOG_UI_VISIBILITY: Adapter found. Item count: " + recordsAdapter.getItemCount() + ". Is empty: " + isEmpty);
+        } else {
+            isEmpty = videoItems.isEmpty();
+            Log.d(TAG, "LOG_UI_VISIBILITY: Adapter is NULL. videoItems list size: " + videoItems.size() + ". Is empty: " + isEmpty);
+        }
 
-        Log.d(TAG, "updateUiVisibility called. Is list empty? " + isEmpty);
+        Log.i(TAG, "LOG_UI_VISIBILITY: updateUiVisibility called. Final decision: isEmpty = " + isEmpty);
 
         if (isEmpty) {
             if (recyclerView != null) recyclerView.setVisibility(View.GONE);
             if (emptyStateContainer != null) emptyStateContainer.setVisibility(View.VISIBLE);
-            Log.d(TAG,"Showing empty state.");
+            Log.d(TAG,"LOG_UI_VISIBILITY: Showing empty state (Recycler GONE, Empty VISIBLE).");
         } else {
             if (emptyStateContainer != null) emptyStateContainer.setVisibility(View.GONE);
             if (recyclerView != null) recyclerView.setVisibility(View.VISIBLE);
-            Log.d(TAG,"Showing recycler view.");
+            Log.d(TAG,"LOG_UI_VISIBILITY: Showing recycler view (Empty GONE, Recycler VISIBLE).");
         }
-        // Ensure loading indicator is hidden
         if (loadingIndicator != null && loadingIndicator.getVisibility() == View.VISIBLE) {
             loadingIndicator.setVisibility(View.GONE);
+            Log.d(TAG,"LOG_UI_VISIBILITY: Loading indicator was visible, set to GONE.");
         }
     }
 
@@ -722,90 +810,92 @@ public class RecordsFragment extends Fragment implements
     }
 
     private List<VideoItem> getInternalRecordsList() {
+        Log.d(TAG, "LOG_GET_INTERNAL: getInternalRecordsList START.");
         List<VideoItem> items = new ArrayList<>();
         File recordsDir = getContext() != null ? getContext().getExternalFilesDir(null) : null;
         if (recordsDir == null) {
-            Log.e(TAG, "Could not get ExternalFilesDir for internal storage.");
-            return items; // Return empty list
+            Log.e(TAG, "LOG_GET_INTERNAL: Could not get ExternalFilesDir for internal storage.");
+            return items;
         }
         File fadCamDir = new File(recordsDir, Constants.RECORDING_DIRECTORY);
+        Log.d(TAG, "LOG_GET_INTERNAL: Checking directory: " + fadCamDir.getAbsolutePath());
 
         if (fadCamDir.exists() && fadCamDir.isDirectory()) {
+            Log.d(TAG, "LOG_GET_INTERNAL: Directory exists. Listing files.");
             File[] files = fadCamDir.listFiles();
             if (files != null) {
+                Log.d(TAG, "LOG_GET_INTERNAL: Found " + files.length + " files/dirs in internal storage.");
                 for (File file : files) {
-                    // Check for correct extension and ignore temp files if they somehow linger
                     if (file.isFile() && file.getName().endsWith("." + Constants.RECORDING_FILE_EXTENSION) && !file.getName().startsWith("temp_")) {
                         long lastModifiedMeta = file.lastModified();
                         long timestampFromFile = Utils.parseTimestampFromFilename(file.getName());
-                        long finalTimestamp = lastModifiedMeta; // Default to metadata
+                        long finalTimestamp = lastModifiedMeta; 
 
-                        if (lastModifiedMeta <= 0 && timestampFromFile > 0) { // If metadata is bad, use filename timestamp
+                        if (lastModifiedMeta <= 0 && timestampFromFile > 0) { 
                             finalTimestamp = timestampFromFile;
-                            Log.d(TAG,"Internal: Used filename timestamp for " + file.getName());
                         } else if (lastModifiedMeta <= 0 && timestampFromFile <= 0) {
-                            Log.w(TAG,"Internal: Both metadata and filename parse failed for " + file.getName() + ", using current time as fallback.");
-                            finalTimestamp = System.currentTimeMillis(); // Fallback needed
-                        } else {
-                            // Use metadata by default if valid
-                            // Log.v(TAG,"Internal: Using metadata timestamp for " + file.getName());
+                            finalTimestamp = System.currentTimeMillis(); 
                         }
                         Uri uri = Uri.fromFile(file);
-                        Log.d(TAG, "Internal Added: " + file.getName() + " | Using Timestamp: " + finalTimestamp);
                         items.add(new VideoItem(uri, file.getName(), file.length(), finalTimestamp));
+                        Log.v(TAG, "LOG_GET_INTERNAL: Added internal item: " + file.getName());
+                    } else {
+                        Log.v(TAG, "LOG_GET_INTERNAL: Skipped item (not a valid video file or is temp): " + file.getName());
                     }
                 }
             } else {
-                Log.w(TAG, "Internal FadCam directory listFiles returned null.");
+                Log.w(TAG, "LOG_GET_INTERNAL: Internal FadCam directory listFiles returned null.");
             }
         } else {
-            Log.i(TAG, "Internal FadCam directory does not exist yet.");
+            Log.i(TAG, "LOG_GET_INTERNAL: Internal FadCam directory does not exist yet: " + fadCamDir.getAbsolutePath());
         }
-        Log.d(TAG, "Found " + items.size() + " internal records.");
+        Log.i(TAG, "LOG_GET_INTERNAL: Found " + items.size() + " internal records. END.");
         return items;
     }
 
     private List<VideoItem> getSafRecordsList(Uri treeUri) {
+        Log.d(TAG, "LOG_GET_SAF: getSafRecordsList START for URI: " + treeUri);
         List<VideoItem> items = new ArrayList<>();
         Context context = getContext();
         if (context == null) {
-            Log.e(TAG,"Context is null in getSafRecordsList"); return items;
+            Log.e(TAG,"LOG_GET_SAF: Context is null."); return items;
         }
 
         DocumentFile dir = DocumentFile.fromTreeUri(context, treeUri);
 
         if (dir != null && dir.isDirectory() && dir.canRead()) {
+            Log.d(TAG, "LOG_GET_SAF: SAF Directory " + dir.getName() + " is accessible. Listing files.");
             try {
-                for (DocumentFile file : dir.listFiles()) {
-                    // Added checks for isFile and valid name
+                DocumentFile[] files = dir.listFiles();
+                Log.d(TAG, "LOG_GET_SAF: Found " + (files != null ? files.length : "null (listFiles failed?)") + " files/dirs in SAF location.");
+                for (DocumentFile file : files) {
                     if (file != null && file.isFile() && file.getName() != null &&
-                            (file.getName().endsWith("." + Constants.RECORDING_FILE_EXTENSION) || "video/mp4".equals(file.getType())) && // Check name or MIME
-                            !file.getName().startsWith("temp_")) // Ignore temporary files
+                            (file.getName().endsWith("." + Constants.RECORDING_FILE_EXTENSION) || "video/mp4".equals(file.getType())) && 
+                            !file.getName().startsWith("temp_")) 
                     {
                         long lastModifiedMeta = file.lastModified();
                         String name = file.getName();
                         long timestampFromFile = Utils.parseTimestampFromFilename(name);
-                        long finalTimestamp = lastModifiedMeta; // Default to metadata
+                        long finalTimestamp = lastModifiedMeta; 
 
-                        if (lastModifiedMeta <= 0 && timestampFromFile > 0) { // If metadata is bad (often 0 for SAF), use filename timestamp
+                        if (lastModifiedMeta <= 0 && timestampFromFile > 0) { 
                             finalTimestamp = timestampFromFile;
-                            Log.d(TAG,"SAF: Used filename timestamp for " + name);
                         } else if (lastModifiedMeta <= 0 && timestampFromFile <= 0) {
-                            Log.w(TAG,"SAF: Both metadata and filename parse failed for " + name + ", using current time as fallback.");
-                            finalTimestamp = System.currentTimeMillis(); // Fallback needed
-                        } else {
-                            // Use metadata by default if valid (it might be valid sometimes)
-                            // Log.v(TAG,"SAF: Using metadata timestamp for " + name);
+                            finalTimestamp = System.currentTimeMillis(); 
                         }
-
                         Uri uri = file.getUri();
-                        Log.d(TAG, "SAF Added: " + name + " | Using Timestamp: " + finalTimestamp);
                         items.add(new VideoItem(uri, name, file.length(), finalTimestamp));
+                        Log.v(TAG, "LOG_GET_SAF: Added SAF item: " + name);
+                    } else {
+                        if (file != null) {
+                             Log.v(TAG, "LOG_GET_SAF: Skipped item (not a valid video file or is temp): " + file.getName() + " | isFile: " + file.isFile() + " | type: " + file.getType());
+                        } else {
+                             Log.v(TAG, "LOG_GET_SAF: Skipped a null DocumentFile entry in listFiles result.");
+                        }
                     }
                 }
-                Log.d(TAG, "Found " + items.size() + " SAF records in '" + dir.getName()+"'");
             } catch (Exception e) {
-                Log.e(TAG, "Error listing SAF files in " + treeUri, e);
+                Log.e(TAG, "LOG_GET_SAF: Error listing SAF files in " + treeUri, e);
                 if(getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(context, "Error reading custom location content.", Toast.LENGTH_SHORT).show();
@@ -813,11 +903,12 @@ public class RecordsFragment extends Fragment implements
                 }
             }
         } else {
-            Log.e(TAG, "Cannot read or access SAF directory: " + treeUri +
-                    ", Exists=" + (dir != null && dir.exists()) +
+            Log.e(TAG, "LOG_GET_SAF: Cannot read or access SAF directory: " + treeUri +
+                    ", Dir Exists=" + (dir != null && dir.exists()) +
                     ", IsDir=" + (dir != null && dir.isDirectory()) +
                     ", CanRead=" + (dir != null && dir.canRead()));
         }
+        Log.i(TAG, "LOG_GET_SAF: Found " + items.size() + " SAF records. END.");
         return items;
     }
 
@@ -1046,20 +1137,42 @@ public class RecordsFragment extends Fragment implements
     // --- deleteSelectedVideos (Corrected version from previous step) ---
     /** Handles deletion of selected videos */
     private void deleteSelectedVideos() {
-        final List<Uri> itemsToDelete = new ArrayList<>(selectedUris); // Use fragment's list
-        if(itemsToDelete.isEmpty()){ Log.d(TAG,"Deletion requested but selectedUris is empty."); exitSelectionMode(); return; }
+        final List<Uri> itemsToDeleteUris = new ArrayList<>(selectedUris);
+        if(itemsToDeleteUris.isEmpty()){ Log.d(TAG,"Deletion requested but selectedUris is empty."); exitSelectionMode(); return; }
 
-        Log.i(TAG,"Deleting "+itemsToDelete.size()+" selected videos...");
-        exitSelectionMode(); // Exit selection mode UI first
+        Log.i(TAG, getString(R.string.delete_videos_log, itemsToDeleteUris.size()));
+        exitSelectionMode();
 
         if (executorService == null || executorService.isShutdown()){ executorService = Executors.newSingleThreadExecutor(); }
-        executorService.submit(() -> { /* ... background deletion loop (calling deleteVideoUri) ... */
+        executorService.submit(() -> {
             int successCount = 0; int failCount = 0;
-            for(Uri uri: itemsToDelete) { if(deleteVideoUri(uri)) successCount++; else failCount++; }
-            Log.d(TAG,"BG Deletion Finished. Success: "+successCount+", Fail: "+failCount);
+            List<VideoItem> allCurrentItems = new ArrayList<>(videoItems); // Copy for safe iteration
+
+            for(Uri uri: itemsToDeleteUris) {
+                VideoItem itemToTrash = findVideoItemByUri(allCurrentItems, uri);
+                if (itemToTrash != null) {
+                    if (moveToTrashVideoItem(itemToTrash)) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } else {
+                    Log.w(TAG, "Could not find VideoItem for URI: " + uri + " to move to trash.");
+                    failCount++;
+                }
+            }
+            Log.d(TAG,"BG Trash Operation Finished. Success: "+successCount+", Fail: "+failCount);
             // Post results and UI refresh back to main thread
             final int finalSuccessCount = successCount; final int finalFailCount = failCount;
-            if(getActivity()!=null){ getActivity().runOnUiThread(()->{/* ... Show Toast ... */ loadRecordsList(); }); }
+            if(getActivity()!=null){
+                getActivity().runOnUiThread(()->{
+                    String message = (finalFailCount > 0) ?
+                             getString(R.string.delete_videos_partial_success_toast, finalSuccessCount, finalFailCount) :
+                             getString(R.string.delete_videos_success_toast, finalSuccessCount);
+                    Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+                    loadRecordsList();
+                });
+            }
         });
     }
     private void confirmDeleteAll() {
@@ -1078,23 +1191,32 @@ public class RecordsFragment extends Fragment implements
 
     // Inside RecordsFragment.java
     private void deleteAllVideos() {
-        List<VideoItem> itemsToDelete = new ArrayList<>(videoItems);
-        if (itemsToDelete.isEmpty()) { /* ... show toast, return ... */ return; }
+        List<VideoItem> itemsToTrash = new ArrayList<>(videoItems);
+        if (itemsToTrash.isEmpty()) {
+             if(getContext() != null) Toast.makeText(requireContext(), "No videos to move to trash.", Toast.LENGTH_SHORT).show();
+             return;
+        }
 
-        // Visually clear immediately (optimistic)
-        videoItems.clear();
-        if(recordsAdapter != null) recordsAdapter.updateRecords(videoItems);
-        // *** FIX: Update visibility immediately after clearing for UI responsiveness ***
-        updateUiVisibility(); // Show empty state now
-        // --- End FIX ---
+        Log.i(TAG, "Moving all " + itemsToTrash.size() + " videos to trash...");
+
+        if (executorService == null || executorService.isShutdown()) {
+            executorService = Executors.newSingleThreadExecutor();
+        }
 
         executorService.submit(() -> {
             int successCount = 0;
             int failCount = 0;
-            for (VideoItem item : itemsToDelete) {
+            for (VideoItem item : itemsToTrash) {
                 if (item != null && item.uri != null) {
-                    if (deleteVideoUri(item.uri)) successCount++; else failCount++;
-                } else { failCount++; }
+                    if (moveToTrashVideoItem(item)) { // Pass the whole VideoItem
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } else {
+                    Log.w(TAG, "Encountered a null item or item with null URI in deleteAllVideos list.");
+                    failCount++;
+                }
             }
 
             // Final status update on main thread
@@ -1103,59 +1225,117 @@ public class RecordsFragment extends Fragment implements
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     String message = (finalFailCount > 0) ?
-                            "Deleted " + finalSuccessCount + ", Failed " + finalFailCount :
-                            "Deleted all " + finalSuccessCount + " videos.";
+                            getString(R.string.delete_videos_partial_success_toast, finalSuccessCount, finalFailCount) :
+                            getString(R.string.delete_videos_success_toast, finalSuccessCount);
                     Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
-
-                    // *** Optional: Double-check UI visibility here, though should already be set ***
-                    // updateUiVisibility();
+                    loadRecordsList(); // Refresh the list from storage
                 });
             }
         });
     }
 
-    // Helper to delete a video via URI (Internal or SAF)
-    private boolean deleteVideoUri(Uri uri) {
-        Context context = getContext();
-        if(context == null || uri == null) return false;
+    // Helper to find VideoItem by URI from a list
+    private VideoItem findVideoItemByUri(List<VideoItem> items, Uri uri) {
+        if (uri == null || items == null) return null;
+        for (VideoItem item : items) {
+            if (item != null && uri.equals(item.uri)) {
+                return item;
+            }
+        }
+        return null;
+    }
 
-        Log.d(TAG, "Attempting to delete URI: " + uri);
-        try {
-            if ("file".equals(uri.getScheme())) {
-                File file = new File(uri.getPath());
-                if (file.exists() && file.delete()) {
-                    Log.d(TAG, "Deleted internal file: " + file.getName());
-                    return true;
-                } else {
-                    Log.e(TAG, "Failed to delete internal file: " + uri.getPath() + " Exists=" + file.exists());
-                    return false;
-                }
-            } else if ("content".equals(uri.getScheme())) {
-                if (DocumentsContract.deleteDocument(context.getContentResolver(), uri)) {
-                    Log.d(TAG, "Deleted SAF document: " + uri);
-                    return true;
-                } else {
-                    // Check if it was already deleted or if it's really an error
-                    DocumentFile doc = DocumentFile.fromSingleUri(context, uri);
-                    if(doc == null || !doc.exists()){
-                        Log.w(TAG,"deleteDocument returned false, but file doesn't exist. Treating as success. URI: "+ uri);
+    /**
+     * Moves a single VideoItem to the trash.
+     * This replaces the old deleteVideoUri functionality.
+     *
+     * @param videoItem The VideoItem to move to trash.
+     * @return true if the video was successfully moved to trash, false otherwise.
+     */
+    private boolean moveToTrashVideoItem(VideoItem videoItem) {
+        Context context = getContext();
+        if (context == null || videoItem == null || videoItem.uri == null || videoItem.displayName == null) {
+            Log.e(TAG, "moveToTrashVideoItem: Invalid arguments (context, videoItem, URI, or displayName is null).");
+            return false;
+        }
+
+        Uri uri = videoItem.uri;
+        String originalDisplayName = videoItem.displayName;
+        // Determine if it's an SAF source. Content URIs are typically from SAF.
+        boolean isSafSource = "content".equals(uri.getScheme());
+
+        Log.i(TAG, "Attempting to move to trash: " + originalDisplayName + " (URI: " + uri + ", isSAF: " + isSafSource + ")");
+
+        if (TrashManager.moveToTrash(context, uri, originalDisplayName, isSafSource)) {
+            Log.i(TAG, "Successfully moved to trash: " + originalDisplayName);
+            return true;
+        } else {
+            Log.e(TAG, "Failed to move to trash: " + originalDisplayName);
+            // Optionally, show a specific toast for this failure if needed,
+            // but batch operations will show a summary.
+            // if(getActivity() != null) getActivity().runOnUiThread(() -> Toast.makeText(context, "Failed to move '" + originalDisplayName + "' to trash.", Toast.LENGTH_SHORT).show());
+            return false;
+        }
+    }
+
+    // OLD deleteVideoUri - to be removed or commented out after confirming moveToTrashVideoItem is used everywhere
+    private boolean deleteVideoUri(Uri uri) {
+        // THIS METHOD IS NOW REPLACED BY moveToTrashVideoItem(VideoItem item)
+        // To use the new method, you need the VideoItem object, not just the URI,
+        // because we need the originalDisplayName and to determine if it's an SAF source.
+
+        // Find the VideoItem corresponding to this URI from your main list (videoItems)
+        VideoItem itemToTrash = null;
+        List<VideoItem> currentItems = new ArrayList<>(videoItems); // Use a copy to avoid issues if list is modified elsewhere
+        itemToTrash = findVideoItemByUri(currentItems, uri);
+
+        if (itemToTrash != null) {
+            Log.d(TAG, "Redirecting deleteVideoUri for " + uri + " to moveToTrashVideoItem.");
+            return moveToTrashVideoItem(itemToTrash);
+        } else {
+            Log.e(TAG, "deleteVideoUri called for URI not found in videoItems: " + uri + ". Attempting direct delete as fallback (SHOULD NOT HAPPEN).");
+             // Fallback to old deletion logic if item not found (should not happen ideally)
+            // This part should ideally be removed if moveToTrashVideoItem is robustly used.
+            Context context = getContext();
+            if(context == null) {
+                Log.e(TAG, "Fallback delete failed: context is null for URI: " + uri);
+                return false;
+            }
+            Log.w(TAG, "Fallback: Attempting direct delete for URI: " + uri + " (VideoItem not found)");
+            try {
+                if ("file".equals(uri.getScheme())) {
+                    File file = new File(uri.getPath());
+                    if (file.exists() && file.delete()) {
+                        Log.i(TAG, "Fallback: Deleted internal file: " + file.getName());
                         return true;
                     } else {
-                        Log.e(TAG, "Failed to delete SAF document (deleteDocument returned false): " + uri);
+                        Log.e(TAG, "Fallback: Failed to delete internal file: " + uri.getPath() + " Exists=" + file.exists());
+                        return false;
+                    }
+                } else if ("content".equals(uri.getScheme())) {
+                    if (DocumentsContract.deleteDocument(context.getContentResolver(), uri)) {
+                        Log.i(TAG, "Fallback: Deleted SAF document: " + uri);
+                        return true;
+                    } else {
+                        DocumentFile doc = DocumentFile.fromSingleUri(context, uri);
+                        if(doc == null || !doc.exists()){
+                            Log.w(TAG,"Fallback: deleteDocument returned false, but file doesn't exist or became null. Treating as success. URI: "+ uri);
+                            return true; // If it's gone, it's 'deleted'
+                        }
+                        Log.e(TAG, "Fallback: Failed to delete SAF document (deleteDocument returned false and file still exists): " + uri);
                         return false;
                     }
                 }
-            } else {
-                Log.w(TAG, "Cannot delete URI with unknown scheme: " + uri.getScheme());
+                 Log.w(TAG, "Fallback: Unknown URI scheme for direct delete: " + uri.getScheme());
+                return false;
+            } catch (SecurityException se) {
+                 Log.e(TAG, "Fallback: SecurityException deleting URI: " + uri, se);
+                if(getActivity() != null) getActivity().runOnUiThread(() -> Toast.makeText(context, "Permission denied during fallback delete.", Toast.LENGTH_SHORT).show());
+                return false;
+            } catch (Exception e) {
+                Log.e(TAG, "Fallback: Exception deleting URI: " + uri, e);
                 return false;
             }
-        } catch (SecurityException e) {
-            Log.e(TAG, "SecurityException deleting URI: " + uri, e);
-            if(getActivity() != null) getActivity().runOnUiThread(() -> Toast.makeText(context, "Permission denied deleting file.", Toast.LENGTH_SHORT).show());
-            return false;
-        } catch (Exception e) {
-            Log.e(TAG, "Exception deleting URI: " + uri, e);
-            return false;
         }
     }
 
