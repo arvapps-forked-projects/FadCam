@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.hardware.camera2.CameraAccessException;
@@ -13,6 +14,8 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.media.MediaRecorder;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -1105,11 +1108,25 @@ public class RecordingService extends Service {
             int maxRetries = 3;
             int retryDelayMs = 500;
             boolean audioSourceSet = false;
+            String audioInputSource = sharedPreferencesManager.getAudioInputSource();
+            int requestedSource = MediaRecorder.AudioSource.MIC; // Default
+            boolean wiredMicAvailable = isWiredMicConnected();
+            if (audioInputSource.equals(SharedPreferencesManager.AUDIO_INPUT_SOURCE_WIRED)) {
+                if (wiredMicAvailable) {
+                    requestedSource = MediaRecorder.AudioSource.CAMCORDER; // Use CAMCORDER for wired
+                } else {
+                    Log.w(TAG, "User selected wired mic, but none detected. Falling back to phone mic.");
+                    Toast.makeText(getApplicationContext(), getString(R.string.audio_input_source_wired_not_connected), Toast.LENGTH_SHORT).show();
+                    requestedSource = MediaRecorder.AudioSource.MIC;
+                }
+            } else {
+                requestedSource = MediaRecorder.AudioSource.MIC;
+            }
             for (int i = 0; i < maxRetries; i++) {
                 try {
-                    mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+                    mediaRecorder.setAudioSource(requestedSource);
                     audioSourceSet = true;
-                    Log.d(TAG, "setAudioSource successful on attempt " + (i + 1));
+                    Log.d(TAG, "setAudioSource (" + requestedSource + ") successful on attempt " + (i + 1));
                     break;
                 } catch (RuntimeException e) {
                     Log.e(TAG, "setAudioSource failed on attempt " + (i + 1) + "/" + maxRetries + ": " + e.getMessage());
@@ -1127,13 +1144,25 @@ public class RecordingService extends Service {
                             throw new IOException("Failed to reset MediaRecorder during audio setup retry", e);
                         }
                     } else {
-                        Log.e(TAG, "setAudioSource failed after all retries.");
-                        throw e;
+                        Log.e(TAG, "setAudioSource failed after all retries. Forcing fallback to phone mic.");
+                        // Fallback to phone mic as last resort
+                        try {
+                            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+                            audioSourceSet = true;
+                            Log.w(TAG, "Fallback to phone mic audio source succeeded.");
+                        } catch (Exception fallbackEx) {
+                            Log.e(TAG, "Fallback to phone mic audio source failed.", fallbackEx);
+                        }
                     }
                 }
             }
             if (!audioSourceSet) {
-                throw new IOException("Failed to set audio source after retries, an unexpected error occurred in the retry logic.");
+                Log.e(TAG, "Failed to set audio source after retries, using phone mic as last resort.");
+                try {
+                    mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+                } catch (Exception fallbackEx) {
+                    Log.e(TAG, "Final fallback to phone mic audio source failed.", fallbackEx);
+                }
             }
         }
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
@@ -1178,11 +1207,11 @@ public class RecordingService extends Service {
             if (currentRecordingSafUri != null) {
                 throw new IOException("setNextOutputFile: SAF/DocumentFile not supported in this mode");
             } else if (tempOutputFileForInternal != null) {
-                Log.d(TAG, "Configuring MediaRecorder output for Internal temp file: " + tempOutputFileForInternal.getAbsolutePath());
-                mediaRecorder.setOutputFile(tempOutputFileForInternal.getAbsolutePath());
-            } else {
-                throw new IOException("createOutputFile() did not configure any valid output (neither SAF URI nor Internal temp file).");
-            }
+            Log.d(TAG, "Configuring MediaRecorder output for Internal temp file: " + tempOutputFileForInternal.getAbsolutePath());
+            mediaRecorder.setOutputFile(tempOutputFileForInternal.getAbsolutePath());
+        } else {
+            throw new IOException("createOutputFile() did not configure any valid output (neither SAF URI nor Internal temp file).");
+        }
         }
         VideoCodec codec = sharedPreferencesManager.getVideoCodec();
         mediaRecorder.setVideoEncoder(codec.getEncoder());
@@ -1316,7 +1345,7 @@ public class RecordingService extends Service {
                             cameraToOpenId = null;
                             Log.e(TAG, "Could not find any back-facing camera.");
                         }
-                    }
+                }
                 }
             }
 
@@ -1332,7 +1361,7 @@ public class RecordingService extends Service {
             if(cameraDevice != null) {
                 Log.w(TAG,"openCamera: Closing existing cameraDevice instance first.");
                 try {
-                    cameraDevice.close();
+                cameraDevice.close();
                 } catch (Exception e) {
                     Log.e(TAG, "Error explicitly closing existing cameraDevice prior to opening new one", e);
                 }
@@ -1349,7 +1378,7 @@ public class RecordingService extends Service {
                     Log.i(TAG, "Opening camera " + finalCameraToOpenId + ", attempt " + (attempt + 1));
                     cameraManager.openCamera(finalCameraToOpenId, cameraStateCallback, backgroundHandler);
                     return;
-                } catch (CameraAccessException e) {
+        } catch (CameraAccessException e) {
                     Log.e(TAG, "openCamera: Camera Access Exception on attempt " + (attempt + 1) + " for ID " + finalCameraToOpenId, e);
                     // Use direct integer values for error codes for broader compatibility
                     int reason = e.getReason();
@@ -1474,7 +1503,7 @@ public class RecordingService extends Service {
                 Log.w(TAG, "CameraDevice.onClosed received for camera " + closedCameraId +
                            " but RecordingService.this.cameraDevice is " + RecordingService.this.cameraDevice.getId() +
                            ". Not nulling the field based on this specific event.");
-            } else {
+                } else {
                  Log.d(TAG, "CameraDevice.onClosed received for camera " + closedCameraId +
                            " but RecordingService.this.cameraDevice was already null.");
             }
@@ -2303,7 +2332,7 @@ public class RecordingService extends Service {
                                     nextOutputFilePending = true;
                                     Log.d(TAG, "[OnInfoListener] setNextOutputFile (APPROACHING) called for SAF PFD.");
                                 }
-                            } else {
+                } else {
                                 Log.e(TAG, "[OnInfoListener] Failed to open nextSegmentPfd for SAF. Stopping recording.");
                                 new Handler(Looper.getMainLooper()).post(() -> stopRecording());
                             }
@@ -2675,6 +2704,26 @@ public class RecordingService extends Service {
             isSegmentProcessingActive = false;
             processNextSegmentInQueue();
         }
+    }
+
+    // Helper to check if a wired mic is connected
+    private boolean isWiredMicConnected() {
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
+            for (AudioDeviceInfo device : devices) {
+                if (device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                    device.getType() == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                    device.getType() == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                    device.getType() == AudioDeviceInfo.TYPE_USB_HEADSET) {
+                    return true;
+                }
+            }
+        } else {
+            Intent intent = registerReceiver(null, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
+            return intent != null && intent.getIntExtra("state", 0) == 1;
+        }
+        return false;
     }
 
 }
