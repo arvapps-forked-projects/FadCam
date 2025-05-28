@@ -77,4 +77,8 @@ dependencies {
 
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
 
+    implementation(libs.appintro.v631)
+
+    implementation(libs.lottie)
+
 }

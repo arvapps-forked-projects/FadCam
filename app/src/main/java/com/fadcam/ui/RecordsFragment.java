@@ -75,7 +75,11 @@ import java.util.Set; // Need Set import
 import java.util.HashSet; // Need HashSet import
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout; // ADD THIS IMPORT
 
-public class RecordsFragment extends Fragment implements
+import androidx.appcompat.widget.SearchView;
+import com.bumptech.glide.Glide;
+import java.util.concurrent.TimeUnit;
+
+public class RecordsFragment extends BaseFragment implements
         RecordsAdapter.OnVideoClickListener,
         RecordsAdapter.OnVideoLongClickListener,
         RecordActionListener {
@@ -558,42 +562,66 @@ public class RecordsFragment extends Fragment implements
 // ** In RecordsFragment.java **
 
     private void setupRecyclerView() {
-        if (getContext() == null) {
-            Log.e(TAG,"Cannot setup RecyclerView, context is null.");
-            return;
+        emptyStateContainer = getView().findViewById(R.id.empty_state_container);
+        recyclerView = getView().findViewById(R.id.recycler_view_records);
+        loadingIndicator = getView().findViewById(R.id.loading_indicator);
+        
+        if (recordsAdapter == null) {
+            // Create new adapter if needed
+            recordsAdapter = new RecordsAdapter(
+                    requireContext(),
+                    videoItems,
+                    executorService,
+                    sharedPreferencesManager,
+                    this,
+                    this,
+                    this
+            );
+            Log.d(TAG, "Creating NEW adapter instance in setupRecyclerView");
+        } else {
+            // Update existing adapter with current items
+            recordsAdapter.updateRecords(videoItems);
+            Log.d(TAG, "UPDATING existing adapter in setupRecyclerView");
         }
-        if(recyclerView == null){
-            Log.e(TAG, "RecyclerView is null in setupRecyclerView");
-            return;
-        }
-
-        // Set the layout manager (Grid or Linear)
-        setLayoutManager(); // Uses the isGridView flag
-
-        // Ensure necessary dependencies are available
-        if (executorService == null || executorService.isShutdown()) {
-            executorService = Executors.newSingleThreadExecutor();
-        }
-        if (sharedPreferencesManager == null) {
-            sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
-        }
-
-        // Create the adapter instance, passing all dependencies
-        // Note: videoItems might be empty here initially, adapter handles that.
-        // The 'this' refers to RecordsFragment implementing the necessary listener interfaces.
-        recordsAdapter = new RecordsAdapter(
-                getContext(),           // Context
-                videoItems,             // Initial (likely empty) data list
-                executorService,        // Background thread executor
-                sharedPreferencesManager, // Preferences for 'opened' status
-                this,                   // OnVideoClickListener
-                this,                   // OnVideoLongClickListener
-                this                    // RecordActionListener
-        );
-
-        // Set the adapter on the RecyclerView
+        
         recyclerView.setAdapter(recordsAdapter);
-        Log.d(TAG, "RecyclerView setup complete. Adapter assigned.");
+        
+        // Set layout manager
+        setLayoutManager();
+        
+        // Add pagination scroll listener
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                
+                // Only trigger loading more when scrolling down
+                if (dy > 0) {
+                    RecyclerView.LayoutManager layoutManager = recyclerView.getLayoutManager();
+                    int visibleItemCount = layoutManager.getChildCount();
+                    int totalItemCount = layoutManager.getItemCount();
+                    int firstVisibleItemPosition = 0;
+                    
+                    if (layoutManager instanceof LinearLayoutManager) {
+                        firstVisibleItemPosition = ((LinearLayoutManager) layoutManager).findFirstVisibleItemPosition();
+                    } else if (layoutManager instanceof GridLayoutManager) {
+                        firstVisibleItemPosition = ((GridLayoutManager) layoutManager).findFirstVisibleItemPosition();
+                    }
+                    
+                    // Load more when near the end (last 5 items)
+                    if ((visibleItemCount + firstVisibleItemPosition + 5) >= totalItemCount 
+                            && firstVisibleItemPosition >= 0
+                            && totalItemCount >= PAGE_SIZE) {
+                        loadMoreItems();
+                    }
+                }
+            }
+        });
+        
+        // Make sure spinner is visible during initial load
+        if (loadingIndicator != null) {
+            loadingIndicator.setVisibility(View.VISIBLE);
+        }
     }
 
     // Need to update the Adapter constructor signature check
@@ -709,6 +737,12 @@ public class RecordsFragment extends Fragment implements
 
 // ** In RecordsFragment.java **
 
+    private static final int PAGE_SIZE = 30; // Number of videos to load per page
+    private boolean isLoadingMore = false;
+    private boolean hasMoreItems = true;
+    private int currentPage = 0;
+    private List<VideoItem> allLoadedItems = new ArrayList<>();
+
     @SuppressLint("NotifyDataSetChanged")
     private void loadRecordsList() {
         Log.i(TAG, "LOG_LOAD_RECORDS: loadRecordsList START. Current sort: " + currentSortOption);
@@ -725,10 +759,15 @@ public class RecordsFragment extends Fragment implements
             Log.d(TAG, "LOG_LOAD_RECORDS: Empty state GONE.");
         }
 
+        // Reset pagination state when doing a full reload
+        currentPage = 0;
+        allLoadedItems.clear();
+        hasMoreItems = true;
+
         executorService.execute(() -> {
             Log.d(TAG, "LOG_LOAD_RECORDS_BG: Background execution START.");
-            final List<VideoItem> loadedItems = new ArrayList<>();
-            List<VideoItem> tempCacheVideos = getTempCacheRecordsList(); // Get temp videos first, as they might be relevant for both internal and SAF paths
+            // We'll collect all videos but only display the first page
+            List<VideoItem> tempCacheVideos = getTempCacheRecordsList();
             Log.d(TAG, "LOG_LOAD_RECORDS_BG: Fetched " + tempCacheVideos.size() + " temp cache videos.");
 
             String safUriString = sharedPreferencesManager.getCustomStorageUri();
@@ -742,11 +781,10 @@ public class RecordsFragment extends Fragment implements
                         Log.i(TAG, "LOG_LOAD_RECORDS_BG: Valid SAF custom location. Loading ONLY from SAF.");
                         List<VideoItem> safVideos = getSafRecordsList(treeUri);
                         Log.d(TAG, "LOG_LOAD_RECORDS_BG: Fetched " + safVideos.size() + " SAF videos.");
-                        loadedItems.addAll(safVideos);
+                        allLoadedItems.addAll(safVideos);
                         loadedFromSaf = true;
                     } else {
                         Log.w(TAG, "LOG_LOAD_RECORDS_BG: No persistent permission for SAF URI: " + safUriString + ". Falling back to internal storage.");
-                        // Optionally, notify the user or clear the invalid preference here.
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "LOG_LOAD_RECORDS_BG: Error processing SAF URI: " + safUriString + ". Falling back to internal storage.", e);
@@ -759,47 +797,46 @@ public class RecordsFragment extends Fragment implements
                 Log.i(TAG, "LOG_LOAD_RECORDS_BG: Loading from internal storage.");
                 List<VideoItem> internalVideos = getInternalRecordsList();
                 Log.d(TAG, "LOG_LOAD_RECORDS_BG: Fetched " + internalVideos.size() + " internal videos.");
-                loadedItems.addAll(internalVideos);
+                allLoadedItems.addAll(internalVideos);
             }
 
-            // Add temp cache videos to the primary list (SAF or Internal)
-            // Ensure no duplicates if a temp video somehow also got listed by primary storage methods (unlikely but good practice)
+            // Add temp cache videos to the primary list
             for(VideoItem tempVideo : tempCacheVideos){
-                if(!loadedItems.contains(tempVideo)){
-                    loadedItems.add(tempVideo);
+                if(!allLoadedItems.contains(tempVideo)){
+                    allLoadedItems.add(tempVideo);
                     Log.d(TAG, "LOG_LOAD_RECORDS_BG: Added temp cache video " + tempVideo.displayName + " to final list.");
                 }
             }
-            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Total items before sort (after potentially adding temp cache): " + loadedItems.size());
+            
+            // Sort all items
+            sortItems(allLoadedItems, currentSortOption);
+            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Total items after sort: " + allLoadedItems.size());
 
-            sortItems(loadedItems, currentSortOption);
-            Log.d(TAG, "LOG_LOAD_RECORDS_BG: Total items after sort: " + loadedItems.size());
+            // Extract just the first page
+            final List<VideoItem> firstPageItems = getNextPage(0);
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
-                    Log.i(TAG, "LOG_LOAD_RECORDS_UI: Updating UI on main thread. Item count to display: " + loadedItems.size());
+                    Log.i(TAG, "LOG_LOAD_RECORDS_UI: Updating UI on main thread. First page item count: " + firstPageItems.size() + ", Total available: " + allLoadedItems.size());
                     videoItems.clear();
-                    videoItems.addAll(loadedItems);
-                    Log.d(TAG, "LOG_LOAD_RECORDS_UI: videoItems list updated in fragment. Size: " + videoItems.size());
+                    videoItems.addAll(firstPageItems);
+                    
                     if (recordsAdapter != null) {
-                        recordsAdapter.updateRecords(videoItems); // <--- Ensure this call happens
-                        // notifyDataSetChanged is called within updateRecords in the adapter, so not strictly needed here again if that's the case.
-                        // However, explicitly calling it here can be a safeguard or if adapter's updateRecords changes.
-                        // For now, let's assume updateRecords handles the notification.
-                        // recordsAdapter.notifyDataSetChanged(); // This might be redundant if updateRecords already does it.
-                        Log.d(TAG, "LOG_LOAD_RECORDS_UI: Adapter updated with new records. Adapter item count: " + (recordsAdapter != null ? recordsAdapter.getItemCount() : "null adapter"));
+                        recordsAdapter.updateRecords(videoItems);
+                        Log.d(TAG, "LOG_LOAD_RECORDS_UI: Adapter updated with first page. Adapter item count: " + recordsAdapter.getItemCount());
                     } else {
                         Log.w(TAG, "LOG_LOAD_RECORDS_UI: recordsAdapter is NULL when trying to update and notify.");
                     }
+                    
                     updateUiVisibility();
                     if (loadingIndicator != null) {
                         loadingIndicator.setVisibility(View.GONE);
-                        Log.d(TAG, "LOG_LOAD_RECORDS_UI: Loading indicator GONE.");
                     }
                     if (swipeRefreshLayout != null) {
                         swipeRefreshLayout.setRefreshing(false);
-                        Log.d(TAG, "LOG_LOAD_RECORDS_UI: SwipeRefreshLayout refreshing set to false.");
                     }
+                    
+                    isLoadingMore = false;
                 });
             } else {
                 Log.w(TAG,"LOG_LOAD_RECORDS_BG: Activity is null, cannot update UI after loading records.");
@@ -808,7 +845,47 @@ public class RecordsFragment extends Fragment implements
         });
         Log.d(TAG, "LOG_LOAD_RECORDS: loadRecordsList END (background task launched).");
     }
-
+    
+    // Helper method to get the next page of items
+    private List<VideoItem> getNextPage(int page) {
+        int startIndex = page * PAGE_SIZE;
+        if (startIndex >= allLoadedItems.size()) {
+            hasMoreItems = false;
+            return new ArrayList<>();
+        }
+        
+        int endIndex = Math.min(startIndex + PAGE_SIZE, allLoadedItems.size());
+        List<VideoItem> pageItems = new ArrayList<>(allLoadedItems.subList(startIndex, endIndex));
+        
+        hasMoreItems = endIndex < allLoadedItems.size();
+        return pageItems;
+    }
+    
+    // Method to load more items when scrolling
+    private void loadMoreItems() {
+        if (!hasMoreItems || isLoadingMore) return;
+        
+        isLoadingMore = true;
+        currentPage++;
+        
+        List<VideoItem> nextPageItems = getNextPage(currentPage);
+        if (!nextPageItems.isEmpty()) {
+            int prevSize = videoItems.size();
+            videoItems.addAll(nextPageItems);
+            
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    if (recordsAdapter != null) {
+                        recordsAdapter.notifyItemRangeInserted(prevSize, nextPageItems.size());
+                        Log.d(TAG, "Loaded more items: " + nextPageItems.size() + ", total now: " + videoItems.size());
+                    }
+                    isLoadingMore = false;
+                });
+            }
+        } else {
+            isLoadingMore = false;
+        }
+    }
 
     // Ensure updateUiVisibility is defined correctly:
     private void updateUiVisibility() {
@@ -1644,7 +1721,7 @@ public class RecordsFragment extends Fragment implements
     // ----- Fix Start for this class (RecordsFragment_segment_receiver_fields) -----
     private BroadcastReceiver segmentCompleteReceiver;
     private boolean isSegmentReceiverRegistered = false;
-    // ----- Fix Ended for this class (RecordsFragment_segment_receiver_fields) -----
+    // ----- Fix End: Add search-related fields at class level -----
 
     // ----- Fix Start for this class (RecordsFragment_segment_receiver_methods) -----
     private void registerSegmentCompleteReceiver() {
@@ -1701,4 +1778,119 @@ public class RecordsFragment extends Fragment implements
         }
     }
     // ----- Fix Ended for this class (RecordsFragment_segment_receiver_methods) -----
+
+    // ----- Fix Start: Add search-related fields at class level -----
+    private SearchView searchView;
+    private boolean isSearchViewActive = false;
+    // ----- Fix End: Add search-related fields at class level -----
+
+    // ----- Fix Start: Add search-related methods -----
+    /**
+     * Checks if search functionality is currently active
+     * @return true if search is active, false otherwise
+     */
+    private boolean isSearchActive() {
+        return isSearchViewActive && searchView != null && !searchView.isIconified();
+    }
+
+    /**
+     * Clears the current search and resets the search view
+     */
+    private void clearSearch() {
+        if (searchView != null) {
+            searchView.setQuery("", false);
+            searchView.setIconified(true);
+            isSearchViewActive = false;
+            // Reload original data without filter
+            loadRecordsList();
+        }
+    }
+    // ----- Fix End: Add search-related methods -----
+
+    // ----- Fix Start: Add isInSelectionMode() method -----
+    /**
+     * Checks if the fragment is currently in selection mode
+     * @return true if in selection mode, false otherwise
+     */
+    private boolean isInSelectionMode() {
+        return isInSelectionMode;
+    }
+    // ----- Fix End: Add isInSelectionMode() method -----
+
+    // Override the onBackPressed method from BaseFragment
+    @Override
+    protected boolean onBackPressed() {
+        // If search is active, clear it instead of navigating back
+        if (isSearchActive()) {
+            clearSearch();
+            return true;
+        }
+        
+        // If in selection mode, exit selection mode instead of navigating back
+        if (isInSelectionMode()) {
+            exitSelectionMode();
+            return true;
+        }
+        
+        // Handle any other specific cases here
+        
+        // For normal cases, let the default implementation handle it
+        return false;
+    }
+
+    // ----- Fix Start: Add refreshList method -----
+    /**
+     * Public method to refresh the records list
+     * Can be called from other fragments when they need to update this fragment
+     */
+    public void refreshList() {
+        if (isAdded()) {
+            loadRecordsList();
+        }
+    }
+    // ----- Fix End: Add refreshList method -----
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        clearResources();
+    }
+
+    private void clearResources() {
+        // Shutdown the executor service properly
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown();
+            try {
+                // Wait a bit for tasks to complete
+                if (!executorService.awaitTermination(500, TimeUnit.MILLISECONDS)) {
+                    executorService.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executorService.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        // Clear video lists to free memory
+        if (videoItems != null) videoItems.clear();
+        if (allLoadedItems != null) allLoadedItems.clear();
+        if (selectedUris != null) selectedUris.clear();
+        
+        // Clear thumbnail caches
+        if (getContext() != null) {
+            Glide.get(getContext()).clearMemory();
+            // Schedule disk cache clearing on a background thread
+            new Thread(() -> {
+                try {
+                    Glide.get(getContext()).clearDiskCache();
+                } catch (Exception e) {
+                    Log.e(TAG, "Error clearing Glide disk cache", e);
+                }
+            }).start();
+        }
+        
+        // Release references
+        recordsAdapter = null;
+        Log.d(TAG, "Resources cleared in onDestroy");
+    }
 }

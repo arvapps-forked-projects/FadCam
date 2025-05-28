@@ -6,6 +6,7 @@ public abstract class Constants {
 
     public static final String PREFS_NAME = "app_prefs";
     public static final String LANGUAGE_KEY = "language";
+    public static final String COMPLETED_ONBOARDING_KEY = "pref_completed_onboarding";
 
     public static final String PREF_VIDEO_RESOLUTION_WIDTH = "video_resolution_width";
     public static final String PREF_VIDEO_RESOLUTION_HEIGHT = "video_resolution_height";
@@ -110,5 +111,11 @@ public abstract class Constants {
     public static final int REQUEST_CODE_OPEN_DOCUMENT_TREE_FOR_SAF = 1001; // Added request code
 
     public static final String EXTRA_ORIGINAL_TEMP_SAF_URI_STRING = "com.fadcam.EXTRA_ORIGINAL_TEMP_SAF_URI_STRING"; // For SAF processing replacement tracking
-
+    
+    // ----- Fix Start for camera resource availability -----
+    // Broadcast for camera resource availability status
+    public static final String ACTION_CAMERA_RESOURCE_AVAILABILITY = "com.fadcam.ACTION_CAMERA_RESOURCE_AVAILABILITY";
+    public static final String EXTRA_CAMERA_RESOURCES_AVAILABLE = "com.fadcam.EXTRA_CAMERA_RESOURCES_AVAILABLE";
+    public static final int CAMERA_RESOURCE_COOLDOWN_MS = 1500; // 1.5 seconds cooldown for camera resources
+    // ----- Fix End for camera resource availability -----
 }

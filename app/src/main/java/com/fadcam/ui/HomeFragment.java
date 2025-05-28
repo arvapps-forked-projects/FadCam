@@ -100,7 +100,7 @@ import android.widget.ImageView; // <<< ADD IMPORT FOR ImageView
 import androidx.fragment.app.FragmentManager; // <<< ADD IMPORT FOR FragmentManager
 import androidx.fragment.app.FragmentTransaction; // <<< ADD IMPORT FOR FragmentTransaction
 
-public class HomeFragment extends Fragment {
+public class HomeFragment extends BaseFragment {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
@@ -167,6 +167,12 @@ public class HomeFragment extends Fragment {
     // ----- Fix Start for this class (HomeFragment) -----
     private BroadcastReceiver segmentCompleteStatsReceiver; // For segment completion to update stats
     // ----- Fix Ended for this class (HomeFragment) -----
+
+    // ----- Fix Start for camera resource availability receiver -----
+    private BroadcastReceiver cameraResourceAvailabilityReceiver;
+    private boolean isCameraResourceAvailabilityReceiverRegistered = false;
+    private boolean areCameraResourcesAvailable = true; // Default to true
+    // ----- Fix End for camera resource availability receiver -----
 
     private MaterialButton buttonTorchSwitch;
 
@@ -330,46 +336,15 @@ public class HomeFragment extends Fragment {
 
                     // 4. Surface handling logic OR placeholder animations (also runs AFTER card bounce)
                     if (isRecordingOrPaused()) { // Only update service if recording/paused
-                        if (isPreviewEnabled) {
-                            if (textureView != null && textureView.isAvailable() && textureViewSurface != null) {
-                                Log.d(TAG, "Preview enabled (post-anim): TextureView available, sending surface to service.");
-                                updateServiceWithCurrentSurface(textureViewSurface);
-                            } else {
-                                Log.d(TAG, "Preview enabled (post-anim): TextureView not yet available, will send surface on callback.");
-                            }
+                        if (textureView != null && textureView.isAvailable() && textureViewSurface != null) {
+                            Log.d(TAG, "Preview enabled (post-anim): TextureView available, sending surface to service.");
+                            updateServiceWithCurrentSurface(textureViewSurface);
                         } else {
-                            Log.d(TAG, "Preview disabled (post-anim): Sending null surface to service.");
-                            updateServiceWithCurrentSurface(null);
+                            Log.d(TAG, "Preview enabled (post-anim): TextureView not yet available, will send surface on callback.");
                         }
                     } else {
-                        // Logic for when NOT recording/paused: Show random message and animate placeholder
-                        Log.d(TAG, "Long press on preview (post-anim) while not recording/paused. Applying placeholder animations.");
-                        showRandomMessage(); // Show random message on the placeholder
-
-                        if (tvPreviewPlaceholder != null) {
-                            tvPreviewPlaceholder.setVisibility(View.VISIBLE); // Ensure placeholder is visible
-
-                            // Red blinking animation for placeholder
-                            tvPreviewPlaceholder.setBackgroundColor(Color.RED);
-                            tvPreviewPlaceholder.postDelayed(() -> {
-                                if (tvPreviewPlaceholder != null) { // Check again in case fragment is destroyed
-                                   tvPreviewPlaceholder.setBackgroundColor(Color.TRANSPARENT);
-                                }
-                            }, 100); // Blink duration
-
-                            // Wobble animation for placeholder
-                            ObjectAnimator pScaleXUp = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 1.1f);
-                            ObjectAnimator pScaleYUp = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 1.1f);
-                            ObjectAnimator pScaleXDown = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 1.0f);
-                            ObjectAnimator pScaleYDown = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 1.0f);
-                            pScaleXUp.setDuration(50);
-                            pScaleYUp.setDuration(50);
-                            pScaleXDown.setDuration(50);
-                            pScaleYDown.setDuration(50);
-                            AnimatorSet wobbleSet = new AnimatorSet();
-                            wobbleSet.play(pScaleXUp).with(pScaleYUp).before(pScaleXDown).before(pScaleYDown);
-                            wobbleSet.start();
-                        }
+                        Log.d(TAG, "Preview disabled (post-anim): Sending null surface to service.");
+                        updateServiceWithCurrentSurface(null);
                     }
                 }
             });
@@ -410,7 +385,7 @@ public class HomeFragment extends Fragment {
         Log.d(TAG, "HomeFragment created.");
 
         // Request essential permissions on every launch
-        requestEssentialPermissions();
+        // requestEssentialPermissions(); // <-- Disabled, handled in onboarding only
 
         sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
 
@@ -443,6 +418,11 @@ public class HomeFragment extends Fragment {
             executorService = Executors.newSingleThreadExecutor();
         }
 
+        // ----- Fix Start: Set default camera resource availability -----
+        // Set camera resources as available by default when starting
+        areCameraResourcesAvailable = true;
+        // ----- Fix End: Set default camera resource availability -----
+
         // Fetch initial state and update UI
         fetchRecordingState(); // Get current service state
         updateStats();         // Update file count/size stats
@@ -459,6 +439,12 @@ public class HomeFragment extends Fragment {
         registerSegmentCompleteStatsReceiver(requireContext());
         // ----- Fix Ended for this method(onStart) -----
 
+        // ----- Fix Start: Remove duplicate registration since it's now in registerBroadcastReceivers -----
+        // Camera resource availability registration is now handled in registerBroadcastReceivers()
+        // ----- Fix End: Remove duplicate registration -----
+
+        // Ensure we have the latest state
+        fetchRecordingState();
     }
 
     /**
@@ -611,36 +597,28 @@ public class HomeFragment extends Fragment {
      * This method resets the UI to the IDLE state.
      */
     private void onRecordingStopped() {
-        Log.i(TAG, "<<< Received BROADCAST_ON_RECORDING_STOPPED >>>");
-        if (!isAdded() || getContext() == null || getView() == null) {
-            Log.w(TAG, "onRecordingStopped received but fragment not ready.");
-            // Update local state even if UI isn't updated yet
-            recordingState = RecordingState.NONE;
-            return;
-        }
-
-        // Update local state FIRST
+        // ----- Fix Start: Restructure for better state management -----
+        Log.d(TAG, "onRecordingStopped broadcast received.");
+        
+        // First update the recording state
         recordingState = RecordingState.NONE;
-        Log.d(TAG, "onRecordingStopped: Local state set to NONE.");
-
-        releaseWakeLock(); // Release wake lock
-
-        // --- RESET UI TO IDLE STATE ---
+        
+        // Release wake lock if it was acquired
+        releaseWakeLock();
+        
+        // Reset all buttons to idle state
         try {
-            Log.d(TAG,"onRecordingStopped: Calling resetUIButtonsToIdleState...");
-            resetUIButtonsToIdleState(); // Re-enables Start button etc.
-        } catch (Exception e){
-            Log.e(TAG, "onRecordingStopped: Error calling resetUIButtonsToIdleState", e);
+            resetUIButtonsToIdleState();
+            
+            // Handle visual elements for preview and timers
+            updatePreviewVisibility();     // Show placeholder text instead of preview
+            stopUpdatingInfo();            // Stop updating storage info
+            
+            Log.d(TAG, "onRecordingStopped: UI reset to IDLE state. Background processing may continue.");
+        } catch (Exception e) {
+            Log.e(TAG, "Error in onRecordingStopped", e);
         }
-
-        // Stop updating timers/info display
-        stopUpdatingInfo();
-
-        // --- FIX: Removed the irrelevant toast message ---
-        // Utils.showQuickToast(requireContext(), R.string.video_recording_stopped); // <<< REMOVED THIS LINE
-        // --- End FIX ---
-
-        Log.d(TAG, "onRecordingStopped: UI reset to IDLE. Background processing may continue.");
+        // ----- Fix End: Restructure for better state management -----
     }
 
     // Inside HomeFragment.java
@@ -652,70 +630,79 @@ public class HomeFragment extends Fragment {
      * Should only be called when the fragment is attached and view is available.
      */
     private void resetUIButtonsToIdleState() {
-        Log.d(TAG, ">>> resetUIButtonsToIdleState: Resetting UI to IDLE state <<<");
+        Log.d(TAG, "Reset UI to idle state");
+
         // Guard against running if fragment/context isn't ready
         if (!isAdded() || getContext() == null || getView() == null) {
-            Log.w(TAG, "resetUIButtonsToIdleState: Cannot reset UI - Fragment not attached, context/view is null.");
+            Log.w(TAG, "resetUIButtonsToIdleState: Fragment/context unavailable");
             return;
         }
-
+        
         try {
-            // --- Start/Stop Button ---
+            // ----- Fix Start: Update start button handling -----
+            // Start button should always be enabled by default (and later updated by camera resource availability)
             if (buttonStartStop != null) {
-                buttonStartStop.setEnabled(true); // Enable starting
-                buttonStartStop.setText(getString(R.string.button_start)); // Set text to "Start"
-                buttonStartStop.setIcon(AppCompatResources.getDrawable(requireContext(), R.drawable.ic_play)); // Set icon to Play
-                // Ensure background tint is Green for start
-                buttonStartStop.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.button_start)));
-                Log.d(TAG, "Reset Start/Stop button to IDLE.");
-            } else {
-                Log.w(TAG, "resetUIButtonsToIdleState: buttonStartStop is null!");
+                buttonStartStop.setText(R.string.button_start);
+                buttonStartStop.setIcon(AppCompatResources.getDrawable(getContext(), R.drawable.ic_play));
+                buttonStartStop.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#4CAF50"))); // GREEN
+                // Note: Don't set enabled state here - it will be handled by updateStartButtonAvailability()
             }
-
-            // --- Pause/Resume Button ---
-            if (buttonPauseResume != null) {
-                buttonPauseResume.setEnabled(false); // Disable pausing/resuming when idle
-                buttonPauseResume.setIcon(AppCompatResources.getDrawable(requireContext(), R.drawable.ic_pause)); // Reset icon to Pause
-                Log.d(TAG, "Reset Pause/Resume button to IDLE.");
-            } else {
-                Log.w(TAG, "resetUIButtonsToIdleState: buttonPauseResume is null!");
+            
+            // ----- Fix: Keep pause button visible but disabled instead of GONE -----
+            if (buttonPauseResume != null) { 
+                buttonPauseResume.setVisibility(View.VISIBLE);
+                buttonPauseResume.setEnabled(false); // Disabled when not recording
+                buttonPauseResume.setAlpha(0.5f);    // Visually show it's disabled
+                // Reset icon to be ready for next recording
+                buttonPauseResume.setIcon(AppCompatResources.getDrawable(getContext(), R.drawable.ic_pause));
+                buttonPauseResume.setText(getString(R.string.button_pause));
             }
-
-            // --- Camera Switch Button ---
+            // ----- Fix End: Update button handling -----
+            
             if (buttonCamSwitch != null) {
-                buttonCamSwitch.setEnabled(true); // Enable camera switching when idle
-                Log.d(TAG, "Reset Camera Switch button to IDLE.");
-            } else {
-                Log.w(TAG, "resetUIButtonsToIdleState: buttonCamSwitch is null!");
+                buttonCamSwitch.setEnabled(true);
+                buttonCamSwitch.setVisibility(View.VISIBLE);
+                buttonCamSwitch.setAlpha(1f);
             }
-
-            // --- Torch Button ---
+            
             if (buttonTorchSwitch != null) {
-                // Check flash availability again, just in case
-                // initializeTorch(); // Can be redundant, checking is lighter
-                boolean flashAvailable = (cameraManager != null && getCameraWithFlashQuietly() != null);
-                buttonTorchSwitch.setEnabled(flashAvailable); // Enable only if flash is actually available
-                // The torch 'selected' state (on/off icon tint) is handled by updateTorchUI based on its broadcast receiver
-                Log.d(TAG, "Reset Torch button enabled state (based on flash availability): " + flashAvailable);
-            } else {
-                Log.w(TAG, "resetUIButtonsToIdleState: buttonTorchSwitch is null!");
+                buttonTorchSwitch.setEnabled(true);
+                buttonTorchSwitch.setAlpha(1f);
             }
-
-            // --- Preview Area ---
-            // Ensure placeholder is visible and texture view is hidden when idle
-            updatePreviewVisibility(); // This method handles the logic based on recordingState == NONE
-            Log.d(TAG, "Reset Preview Visibility.");
-
-            Log.i(TAG, ">>> UI successfully reset to IDLE state. <<<");
-
-        } catch (IllegalStateException e) {
-            // Can happen if requireContext() is called after fragment detached
-            Log.e(TAG, "resetUIButtonsToIdleState: IllegalStateException resetting UI (Fragment likely detached)", e);
+            
+            // Add this call to ensure the start button is properly enabled/disabled
+            updateStartButtonAvailability();
+            
+            Log.d(TAG, "resetUIButtonsToIdleState: All UI elements reset to idle state");
+            
         } catch (Exception e) {
-            // Catch any other unexpected errors during UI update
-            Log.e(TAG, "resetUIButtonsToIdleState: Unexpected error resetting buttons/UI", e);
+            Log.e(TAG, "Error in resetUIButtonsToIdleState", e);
         }
-    } // End resetUIButtonsToIdleState
+    }
+    
+    /**
+     * Updates the start button state based on camera resource availability
+     */
+    private void updateStartButtonAvailability() {
+        if (!isAdded() || buttonStartStop == null) {
+            return;
+        }
+        
+        // ----- Fix Start: Only disable start button when camera resources are unavailable -----
+        // Only update if we're in a state where the start button would normally be enabled
+        if (recordingState == RecordingState.NONE) {
+            boolean shouldEnable = areCameraResourcesAvailable;
+            buttonStartStop.setEnabled(shouldEnable);
+            buttonStartStop.setAlpha(shouldEnable ? 1.0f : 0.5f);
+            
+            if (!shouldEnable) {
+                Log.d(TAG, "Start button disabled due to camera resources being released");
+            } else {
+                Log.d(TAG, "Start button enabled as camera resources are available");
+            }
+        }
+        // ----- Fix End: Only disable start button when camera resources are unavailable -----
+    }
 
     /** Helper for resetUIButtonsToIdleState to check flash without throwing checked exception */
     private String getCameraWithFlashQuietly() {
@@ -766,6 +753,12 @@ public class HomeFragment extends Fragment {
             }
         }
         // ----- Fix Ended for this method(onStop)-----
+
+        // ----- Fix Start for unregistering camera resource availability receiver -----
+        unregisterCameraResourceAvailabilityReceiver();
+        // ----- Fix End for unregistering camera resource availability receiver -----
+
+        stopUpdatingInfo();
     }
 
     // --- `onResume()` Method (Simplified - focuses on fetch state) ---
@@ -828,6 +821,10 @@ public class HomeFragment extends Fragment {
         initializeSegmentCompleteStatsReceiver();
         // ----- Fix Ended for this method(registerBroadcastReceivers) -----
 
+        // ----- Fix Start: Also initialize camera resource availability receiver -----
+        initializeCameraResourceAvailabilityReceiver();
+        // ----- Fix End: Also initialize camera resource availability receiver -----
+
         // Register them
         // ----- Fix Start for this method(registerBroadcastReceivers_update_isStateReceiversRegistered_flag_logic)-----
         // registerRecordingStateReceivers now returns a boolean indicating success
@@ -841,6 +838,10 @@ public class HomeFragment extends Fragment {
         // ----- Fix Start for this method(registerBroadcastReceivers) -----
         registerSegmentCompleteStatsReceiver(context); // Register the new one
         // ----- Fix Ended for this method(registerBroadcastReceivers) -----
+
+        // ----- Fix Start: Also register the camera resource availability receiver -----
+        registerCameraResourceAvailabilityReceiver();
+        // ----- Fix End: Also register the camera resource availability receiver -----
 
         // ----- Fix Start for this method(registerBroadcastReceivers_update_isStateReceiversRegistered_flag_logic)-----
         // isStateReceiversRegistered = true; // Assuming registerRecordingStateReceivers sets this -> Moved up and tied to actual success
@@ -1488,57 +1489,13 @@ public class HomeFragment extends Fragment {
         });
     }
 
-    private boolean areEssentialPermissionsGranted() {
-        boolean cameraGranted = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
-        boolean recordAudioGranted = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
-
-        boolean storageGranted;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) { // Android 11 and above
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // Android 13 and above
-                storageGranted = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED ||
-                        ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-            } else {
-                // Below Android 13
-                storageGranted = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-            }
-        } else { // Below Android 11
-            storageGranted = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-        }
-
-        return cameraGranted && recordAudioGranted && storageGranted;
-    }
-
-    private void showPermissionsInfoDialog() {
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Permissions Required")
-                .setMessage("This app needs camera, microphone, and storage permissions to function properly. Please enable these permissions from the app settings.")
-                .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
-                .show();
-    }
-
-    private void debugPermissionsStatus() {
-        Log.d(TAG, "Camera permission: " +
-                (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED ? "Granted" : "Denied"));
-        Log.d(TAG, "Record Audio permission: " +
-                (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ? "Granted" : "Denied"));
-        Log.d(TAG, "Write External Storage permission: " +
-                (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED ? "Granted" : "Denied"));
-    }
-
     private void setupButtonListeners() {
         buttonStartStop.setOnClickListener(v -> {
-            debugPermissionsStatus();
-            if (!areEssentialPermissionsGranted()) {
-                debugPermissionsStatus();
-                showPermissionsInfoDialog();
-            } else {
                 if (recordingState.equals(RecordingState.NONE)) {
                     startRecording();
                 } else {
                     stopRecording();
                     updateStats();
-                }
             }
         });
 
@@ -1565,44 +1522,7 @@ public class HomeFragment extends Fragment {
             return;
         }
         performHapticFeedback();
-
-        if (!areEssentialPermissionsGranted()) {
-            Log.w(TAG, "Essential permissions not granted. Cannot start recording.");
-            // ----- Fix Start for this method(startRecording_correctString)-----
-            Utils.showQuickToast(getContext(), getString(R.string.essential_permissions_missing));
-            // ----- Fix Ended for this method(startRecording_correctString)-----
-            requestEssentialPermissions(); // Re-trigger permission request
-            return;
-        }
-
-        // Check for SAF permission before starting recording if custom storage is selected
-        String storageMode = sharedPreferencesManager.getStorageMode();
-        if (SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode)) {
-            String customUriString = sharedPreferencesManager.getCustomStorageUri();
-            if (customUriString == null || !hasSafPermission(Uri.parse(customUriString))) {
-                // ----- Fix Start for this method(startRecording_safPermissionString)-----
-                Utils.showQuickToast(getContext(), getString(R.string.saf_permission_missing_dialog_instructions));
-                // ----- Fix Ended for this method(startRecording_safPermissionString)-----
-                // Guide user to grant permission via settings or a dedicated button
-                // Potentially open a dialog or navigate to settings fragment
-                new MaterialAlertDialogBuilder(requireContext())
-                        .setTitle(getString(R.string.saf_permission_missing_dialog_title))
-                        .setMessage(getString(R.string.saf_permission_missing_dialog_message_for_start_recording))
-                        .setPositiveButton(getString(R.string.grant_permission_button), (dialog, which) -> {
-                            // Intent to open document tree, user selects directory
-                            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
-                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
-                                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                            // Optionally, you can suggest a starting URI
-                            // intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, someDefaultUri);
-                            startActivityForResult(intent, Constants.REQUEST_CODE_OPEN_DOCUMENT_TREE_FOR_SAF);
-                        })
-                        .setNegativeButton(getString(R.string.universal_cancel), null)
-                        .show();
-                return;
-            }
-        }
+        // Permission checks removed; handled by onboarding
 
         if (isMyServiceRunning(RecordingService.class)) {
             Log.w(TAG, "Start requested, but service appears to be already running or starting. Current state: " + recordingState);
@@ -2823,7 +2743,105 @@ public class HomeFragment extends Fragment {
                 .setNegativeButton(R.string.universal_cancel, null)
                 .show();
     }
-    // ----- Fix Ended for this class (HomeFragment_clock_color_picker) -----
+
+    /**
+     * Override the onBackPressed method from BaseFragment
+     */
+    @Override
+    protected boolean onBackPressed() {
+        // Handle any special cases for the HomeFragment's back button
+        if (isRecordingOrPaused()) {
+            // If recording is in progress, show a confirmation dialog
+            new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Recording in Progress")
+                .setMessage("Do you want to stop recording and exit?")
+                .setPositiveButton("Stop and Exit", (dialog, which) -> {
+                    stopRecording();
+                    // Allow normal back behavior after stopping recording
+                    requireActivity().onBackPressed();
+                })
+                .setNegativeButton("Continue Recording", null)
+                .show();
+            return true; // We handled the back press
+        }
+        
+        // For normal cases, let the base implementation handle it
+        return false;
+    }
+
+    // ----- Fix Start for camera resource availability methods -----
+    /**
+     * Initializes the receiver for camera resource availability status updates
+     */
+    private void initializeCameraResourceAvailabilityReceiver() {
+        if (cameraResourceAvailabilityReceiver == null) {
+            cameraResourceAvailabilityReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (!isAdded() || intent == null || 
+                        !Constants.ACTION_CAMERA_RESOURCE_AVAILABILITY.equals(intent.getAction())) {
+                        return;
+                    }
+                    
+                    boolean isAvailable = intent.getBooleanExtra(
+                        Constants.EXTRA_CAMERA_RESOURCES_AVAILABLE, true);
+                    
+                    areCameraResourcesAvailable = isAvailable;
+                    updateStartButtonAvailability();
+                    
+                    Log.d(TAG, "Received camera resource availability status: " + isAvailable);
+                }
+            };
+        }
+    }
+    
+    /**
+     * Registers the camera resource availability receiver
+     */
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private void registerCameraResourceAvailabilityReceiver() {
+        if (isCameraResourceAvailabilityReceiverRegistered || getContext() == null) {
+            return;
+        }
+        
+        initializeCameraResourceAvailabilityReceiver();
+        if (cameraResourceAvailabilityReceiver == null) {
+            Log.e(TAG, "Cannot register: Failed to initialize camera resource availability receiver");
+            return;
+        }
+        
+        IntentFilter filter = new IntentFilter(Constants.ACTION_CAMERA_RESOURCE_AVAILABILITY);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                requireContext().registerReceiver(
+                    cameraResourceAvailabilityReceiver, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                requireContext().registerReceiver(cameraResourceAvailabilityReceiver, filter);
+            }
+            isCameraResourceAvailabilityReceiverRegistered = true;
+            Log.d(TAG, "Camera resource availability receiver registered");
+        } catch (Exception e) {
+            Log.e(TAG, "Error registering camera resource availability receiver", e);
+        }
+    }
+    
+    /**
+     * Unregisters the camera resource availability receiver
+     */
+    private void unregisterCameraResourceAvailabilityReceiver() {
+        if (!isCameraResourceAvailabilityReceiverRegistered || getContext() == null) {
+            return;
+        }
+        
+        try {
+            requireContext().unregisterReceiver(cameraResourceAvailabilityReceiver);
+            isCameraResourceAvailabilityReceiverRegistered = false;
+            Log.d(TAG, "Camera resource availability receiver unregistered");
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "Error unregistering camera resource availability receiver: " + e.getMessage());
+        }
+    }
+    // ----- Fix End for camera resource availability methods -----
 
     // ----- Fix Start for this class (HomeFragment) -----
     private void initializeSegmentCompleteStatsReceiver() {

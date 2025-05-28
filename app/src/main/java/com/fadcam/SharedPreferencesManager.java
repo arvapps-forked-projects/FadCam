@@ -358,4 +358,19 @@ public class SharedPreferencesManager {
     }
     // ----- Fix Ended for this class (SharedPreferencesManager_audio_input_source) -----
 
+    // ----- Fix Start for method(onboarding) -----
+    // Using the proper constant from Constants class
+    public boolean isShowOnboarding() {
+        // Return true if onboarding hasn't been completed
+        return !sharedPreferences.getBoolean(Constants.COMPLETED_ONBOARDING_KEY, false);
+    }
+
+    public void setShowOnboarding(boolean show) {
+        // Store the opposite value in COMPLETED_ONBOARDING_KEY
+        // If show is true, it means onboarding is not completed
+        // If show is false, it means onboarding is completed
+        sharedPreferences.edit().putBoolean(Constants.COMPLETED_ONBOARDING_KEY, !show).apply();
+    }
+    // ----- Fix End for method(onboarding) -----
+
 }
