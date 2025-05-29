@@ -9,6 +9,7 @@ import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,12 +25,16 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.fadcam.ui.RecordsFragment;
 import com.fadcam.ui.TrashFragment;
 import com.fadcam.ui.ViewPagerAdapter;
+import com.fadcam.ui.FadePageTransformer;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Locale;
+
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -128,21 +133,24 @@ public class MainActivity extends AppCompatActivity {
         ViewPagerAdapter adapter = new ViewPagerAdapter(this);
         viewPager.setAdapter(adapter);
 
-        // Assuming viewPager is the instance of your ViewPager
-        viewPager.setOffscreenPageLimit(4); // Adjust the number based on your requirement
+        // Apply the fade animation transformer with more conservative settings
+        viewPager.setPageTransformer(new FadePageTransformer());
+
+        // Keep all pages in memory to prevent content disappearing
+        viewPager.setOffscreenPageLimit(adapter.getItemCount());
 
         bottomNavigationView.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
             if (itemId == R.id.navigation_home) {
-                viewPager.setCurrentItem(0);
+                viewPager.setCurrentItem(0, true);
             } else if (itemId == R.id.navigation_records) {
-                viewPager.setCurrentItem(1);
+                viewPager.setCurrentItem(1, true);
             } else if (itemId == R.id.navigation_remote) {
-                viewPager.setCurrentItem(2);
+                viewPager.setCurrentItem(2, true);
             } else if (itemId == R.id.navigation_settings) {
-                viewPager.setCurrentItem(3);
+                viewPager.setCurrentItem(3, true);
             } else if (itemId == R.id.navigation_about) {
-                viewPager.setCurrentItem(4);
+                viewPager.setCurrentItem(4, true);
             }
             return true;
         });
@@ -284,6 +292,61 @@ private void createDynamicShortcuts() {
         if (isTrashFragmentVisible()) {
             View overlayContainer = findViewById(R.id.overlay_fragment_container);
             if (overlayContainer != null) {
+                // Animate fading out
+                overlayContainer.animate()
+                    .alpha(0f)
+                    .setDuration(250)
+                    .setListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            // Set visibility to GONE after animation completes
+                            overlayContainer.setVisibility(View.GONE);
+                            overlayContainer.setAlpha(1f); // Reset alpha for next time
+                            
+                            // Pop any fragments in the back stack
+                            if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
+                                getSupportFragmentManager().popBackStack();
+                            }
+                            
+                            // Force a complete reset of the ViewPager and its fragments
+                            // Save current position
+                            final int currentPosition = viewPager.getCurrentItem();
+                            
+                            // Completely recreate the adapter (aggressive approach)
+                            ViewPagerAdapter newAdapter = new ViewPagerAdapter(MainActivity.this);
+                            viewPager.setAdapter(newAdapter);
+                            
+                            // Reset page transformer to ensure animations work
+                            viewPager.setPageTransformer(new FadePageTransformer());
+                            
+                            // Restore position without animation
+                            viewPager.setCurrentItem(currentPosition, false);
+                            
+                            // Also make sure the correct tab is selected
+                            switch (currentPosition) {
+                                case 0:
+                                    bottomNavigationView.setSelectedItemId(R.id.navigation_home);
+                                    break;
+                                case 1:
+                                    bottomNavigationView.setSelectedItemId(R.id.navigation_records);
+                                    break;
+                                case 2:
+                                    bottomNavigationView.setSelectedItemId(R.id.navigation_remote);
+                                    break;
+                                case 3:
+                                    bottomNavigationView.setSelectedItemId(R.id.navigation_settings);
+                                    break;
+                                case 4:
+                                    bottomNavigationView.setSelectedItemId(R.id.navigation_about);
+                                    break;
+                            }
+                        }
+                    });
+                return; // Exit early without showing toast
+            }
+            
+            // If for some reason we couldn't animate, fallback to immediate hide
+            if (overlayContainer != null) {
                 overlayContainer.setVisibility(View.GONE);
             }
             
@@ -304,7 +367,7 @@ private void createDynamicShortcuts() {
 
         // If we're not on the home tab, go to home tab first before exiting
         if (viewPager.getCurrentItem() != 0) {
-            viewPager.setCurrentItem(0, true);
+            viewPager.setCurrentItem(0, true); // Enable animation
         } else {
             // Check if we should skip this back handling
             if (skipNextBackHandling) {
@@ -343,27 +406,63 @@ private void createDynamicShortcuts() {
                     if (isTrashFragmentVisible()) {
                         View overlayContainer = findViewById(R.id.overlay_fragment_container);
                         if (overlayContainer != null) {
-                            overlayContainer.setVisibility(View.GONE);
+                            // Animate fading out
+                            overlayContainer.animate()
+                                .alpha(0f)
+                                .setDuration(250)
+                                .setListener(new AnimatorListenerAdapter() {
+                                    @Override
+                                    public void onAnimationEnd(Animator animation) {
+                                        // Set visibility to GONE after animation completes
+                                        overlayContainer.setVisibility(View.GONE);
+                                        overlayContainer.setAlpha(1f); // Reset alpha for next time
+                                        
+                                        // Pop any fragments in the back stack
+                                        if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
+                                            getSupportFragmentManager().popBackStack();
+                                        }
+                                        
+                                        // Force a complete reset of the ViewPager and its fragments
+                                        // Save current position
+                                        final int currentPosition = viewPager.getCurrentItem();
+                                        
+                                        // Completely recreate the adapter (aggressive approach)
+                                        ViewPagerAdapter newAdapter = new ViewPagerAdapter(MainActivity.this);
+                                        viewPager.setAdapter(newAdapter);
+                                        
+                                        // Reset page transformer to ensure animations work
+                                        viewPager.setPageTransformer(new FadePageTransformer());
+                                        
+                                        // Restore position without animation
+                                        viewPager.setCurrentItem(currentPosition, false);
+                                        
+                                        // Also make sure the correct tab is selected
+                                        switch (currentPosition) {
+                                            case 0:
+                                                bottomNavigationView.setSelectedItemId(R.id.navigation_home);
+                                                break;
+                                            case 1:
+                                                bottomNavigationView.setSelectedItemId(R.id.navigation_records);
+                                                break;
+                                            case 2:
+                                                bottomNavigationView.setSelectedItemId(R.id.navigation_remote);
+                                                break;
+                                            case 3:
+                                                bottomNavigationView.setSelectedItemId(R.id.navigation_settings);
+                                                break;
+                                            case 4:
+                                                bottomNavigationView.setSelectedItemId(R.id.navigation_about);
+                                                break;
+                                        }
+                                    }
+                                });
+                            return; // Exit early without showing toast
                         }
-                        
-                        // Pop any fragments in the back stack
-                        if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
-                            getSupportFragmentManager().popBackStack();
-                        }
-                        
-                        // Refresh the records fragment if needed
-                        Fragment recordsFragment = getSupportFragmentManager()
-                                .findFragmentByTag("RecordsFragment");
-                        if (recordsFragment instanceof RecordsFragment) {
-                            ((RecordsFragment) recordsFragment).refreshList();
-                        }
-                        
-                        return; // Exit early without showing toast
                     }
                     
-                    // If we're not on the home tab, go to home tab first
+                    // If we're not on the home tab, go to home tab first before exiting
                     if (viewPager.getCurrentItem() != 0) {
-                        viewPager.setCurrentItem(0, true);
+                        viewPager.setCurrentItem(0, true); // Enable animation
                     } else {
                         // Check if we should skip this back handling
                         if (skipNextBackHandling) {

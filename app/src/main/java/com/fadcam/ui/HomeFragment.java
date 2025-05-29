@@ -6,6 +6,8 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
+import android.animation.ArgbEvaluator;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
@@ -287,7 +289,71 @@ public class HomeFragment extends BaseFragment {
         // Ensure there are still messages to choose from
         if (!messageQueue.isEmpty()) {
             String randomMessage = messageQueue.remove(random.nextInt(messageQueue.size()));
+            
+            // Set text with padding
+            tvPreviewPlaceholder.setPadding(40, tvPreviewPlaceholder.getPaddingTop(), 40, tvPreviewPlaceholder.getPaddingBottom());
             tvPreviewPlaceholder.setText(randomMessage);
+
+            // Create a bounce/wobble animation
+            AnimatorSet animatorSet = new AnimatorSet();
+            
+            // Scale down then up animation (bounce effect)
+            ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 0.7f);
+            ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 0.7f);
+            scaleDownX.setDuration(150);
+            scaleDownY.setDuration(150);
+            
+            ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleX", 1.0f);
+            ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "scaleY", 1.0f);
+            scaleUpX.setDuration(150);
+            scaleUpY.setDuration(150);
+            
+            // Wobble animation (rotate slightly left then right)
+            ObjectAnimator rotateLeft = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "rotation", 0f, -3f);
+            rotateLeft.setDuration(80);
+            ObjectAnimator rotateRight = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "rotation", -3f, 3f);
+            rotateRight.setDuration(80);
+            ObjectAnimator rotateCenter = ObjectAnimator.ofFloat(tvPreviewPlaceholder, "rotation", 3f, 0f);
+            rotateCenter.setDuration(80);
+            
+            // Red flash animation for the background of cardPreview
+            // Store the original background drawable
+            final Drawable originalBackground = cardPreview.getBackground();
+            
+            // Create a ValueAnimator for color transition
+            ValueAnimator colorAnim = ValueAnimator.ofObject(new ArgbEvaluator(), 
+                    Color.parseColor("#302745"), // Use the app's dark purple color
+                    Color.RED, 
+                    Color.parseColor("#302745"));
+            colorAnim.setDuration(300);
+            colorAnim.addUpdateListener(animator -> {
+                int color = (int) animator.getAnimatedValue();
+                cardPreview.setBackgroundColor(color);
+            });
+            // Make sure to restore the original background when animation ends
+            colorAnim.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    cardPreview.setBackground(originalBackground);
+                }
+            });
+            
+            // Sequence the animations
+            AnimatorSet bounceSet = new AnimatorSet();
+            bounceSet.playTogether(scaleDownX, scaleDownY);
+            
+            AnimatorSet expandSet = new AnimatorSet();
+            expandSet.playTogether(scaleUpX, scaleUpY);
+            
+            AnimatorSet wobbleSet = new AnimatorSet();
+            wobbleSet.playSequentially(rotateLeft, rotateRight, rotateCenter);
+            
+            // Play bounce then wobble animations
+            animatorSet.playSequentially(bounceSet, expandSet, wobbleSet);
+            animatorSet.start();
+            
+            // Play the background flash animation
+            colorAnim.start();
 
             // Track recently shown messages
             recentlyShownMessages.add(randomMessage);
@@ -305,11 +371,16 @@ public class HomeFragment extends BaseFragment {
 
     private void setupLongPressListener() {
         cardPreview.setOnLongClickListener(v -> {
-            // ----- Fix Start for this method(setupLongPressListener_SequentialAnimation)-----
             // 1. Perform haptic feedback
             performHapticFeedback();
 
-            // 2. Unified Card Bounce Animation (Down then Up)
+            // When not recording, show a random funny message
+            if (!isRecordingOrPaused()) {
+                showRandomMessage();
+                return true;
+            }
+
+            // 2. Unified Card Bounce Animation (Down then Up) - only for recording mode
             AnimatorSet cardBounceAnim = new AnimatorSet();
             ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(cardPreview, "scaleX", 0.9f);
             ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(cardPreview, "scaleY", 0.9f);
@@ -330,17 +401,25 @@ public class HomeFragment extends BaseFragment {
                     super.onAnimationEnd(animation);
 
                     // 3. Core logic: toggle preview, update UI, save state (runs AFTER card bounce)
+                    boolean wasEnabled = isPreviewEnabled;
                     isPreviewEnabled = !isPreviewEnabled;
                     updatePreviewVisibility(); // This is the main visual change for enabling/disabling preview
                     savePreviewState();
+                    
+                    // If we're enabling the preview (it was disabled before), reset the TextureView
+                    // to ensure we don't see any stale frames
+                    if (!wasEnabled && isPreviewEnabled) {
+                        resetTextureView();
+                    }
 
                     // 4. Surface handling logic OR placeholder animations (also runs AFTER card bounce)
                     if (isRecordingOrPaused()) { // Only update service if recording/paused
-                        if (textureView != null && textureView.isAvailable() && textureViewSurface != null) {
+                        if (isPreviewEnabled && textureView != null && textureView.isAvailable() && textureViewSurface != null) {
                             Log.d(TAG, "Preview enabled (post-anim): TextureView available, sending surface to service.");
                             updateServiceWithCurrentSurface(textureViewSurface);
                         } else {
                             Log.d(TAG, "Preview enabled (post-anim): TextureView not yet available, will send surface on callback.");
+                            updateServiceWithCurrentSurface(null);
                         }
                     } else {
                         Log.d(TAG, "Preview disabled (post-anim): Sending null surface to service.");
@@ -349,7 +428,6 @@ public class HomeFragment extends BaseFragment {
                 }
             });
             cardBounceAnim.start(); // Start the card bounce animation
-            // ----- Fix Ended for this method(setupLongPressListener_SequentialAnimation)-----
             return true;
         });
     }
@@ -655,7 +733,7 @@ public class HomeFragment extends BaseFragment {
                 buttonPauseResume.setAlpha(0.5f);    // Visually show it's disabled
                 // Reset icon to be ready for next recording
                 buttonPauseResume.setIcon(AppCompatResources.getDrawable(getContext(), R.drawable.ic_pause));
-                buttonPauseResume.setText(getString(R.string.button_pause));
+                // buttonPauseResume.setText(getString(R.string.button_pause));
             }
             // ----- Fix End: Update button handling -----
             
@@ -774,11 +852,30 @@ public class HomeFragment extends BaseFragment {
         fetchRecordingState(); // Let service callback handle UI sync
 
         registerBroadcastReceivers(); // Centralized registration
+        
+        // ----- Fix Start for this method(onResume)-----
+        // Re-load preview state from SharedPreferences to ensure consistency
+        isPreviewEnabled = sharedPreferencesManager.isPreviewEnabled();
+        Log.d(TAG, "onResume: Loaded isPreviewEnabled state = " + isPreviewEnabled);
+        
+        // Update the preview visibility based on current state
+        updatePreviewVisibility();
+        
+        // Critical: When resuming, send the appropriate surface to the service
+        // This ensures preview shows correctly after app is minimized/restored
+        if (isPreviewEnabled && isRecordingOrPaused() && textureViewSurface != null && textureViewSurface.isValid()) {
+            Log.d(TAG, "onResume: Preview enabled, sending valid surface to service");
+            updateServiceWithCurrentSurface(textureViewSurface);
+        } else if (!isPreviewEnabled || !isRecordingOrPaused()) {
+            // If preview is disabled or not recording, send null surface
+            Log.d(TAG, "onResume: Preview disabled or not recording, sending null surface");
+            updateServiceWithCurrentSurface(null);
+        }
+        // ----- Fix Ended for this method(onResume)-----
 
         Log.d(TAG, "onResume: Triggering stats update.");
         updateStats();
         updateTorchUI(isTorchOn);
-        updatePreviewVisibility(); // ADDED: Ensure preview visibility is correctly set on resume
     }
 
     // Inside HomeFragment.java
@@ -972,6 +1069,8 @@ public class HomeFragment extends BaseFragment {
 
             buttonPauseResume.setEnabled(true); // Enable PAUSE
             buttonPauseResume.setIcon(AppCompatResources.getDrawable(requireContext(), R.drawable.ic_pause));
+            buttonPauseResume.setAlpha(1.0f); // Make fully visible when enabled
+            buttonPauseResume.setBackgroundTintList(ContextCompat.getColorStateList(requireContext(), R.color.button_pause));
 
             buttonCamSwitch.setEnabled(false); // Disable CAM SWITCH
             if(buttonTorchSwitch != null) buttonTorchSwitch.setEnabled(getCameraWithFlashQuietly() != null); // Enable TORCH if available
@@ -994,6 +1093,8 @@ public class HomeFragment extends BaseFragment {
 
             buttonPauseResume.setEnabled(true); // Enable RESUME
             buttonPauseResume.setIcon(AppCompatResources.getDrawable(requireContext(), R.drawable.ic_play)); // Show Play icon for RESUME
+            buttonPauseResume.setAlpha(1.0f); // Make fully visible when enabled
+            buttonPauseResume.setBackgroundTintList(ContextCompat.getColorStateList(requireContext(), R.color.button_pause));
 
             buttonCamSwitch.setEnabled(false); // Disable CAM SWITCH
             // ----- Fix Start for this method(setUIForRecordingPaused_torchButton)-----
@@ -1223,6 +1324,14 @@ public class HomeFragment extends BaseFragment {
         //locationHelper.stopLocationUpdates();
         Log.d(TAG, "HomeFragment paused.");
 
+        // ----- Fix Start for this method(onPause)-----
+        // When pausing, explicitly release the surface reference to avoid stale frames on resume
+        if (textureViewSurface != null) {
+            Log.d(TAG, "onPause: Explicitly sending null surface to service");
+            updateServiceWithCurrentSurface(null);
+        }
+        // ----- Fix Ended for this method(onPause)-----
+        
         // Only unregister if receiver exists
         if (torchReceiver != null) {
             try {
@@ -1232,6 +1341,45 @@ public class HomeFragment extends BaseFragment {
             }
         }
     }
+
+    // ----- Fix Start for this method(resetTextureView)-----
+    /**
+     * Helper method to reset the TextureView when needed to avoid showing stale frames
+     * This should be called when the preview state changes, especially from disabled to enabled
+     */
+    private void resetTextureView() {
+        if (textureView == null) {
+            Log.w(TAG, "resetTextureView: TextureView is null, can't reset");
+            return;
+        }
+        
+        Log.d(TAG, "resetTextureView: Attempting to reset TextureView");
+        
+        // First release any existing surface
+        if (textureViewSurface != null) {
+            textureViewSurface.release();
+            textureViewSurface = null;
+            Log.d(TAG, "resetTextureView: Released existing surface");
+        }
+        
+        // If the TextureView is available, recreate the surface
+        if (textureView.isAvailable()) {
+            SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
+            if (surfaceTexture != null) {
+                textureViewSurface = new Surface(surfaceTexture);
+                Log.d(TAG, "resetTextureView: Created new surface from existing SurfaceTexture");
+                
+                // If recording and preview enabled, update service with new surface
+                if (isPreviewEnabled && isRecordingOrPaused()) {
+                    updateServiceWithCurrentSurface(textureViewSurface);
+                    Log.d(TAG, "resetTextureView: Updated service with new surface");
+                }
+            }
+        } else {
+            Log.d(TAG, "resetTextureView: TextureView not available, can't create surface yet");
+        }
+    }
+    // ----- Fix Ended for this method(resetTextureView)-----
 
 //    @Override
 //    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -1281,9 +1429,11 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void savePreviewState() {
-        SharedPreferences.Editor editor = sharedPreferencesManager.sharedPreferences.edit();
-        editor.putBoolean("isPreviewEnabled", isPreviewEnabled);
-        editor.apply();
+        // ----- Fix Start for this method(savePreviewState)-----
+        // Use the SharedPreferencesManager's method which uses the correct constant
+        sharedPreferencesManager.setPreviewEnabled(isPreviewEnabled);
+        Log.d(TAG, "Preview state saved: " + isPreviewEnabled);
+        // ----- Fix Ended for this method(savePreviewState)-----
     }
 
     //    function to use haptic feedbacks
@@ -1320,6 +1470,9 @@ public class HomeFragment extends BaseFragment {
         setupLongPressListener(); // For Easter eggs on title
         setupClockLongPressListener(); // For display options on clock
         setupAppLogoLongPressListener(view); // <<< CALL NEW METHOD
+        
+        // Initialize easter egg messages and setup listener for preview placeholder
+        initializeMessages();
 
         vibrator = (Vibrator) requireActivity().getSystemService(Context.VIBRATOR_SERVICE);
         TorchService.setHomeFragment(this);
@@ -1343,6 +1496,14 @@ public class HomeFragment extends BaseFragment {
         isPreviewEnabled = sharedPreferencesManager.isPreviewEnabled(); // Initialize with saved state
         Log.d(TAG, "onViewCreated: Loaded isPreviewEnabled state = " + isPreviewEnabled);
         // --- END FIX ---
+
+        // ----- Fix Start for this method(onViewCreated_resetTextureView)-----
+        // If TextureView is already available, reset it to ensure clean state
+        if (textureView != null && textureView.isAvailable()) {
+            resetTextureView();
+            Log.d(TAG, "onViewCreated: Reset TextureView to ensure clean startup state");
+        }
+        // ----- Fix Ended for this method(onViewCreated_resetTextureView)-----
 
         resetTimers();
         copyFontToInternalStorage();
@@ -2580,18 +2741,32 @@ public class HomeFragment extends BaseFragment {
             appLogo.setOnLongClickListener(v -> {
                 performHapticFeedback();
                 Log.i(TAG, "App logo long-pressed. Navigating to TrashFragment manually.");
-                // ----- Fix Start for this method (setupAppLogoLongPressListener) -----
                 // Navigate to TrashFragment manually
                 try {
                     TrashFragment trashFragment = new TrashFragment();
                     FragmentManager fragmentManager = getParentFragmentManager(); // Use getParentFragmentManager
                     FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
 
-                    // ----- Fix Start for this navigation block -----
-                    // Make the overlay container visible
+                    // Add fade in animation
+                    fragmentTransaction.setCustomAnimations(
+                        android.R.animator.fade_in,
+                        android.R.animator.fade_out,
+                        android.R.animator.fade_in,
+                        android.R.animator.fade_out
+                    );
+
+                    // Make the overlay container visible with a fade effect
                     View overlayContainer = requireActivity().findViewById(R.id.overlay_fragment_container);
                     if (overlayContainer != null) {
+                        // First make it visible but transparent
                         overlayContainer.setVisibility(View.VISIBLE);
+                        overlayContainer.setAlpha(0f);
+                        
+                        // Then animate to fully visible
+                        overlayContainer.animate()
+                            .alpha(1f)
+                            .setDuration(250)
+                            .setListener(null);
                     } else {
                         Log.e(TAG, "R.id.overlay_fragment_container not found in MainActivity! Cannot show TrashFragment.");
                         Toast.makeText(getContext(), "Error opening trash (container not found).", Toast.LENGTH_SHORT).show();
@@ -2599,14 +2774,12 @@ public class HomeFragment extends BaseFragment {
                     }
 
                     fragmentTransaction.replace(R.id.overlay_fragment_container, trashFragment);
-                    // ----- Fix Ended for this navigation block -----
                     fragmentTransaction.addToBackStack(null); 
                     fragmentTransaction.commit();
                 } catch (Exception e) {
                     Log.e(TAG, "Manual navigation to TrashFragment failed.", e);
                     Toast.makeText(getContext(), "Error opening trash.", Toast.LENGTH_SHORT).show();
                 }
-                // ----- Fix Ended for this method (setupAppLogoLongPressListener) -----
                 return true; // Consume the long click
             });
         }
@@ -2622,6 +2795,12 @@ public class HomeFragment extends BaseFragment {
         buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
         cardPreview = view.findViewById(R.id.cardPreview); // Assuming R.id.cardPreview exists
         vibrator = (Vibrator) requireActivity().getSystemService(Context.VIBRATOR_SERVICE);
+
+        // Initialize pause button to be visibly disabled from the start
+        if (buttonPauseResume != null) {
+            buttonPauseResume.setEnabled(false);
+            buttonPauseResume.setAlpha(0.5f);
+        }
 
         // Clock related views
         cardClock = view.findViewById(R.id.cardClock); // Corrected ID
@@ -2758,7 +2937,7 @@ public class HomeFragment extends BaseFragment {
                 .setPositiveButton("Stop and Exit", (dialog, which) -> {
                     stopRecording();
                     // Allow normal back behavior after stopping recording
-                    requireActivity().onBackPressed();
+                    requireActivity().getOnBackPressedDispatcher().onBackPressed();
                 })
                 .setNegativeButton("Continue Recording", null)
                 .show();
@@ -2814,7 +2993,7 @@ public class HomeFragment extends BaseFragment {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 requireContext().registerReceiver(
-                    cameraResourceAvailabilityReceiver, filter, Context.RECEIVER_EXPORTED);
+                    cameraResourceAvailabilityReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
             } else {
                 requireContext().registerReceiver(cameraResourceAvailabilityReceiver, filter);
             }
@@ -2878,7 +3057,7 @@ public class HomeFragment extends BaseFragment {
             IntentFilter filter = new IntentFilter(Constants.ACTION_RECORDING_SEGMENT_COMPLETE);
             // Add receiver export flag for Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(segmentCompleteStatsReceiver, filter, Context.RECEIVER_EXPORTED);
+                context.registerReceiver(segmentCompleteStatsReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
             } else {
                 context.registerReceiver(segmentCompleteStatsReceiver, filter);
             }
@@ -2891,4 +3070,43 @@ public class HomeFragment extends BaseFragment {
         // ----- Fix Ended for this method(registerSegmentCompleteStatsReceiver_set_flag)-----
     }
     // ----- Fix Ended for this class (HomeFragment) -----
+
+    // ----- Fix Start for this method(onHiddenChanged)-----
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        Log.d(TAG, "onHiddenChanged: Fragment " + (hidden ? "hidden" : "shown"));
+        
+        // If fragment is becoming visible (not hidden)
+        if (!hidden) {
+            // Same logic as in onResume to ensure preview state is correctly applied
+            if (sharedPreferencesManager == null) {
+                sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
+            }
+            
+            // Re-load preview state from SharedPreferences
+            isPreviewEnabled = sharedPreferencesManager.isPreviewEnabled();
+            Log.d(TAG, "onHiddenChanged: Loaded isPreviewEnabled state = " + isPreviewEnabled);
+            
+            // Update UI based on loaded state
+            updatePreviewVisibility();
+            
+            // Update the surface accordingly
+            if (isPreviewEnabled && isRecordingOrPaused() && textureViewSurface != null && textureViewSurface.isValid()) {
+                Log.d(TAG, "onHiddenChanged: Preview enabled, sending valid surface to service");
+                updateServiceWithCurrentSurface(textureViewSurface);
+            } else if (!isPreviewEnabled || !isRecordingOrPaused()) {
+                Log.d(TAG, "onHiddenChanged: Preview disabled or not recording, sending null surface");
+                updateServiceWithCurrentSurface(null);
+            }
+        } else {
+            // If fragment is being hidden, we should release the surface from the service
+            // to prevent any lingering frames when coming back
+            if (isRecordingOrPaused()) {
+                Log.d(TAG, "onHiddenChanged: Fragment hidden while recording, sending null surface");
+                updateServiceWithCurrentSurface(null);
+            }
+        }
+    }
+    // ----- Fix Ended for this method(onHiddenChanged)-----
 }

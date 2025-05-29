@@ -36,6 +36,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.util.Locale;
 import androidx.fragment.app.Fragment;
 import androidx.activity.OnBackPressedCallback;
+import android.widget.CheckBox;
+import android.widget.ImageView;
 
 public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashItemInteractionListener {
 
@@ -54,6 +56,7 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
     private TextView tvAutoDeleteInfo;
     private SharedPreferencesManager sharedPreferencesManager;
     private boolean isInSelectionMode = false;
+    private CheckBox checkboxSelectAll;
 
     public TrashFragment() {
         // Required empty public constructor
@@ -91,10 +94,12 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
         textViewEmptyTrash = view.findViewById(R.id.empty_trash_text_view);
         emptyTrashLayout = view.findViewById(R.id.empty_trash_layout);
         tvAutoDeleteInfo = view.findViewById(R.id.tvAutoDeleteInfo);
+        checkboxSelectAll = view.findViewById(R.id.checkbox_select_all);
 
         setupToolbar();
         setupRecyclerView();
         setupButtonListeners();
+        setupSelectAllCheckbox();
         updateAutoDeleteInfoText();
 
         // Auto-delete old items first, then load
@@ -115,13 +120,70 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
             toolbar.setTitle(getString(R.string.trash_fragment_title_text));
             toolbar.setNavigationIcon(R.drawable.ic_close);
             toolbar.setNavigationOnClickListener(v -> {
-                // ----- Fix Start: Simply let MainActivity handle back press -----
-                // Just trigger the regular back press, MainActivity will detect
-                // that TrashFragment is visible and handle it correctly
-                if (getActivity() != null) {
-                    getActivity().onBackPressed();
+                // ----- Fix Start for this method(setupToolbar) -----
+                // Handle the fade-out animation manually instead of relying on dispatcher
+                if (getActivity() instanceof MainActivity) {
+                    MainActivity mainActivity = (MainActivity) getActivity();
+                    View overlayContainer = mainActivity.findViewById(R.id.overlay_fragment_container);
+                    
+                    if (overlayContainer != null) {
+                        // Animate fading out - identical to the animation in MainActivity
+                        overlayContainer.animate()
+                            .alpha(0f)
+                            .setDuration(250)
+                            .withEndAction(() -> {
+                                // Set visibility to GONE after animation completes
+                                overlayContainer.setVisibility(View.GONE);
+                                overlayContainer.setAlpha(1f); // Reset alpha for next time
+                                
+                                // Get reference to viewPager and adapter
+                                androidx.viewpager2.widget.ViewPager2 viewPager = 
+                                    mainActivity.findViewById(R.id.view_pager);
+                                com.google.android.material.bottomnavigation.BottomNavigationView bottomNav = 
+                                    mainActivity.findViewById(R.id.bottom_navigation);
+                                
+                                if (viewPager != null && bottomNav != null) {
+                                    // Force a complete reset of the ViewPager and its fragments
+                                    final int currentPosition = viewPager.getCurrentItem();
+                                    
+                                    // Completely recreate the adapter
+                                    ViewPagerAdapter newAdapter = new ViewPagerAdapter(mainActivity);
+                                    viewPager.setAdapter(newAdapter);
+                                    
+                                    // Reset page transformer to ensure animations work
+                                    viewPager.setPageTransformer(new FadePageTransformer());
+                                    
+                                    // Restore position without animation
+                                    viewPager.setCurrentItem(currentPosition, false);
+                                    
+                                    // Make sure the correct tab is selected
+                                    switch (currentPosition) {
+                                        case 0:
+                                            bottomNav.setSelectedItemId(R.id.navigation_home);
+                                            break;
+                                        case 1:
+                                            bottomNav.setSelectedItemId(R.id.navigation_records);
+                                            break;
+                                        case 2:
+                                            bottomNav.setSelectedItemId(R.id.navigation_remote);
+                                            break;
+                                        case 3:
+                                            bottomNav.setSelectedItemId(R.id.navigation_settings);
+                                            break;
+                                        case 4:
+                                            bottomNav.setSelectedItemId(R.id.navigation_about);
+                                            break;
+                                    }
+                                }
+                                
+                                // Pop any fragments in the back stack
+                                if (mainActivity.getSupportFragmentManager().getBackStackEntryCount() > 0) {
+                                    mainActivity.getSupportFragmentManager().popBackStack();
+                                }
+                            });
+                    }
                 }
-                // ----- Fix End: Simply let MainActivity handle back press -----
+                // ----- Fix Ended for this method(setupToolbar) -----
             });
         } else {
             Log.e(TAG, "Toolbar is null or Activity is not AppCompatActivity, cannot set up toolbar as ActionBar.");
@@ -133,6 +195,18 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
         trashAdapter = new TrashAdapter(getContext(), trashItems, this, null);
         recyclerViewTrashItems.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerViewTrashItems.setAdapter(trashAdapter);
+        
+        // Add scroll state change listener to maintain selection during scrolling
+        recyclerViewTrashItems.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    // Update select all checkbox state when scrolling stops
+                    updateSelectAllCheckboxState();
+                }
+            }
+        });
     }
 
     private void setupButtonListeners() {
@@ -263,6 +337,13 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
                 toolbar.setTitle(getString(R.string.trash_fragment_title_text));
             }
         }
+        
+        // Show/hide select all checkbox
+        if (checkboxSelectAll != null) {
+            checkboxSelectAll.setVisibility((isInSelectionMode && !trashItems.isEmpty()) ? View.VISIBLE : View.GONE);
+        }
+        
+        updateSelectAllCheckboxState();
     }
 
     @Override
@@ -351,6 +432,14 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
                 toolbar.setTitle(selectedCount + " selected");
             } else if (toolbar != null) {
                 toolbar.setTitle(getString(R.string.trash_fragment_title_text));
+            }
+            
+            // Update select all checkbox state
+            updateSelectAllCheckboxState();
+            
+            // Show/hide select all checkbox
+            if (checkboxSelectAll != null) {
+                checkboxSelectAll.setVisibility(isInSelectionMode ? View.VISIBLE : View.GONE);
             }
         }
     }
@@ -504,7 +593,41 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
             if (toolbar != null) {
                 toolbar.setTitle(getString(R.string.trash_fragment_title_text));
             }
+            
+            // Hide select all checkbox
+            if (checkboxSelectAll != null) {
+                checkboxSelectAll.setVisibility(View.GONE);
+            }
         }
+    }
+
+    private void setupSelectAllCheckbox() {
+        if (checkboxSelectAll == null) return;
+        
+        checkboxSelectAll.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                if (!trashAdapter.isAllSelected() && !trashItems.isEmpty()) {
+                    trashAdapter.selectAll();
+                }
+            } else {
+                if (trashAdapter.getSelectedItemsCount() > 0) {
+                    trashAdapter.clearSelections();
+                }
+            }
+            updateActionButtonsState();
+        });
+    }
+    
+    private void updateSelectAllCheckboxState() {
+        if (checkboxSelectAll == null || trashAdapter == null) return;
+        
+        // Update checkbox without triggering listener
+        checkboxSelectAll.setOnCheckedChangeListener(null);
+        boolean shouldBeChecked = trashAdapter.isAllSelected() && !trashItems.isEmpty();
+        checkboxSelectAll.setChecked(shouldBeChecked);
+        
+        // Re-add the listener
+        setupSelectAllCheckbox();
     }
 
     // TODO: Create TrashAdapter class
