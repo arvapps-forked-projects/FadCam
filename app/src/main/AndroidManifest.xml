@@ -49,8 +49,10 @@
 
 <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
     <application
+        android:name=".FadCamApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

@@ -35,6 +35,7 @@ android {
             )
         }
     }
+    
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -45,6 +46,21 @@ android {
         // Disables dependency metadata when building Android App Bundles.
         includeInBundle = false
     }
+    
+    // Proper resource handling
+    android.aaptOptions.noCompress += listOf("xml")
+    
+    // Generate R class for the AppLock library
+    android.namespace = "com.fadcam"
+    
+    // Add the sourceSets for the AppLockLibrary
+    sourceSets {
+        getByName("main") {
+            java.srcDir("libs/AppLockLibrary/src/main/java")
+            // Include all resources
+            res.srcDir("libs/AppLockLibrary/src/main/res")
+        }
+    }
 }
 
 dependencies {
@@ -53,10 +69,18 @@ dependencies {
     implementation(libs.material)
     implementation(libs.activity)
     implementation(libs.constraintlayout)
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation("androidx.navigation:navigation-fragment-ktx:2.9.0")
-    implementation("androidx.navigation:navigation-ui-ktx:2.9.0")
+    implementation(libs.swiperefreshlayout)
+    implementation(libs.navigation.fragment.ktx)
+    implementation(libs.navigation.ui.ktx)
     implementation(libs.gson)
+    
+    // CameraX dependencies
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.video)
+    implementation(libs.camerax.extensions)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
@@ -76,9 +100,13 @@ dependencies {
     implementation(mapOf("name" to "ffmpeg-kit-full-6.0-2.LTS", "ext" to "aar"))
 
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+    implementation(fileTree(mapOf("dir" to "libs/aar", "include" to listOf("*.aar"))))
 
     implementation(libs.appintro.v631)
 
     implementation(libs.lottie)
-
+    // Removing AppLockLibrary as a project dependency
+    // implementation(project(":app:libs:AppLockLibrary"))
+    implementation(libs.lifecycle.process)
+    implementation(libs.lifecycle.runtime)
 }

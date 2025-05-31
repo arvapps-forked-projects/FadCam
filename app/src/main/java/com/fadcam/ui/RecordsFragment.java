@@ -37,6 +37,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fadcam.Constants;
+import com.fadcam.MainActivity;
 import com.fadcam.R;
 import com.fadcam.SharedPreferencesManager; // Import your manager
 import com.fadcam.Utils;
@@ -48,6 +49,10 @@ import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+// Add AppLock imports
+import com.guardanis.applock.AppLock;
+import com.guardanis.applock.dialogs.UnlockDialogBuilder;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,6 +60,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import android.graphics.Rect;
 
@@ -102,6 +108,10 @@ public class RecordsFragment extends BaseFragment implements
     private boolean isGridView = true;
     private FloatingActionButton fabToggleView;
     private FloatingActionButton fabDeleteSelected;
+
+    // ----- Fix Start: Add AppLock overlay view field -----
+    private View applockOverlay;
+    // ----- Fix End: Add AppLock overlay view field -----
 
     // Use VideoItem and store Uris for selection
     private List<VideoItem> videoItems = new ArrayList<>();
@@ -467,6 +477,7 @@ public class RecordsFragment extends BaseFragment implements
         emptyStateContainer = view.findViewById(R.id.empty_state_container);
         fabToggleView = view.findViewById(R.id.fab_toggle_view);
         fabDeleteSelected = view.findViewById(R.id.fab_delete_selected);
+        applockOverlay = view.findViewById(R.id.applock_overlay);
 
         setupRecyclerView();
         setupFabListeners();
@@ -508,6 +519,25 @@ public class RecordsFragment extends BaseFragment implements
             if(recordsAdapter != null) recordsAdapter.updateRecords(videoItems); // Make sure adapter has the data
             updateUiVisibility();
         }
+        // ----- Fix Start: Show AppLock overlay immediately if required and not unlocked (session-based) -----
+        boolean isAppLockEnabled = sharedPreferencesManager.isAppLockEnabled();
+        boolean isSessionUnlocked = sharedPreferencesManager.isAppLockSessionUnlocked();
+        if (isAppLockEnabled && !isSessionUnlocked && com.guardanis.applock.AppLock.isEnrolled(requireContext())) {
+            fadeOverlay(true);
+        } else {
+            fadeOverlay(false);
+        }
+        // ----- Fix End: Show AppLock overlay immediately if required and not unlocked (session-based) -----
+
+        // ----- Fix Start: Apply theme colors to FABs, top bar, and bottom sheet in RecordsFragment -----
+        // Apply theme to top bar
+        int colorTopBar = resolveThemeColor(R.attr.colorTopBar);
+        if (toolbar != null) toolbar.setBackgroundColor(colorTopBar);
+        // Apply theme to FABs
+        int colorButton = resolveThemeColor(R.attr.colorButton);
+        if (fabToggleView != null) fabToggleView.setBackgroundTintList(android.content.res.ColorStateList.valueOf(colorButton));
+        if (fabDeleteSelected != null) fabDeleteSelected.setBackgroundTintList(android.content.res.ColorStateList.valueOf(colorButton));
+        // ----- Fix End: Apply theme colors to FABs, top bar, and bottom sheet in RecordsFragment -----
     } // End onViewCreated
 
     @Override
@@ -515,26 +545,38 @@ public class RecordsFragment extends BaseFragment implements
         super.onResume();
         Log.i(TAG, "LOG_LIFECYCLE: onResume called.");
 
-        // ----- Fix Start for this method (onResume_toolbar_and_menu_refresh) -----
+        // Always update toolbar/menu and AppLock state
+        androidx.viewpager2.widget.ViewPager2 viewPager = getActivity() != null ? getActivity().findViewById(R.id.view_pager) : null;
+        if (viewPager != null && viewPager.getCurrentItem() == 1 && isVisible()) {
+            checkAppLock();
+        }
         // Re-assert toolbar and invalidate options menu
         if (toolbar != null && getActivity() instanceof AppCompatActivity) {
             AppCompatActivity activity = (AppCompatActivity) getActivity();
             activity.setSupportActionBar(toolbar); // Re-set the support action bar
             toolbar.setTitle(originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title));
-            activity.invalidateOptionsMenu(); // Tell the activity to redraw the options menu
-            Log.d(TAG, "Toolbar re-set and options menu invalidated in onResume.");
+            Log.d(TAG, "Toolbar re-set in onResume.");
         } else {
             Log.w(TAG, "Could not re-set toolbar in onResume - toolbar or activity null/invalid.");
         }
-        // ----- Fix Ended for this method (onResume_toolbar_and_menu_refresh) -----
-
-        // Add null check for safety
         if (sharedPreferencesManager == null && getContext() != null) {
             sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
         }
-
         Log.i(TAG, "LOG_REFRESH: Calling loadRecordsList() from onResume.");
         loadRecordsList(); // RESTORED: Always reload the list when the fragment resumes
+        updateFabIcons();
+        // ----- Fix Start: Always invalidate options menu to ensure correct menu for Records tab -----
+        requireActivity().invalidateOptionsMenu();
+        // ----- Fix End: Always invalidate options menu to ensure correct menu for Records tab -----
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // Reset unlock state when leaving the fragment
+        // isUnlocked = false;
+        
+        // ... existing code ...
     }
 
     @Override
@@ -592,7 +634,7 @@ public class RecordsFragment extends BaseFragment implements
         
         if (recordsAdapter == null) {
             // Create new adapter if needed
-        recordsAdapter = new RecordsAdapter(
+                    recordsAdapter = new RecordsAdapter(
                     requireContext(),
                     videoItems,
                     executorService,
@@ -1574,17 +1616,9 @@ public class RecordsFragment extends BaseFragment implements
     // --- Menu Handling ---
     @Override
     public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        super.onCreateOptionsMenu(menu, inflater); // Call super
-        menu.clear(); // Clear previous items first
-        inflater.inflate(R.menu.records_menu, menu);
-        MenuItem moreItem = menu.findItem(R.id.action_more_options);
-        MenuItem deleteAllItem = menu.findItem(R.id.action_delete_all); // Find delete all
-
-        // Visibility depends on selection mode
-        if(moreItem != null) moreItem.setVisible(!isInSelectionMode);
-        if(deleteAllItem != null) deleteAllItem.setVisible(false); // Always hide from toolbar menu
-
-        Log.d(TAG,"onCreateOptionsMenu called, More Options Visible: " + !isInSelectionMode);
+        menu.clear(); // Always clear previous items first
+        inflater.inflate(R.menu.records_menu, menu); // Only inflate the correct menu for Records
+        // Hide or show items as needed for Records tab
     }
 
     @Override
@@ -1601,9 +1635,8 @@ public class RecordsFragment extends BaseFragment implements
 
     private void showRecordsSidebar() {
         if (getContext() == null) return;
-
         View bottomSheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_records_options, null);
-        BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(requireContext());
+        BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(requireContext(), R.style.ThemeOverlay_FadCam_BottomSheet);
         bottomSheetDialog.setContentView(bottomSheetView);
 
         RadioGroup sortOptionsGroup = bottomSheetView.findViewById(R.id.sort_options_group);
@@ -2058,5 +2091,74 @@ public class RecordsFragment extends BaseFragment implements
         if (recordsAdapter != null) {
             recordsAdapter.clearCaches();
         }
+    }
+
+    private static final String PREF_APPLOCK_ENABLED = "applock_enabled";
+
+    /**
+     * Checks if app lock is enabled and shows the unlock dialog if needed
+     */
+    private void checkAppLock() {
+        SharedPreferencesManager sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
+        boolean isAppLockEnabled = sharedPreferencesManager.isAppLockEnabled();
+        boolean isSessionUnlocked = sharedPreferencesManager.isAppLockSessionUnlocked();
+        
+        if (isAppLockEnabled && !isSessionUnlocked && AppLock.isEnrolled(requireContext())) {
+            // ----- Fix Start: Fade overlay after successful unlock and restore UI state correctly -----
+            new UnlockDialogBuilder(requireActivity())
+                .onUnlocked(() -> {
+                    sharedPreferencesManager.setAppLockSessionUnlocked(true);
+                    fadeOverlay(false);
+                    updateUiVisibility();
+                    updateFabIcons();
+                })
+                .onCanceled(() -> {
+                    if (getActivity() instanceof MainActivity) {
+                        ((MainActivity) getActivity()).skipNextBackExitHandling();
+                        requireActivity().getOnBackPressedDispatcher().onBackPressed();
+                    }
+                })
+                .show();
+            // ----- Fix End: Fade overlay after successful unlock and restore UI state correctly -----
+        } else {
+            fadeOverlay(false);
+            updateUiVisibility();
+            updateFabIcons();
+        }
+    }
+
+    /**
+     * Sets the visibility of all sensitive content in the Records tab.
+     * @param visible true to show, false to hide (set INVISIBLE)
+     */
+    private void setSensitiveContentVisibility(boolean visible) {
+        int vis = visible ? View.VISIBLE : View.INVISIBLE;
+        if (recyclerView != null) recyclerView.setVisibility(vis);
+        if (emptyStateContainer != null) emptyStateContainer.setVisibility(vis);
+        if (fabToggleView != null) fabToggleView.setVisibility(vis);
+        if (fabDeleteSelected != null) fabDeleteSelected.setVisibility(vis);
+    }
+
+    /**
+     * Fades the AppLock overlay in or out with animation.
+     * @param show true to fade in (show), false to fade out (hide)
+     */
+    private void fadeOverlay(final boolean show) {
+        if (applockOverlay == null) return;
+        if (show) {
+            applockOverlay.setAlpha(0f);
+            applockOverlay.setVisibility(View.VISIBLE);
+            applockOverlay.animate().alpha(1f).setDuration(250).start();
+        } else {
+            applockOverlay.animate().alpha(0f).setDuration(250)
+                .withEndAction(() -> applockOverlay.setVisibility(View.GONE))
+                .start();
+        }
+    }
+
+    private int resolveThemeColor(int attr) {
+        android.util.TypedValue typedValue = new android.util.TypedValue();
+        requireContext().getTheme().resolveAttribute(attr, typedValue, true);
+        return typedValue.data;
     }
 }

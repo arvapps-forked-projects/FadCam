@@ -77,6 +77,32 @@ public class SharedPreferencesManager {
     public static final String AUDIO_INPUT_SOURCE_WIRED = "wired_mic";
     // ----- Fix Ended for this class (SharedPreferencesManager_audio_input_source) -----
 
+    // App Lock preferences
+    private static final String PREF_APP_LOCK_ENABLED = "applock_enabled";
+
+    // ----- Fix Start: AppLock session unlock state -----
+    private static final String KEY_APPLOCK_SESSION_UNLOCKED = "applock_session_unlocked";
+    private volatile boolean sessionUnlockedCache = false;
+
+    /**
+     * Returns true if the AppLock has been unlocked for this session.
+     */
+    public boolean isAppLockSessionUnlocked() {
+        if (sessionUnlockedCache) return true;
+        sessionUnlockedCache = sharedPreferences.getBoolean(KEY_APPLOCK_SESSION_UNLOCKED, false);
+        return sessionUnlockedCache;
+    }
+
+    /**
+     * Sets the AppLock session unlock state.
+     * @param unlocked true if unlocked, false to reset
+     */
+    public void setAppLockSessionUnlocked(boolean unlocked) {
+        sessionUnlockedCache = unlocked;
+        sharedPreferences.edit().putBoolean(KEY_APPLOCK_SESSION_UNLOCKED, unlocked).apply();
+    }
+    // ----- Fix End: AppLock session unlock state -----
+
     private SharedPreferencesManager(Context context) {
         // Use PREFS_NAME from Constants class
         this.sharedPreferences = context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE);
@@ -394,5 +420,23 @@ public class SharedPreferencesManager {
         sharedPreferences.edit().putBoolean(Constants.PREF_LOCATION_DATA, enabled).apply();
     }
     // ----- Fix Ended for this class(SharedPreferencesManager_location_methods) -----
+
+    // ----- Fix Start for this class (SharedPreferencesManager_applock) -----
+    /**
+     * Checks if app lock is enabled
+     * @return true if app lock is enabled, false otherwise
+     */
+    public boolean isAppLockEnabled() {
+        return sharedPreferences.getBoolean(PREF_APP_LOCK_ENABLED, false);
+    }
+    
+    /**
+     * Enables or disables app lock
+     * @param enabled true to enable app lock, false to disable
+     */
+    public void setAppLockEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(PREF_APP_LOCK_ENABLED, enabled).apply();
+    }
+    // ----- Fix Ended for this class (SharedPreferencesManager_applock) -----
 
 }
