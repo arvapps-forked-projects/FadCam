@@ -36,4 +36,15 @@
     <color name="colorDialog">@color/gray</color>
     <color name="colorStatusBar">@color/gray</color>
     <!-- Fix End: Add color references for new theme attributes for maintainability -->
+
+    <color name="dark_red_card">#3B1818</color> <!-- Very dark, muted red for storage card -->
+    <color name="dark_purple_bar">#231942</color> <!-- Very dark purple for dark mode top bar and navbar -->
+
+    <color name="gray_button_filled">#232323</color> <!-- Much darker gray for filled button in all themes -->
+    
+    <!-- Darker color for storage card across all themes -->
+    <color name="dark_card_background">#171717</color>
+    
+    <!-- Extra dark color for storage card in Crimson theme -->
+    <color name="crimson_dark_card_background">#1E0E0E</color>
 </resources>

@@ -94,7 +94,6 @@
     <string name="video_menu_copy_filename">Copy Filename</string>
     <string name="video_menu_mark_viewed">Mark as Viewed</string>
     <string name="video_menu_mark_unviewed">Mark as Unviewed</string>
-    <string name="video_menu_edit_faditorx">Edit in FaditorX</string>
     <string name="records_title">Recordings</string>
     <string name="nav_home">Home</string>
     <string name="nav_records">Records</string>
@@ -259,6 +258,8 @@
     <string name="more_options">More Options</string>
     <string name="records_options_title">Records Options</string>
     <string name="setting_theme_title">App Theme</string>
+    <string name="settings_option_theme">Choose Theme</string>
+    <string name="settings_theme_changed">Theme changed. Applying changes...</string>
     <string name="note_theme">Choose your preferred app theme</string>
 <!-- Below are the start and stop shortcut texts for the shortcuts that appears when we long press on app icon   -->
     <string name="start_recording">Start</string>
@@ -281,11 +282,18 @@
     <string name="setting_back_lens_info_single_v2">Only main back camera detected</string>
 
     <string-array name="theme_options">
-        <item>Dark Mode</item>
-        <item>AMOLED Black</item>
-        <item>Red Passion</item>
+        <item>Midnight Dusk</item>
+        <item>Faded Night</item>
+        <item>Crimson Bloom</item>
+        <item>Silent Forest</item>
+        <item>Shadow Alloy</item>
+        <item>Pookie Pink</item>
     </string-array>
-    <string name="theme_red">Red Passion</string>
+    <string name="theme_red">Crimson Bloom</string>
+    <string name="theme_gold">Premium Gold</string>
+    <string name="theme_silentforest">Silent Forest</string>
+    <string name="theme_shadowalloy">Shadow Alloy</string>
+    <string name="theme_pookiepink">Pookie Pink</string>
     <string name="remote_access_title">Remote Access/Control</string>
     <string name="remote_toast_coming_soon">Coming soon! In Sha Allah</string>
     <string name="remote_coming_soon">Remote control for FadCam is coming soon.</string>
@@ -319,8 +327,8 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="bitrate_custom_hint">e.g. 16,000</string>
     <string name="bitrate_reset_button">Reset</string>
     <string name="bitrate_helper_text">Bitrate controls video quality and file size. Higher = better quality, but larger files. Too high or too low may cause recording errors or poor quality. The recommended range depends on your device and selected resolution. The default value above is based on your current settings.</string>
-    <string name="bitrate_info_default">Default bitrate for this resolution and framerate: %1$s Mbps</string>
-    <string name="bitrate_info_custom">Custom bitrate: %1$s Mbps</string>
+    <string name="bitrate_info_default">Default: %d Mbps</string>
+    <string name="bitrate_info_custom">Custom: %d Mbps</string>
     <string name="bitrate_info_warning_low">Warning: Bitrate is very low. Video quality may be poor.</string>
     <string name="bitrate_info_warning_high">Warning: Bitrate is very high. Recording may fail or overheat device.</string>
     <string name="bitrate_info_ok">Bitrate is in recommended range.</string>
@@ -506,5 +514,9 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="applock_verify_to_change">Verify Current PIN</string>
     <string name="applock_verify_to_remove">Verify PIN to Remove</string>
     <string name="applock_verification_canceled">Verification canceled</string>
+
+    <string name="version_format">v%s</string>
+
+    <string name="edit_with_faditorx">Edit with FaditorX</string>
 
 </resources>

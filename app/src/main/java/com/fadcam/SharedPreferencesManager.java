@@ -61,7 +61,69 @@ public class SharedPreferencesManager {
 
     // ----- Fix Start for this class (SharedPreferencesManager_clock_color) -----
     private static final String PREF_KEY_CLOCK_CARD_COLOR = "clock_card_color";
-    public static final String DEFAULT_CLOCK_CARD_COLOR = "#673AB7"; // Default Purple
+    
+    // This will be set dynamically based on theme
+    public static String DEFAULT_CLOCK_CARD_COLOR = "#673AB7"; // Initial value: Purple
+    
+    /**
+     * Gets the currently set clock card color. 
+     * For AMOLED theme, special handling ensures the clock card always uses Dark Grey.
+     */
+    public String getClockCardColor() {
+        String currentTheme = sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, "Midnight Dusk");
+        
+        // Special case for AMOLED theme - always return Dark Grey
+        if (currentTheme != null && 
+            (currentTheme.equalsIgnoreCase("AMOLED") || currentTheme.equalsIgnoreCase("Amoled") || 
+             currentTheme.equalsIgnoreCase("Faded Night"))) {
+            return "#424242"; // Dark Grey for AMOLED
+        } else if (currentTheme.equals("Crimson Bloom")) {
+            return "#F44336"; // Red for Red theme
+        } else if (currentTheme.equals("Premium Gold")) {
+            return "#FFD700"; // Gold for Premium Gold theme
+        } else if (currentTheme.equals("Silent Forest")) {
+            return "#26A69A"; // Green for Silent Forest theme
+        } else if (currentTheme.equals("Shadow Alloy")) {
+            return "#A5A9AB"; // Silver for Shadow Alloy theme
+        } else if (currentTheme.equals("Pookie Pink")) {
+            return "#F06292"; // Pink for Pookie Pink theme
+        }
+        
+        // For other themes or default
+        return sharedPreferences.getString(PREF_KEY_CLOCK_CARD_COLOR, DEFAULT_CLOCK_CARD_COLOR);
+    }
+    
+    /**
+     * Updates the default clock card color based on the current theme.
+     * This should be called whenever the theme changes or on app startup.
+     */
+    public void updateDefaultClockColorForTheme() {
+        String currentTheme = sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, "Midnight Dusk");
+        
+        // Only update if the theme changes and the color wasn't manually set by the user
+        if (currentTheme != null) {
+            if (currentTheme.equalsIgnoreCase("AMOLED") || currentTheme.equalsIgnoreCase("Amoled") || 
+                currentTheme.equalsIgnoreCase("Faded Night")) {
+                setClockCardColor("#424242"); // Dark Grey for AMOLED
+            } else if (currentTheme.equals("Crimson Bloom")) {
+                setClockCardColor("#F44336"); // Red for Red theme
+            } else if (currentTheme.equals("Premium Gold")) {
+                setClockCardColor("#FFD700"); // Gold for Gold theme
+            } else if (currentTheme.equals("Silent Forest")) {
+                setClockCardColor("#26A69A"); // Green for Silent Forest theme
+            } else if (currentTheme.equals("Shadow Alloy")) {
+                setClockCardColor("#A5A9AB"); // Silver for Shadow Alloy theme
+            } else if (currentTheme.equals("Pookie Pink")) {
+                setClockCardColor("#F06292"); // Pink for Pookie Pink theme
+            } else {
+                setClockCardColor(DEFAULT_CLOCK_CARD_COLOR); // Default purple for other themes
+            }
+        }
+    }
+    
+    public void setClockCardColor(String colorHex) {
+        sharedPreferences.edit().putString(PREF_KEY_CLOCK_CARD_COLOR, colorHex).apply();
+    }
     // ----- Fix Ended for this class (SharedPreferencesManager_clock_color) -----
 
     // ----- Fix Start for this class (SharedPreferencesManager_video_splitting) -----
@@ -349,16 +411,6 @@ public class SharedPreferencesManager {
         return minutes;
     }
     // ----- Fix Ended for this class (SharedPreferencesManager_trash_auto_delete_methods) -----
-
-    // ----- Fix Start for this class (SharedPreferencesManager_clock_color) -----
-    public void setClockCardColor(String colorHex) {
-        sharedPreferences.edit().putString(PREF_KEY_CLOCK_CARD_COLOR, colorHex).apply();
-    }
-
-    public String getClockCardColor() {
-        return sharedPreferences.getString(PREF_KEY_CLOCK_CARD_COLOR, DEFAULT_CLOCK_CARD_COLOR);
-    }
-    // ----- Fix Ended for this class (SharedPreferencesManager_clock_color) -----
 
     // ----- Fix Start for this class (SharedPreferencesManager_video_splitting_methods) -----
     public boolean isVideoSplittingEnabled() {

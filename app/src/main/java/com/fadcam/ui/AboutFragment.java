@@ -4,9 +4,12 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.Html;
@@ -22,6 +25,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.text.HtmlCompat;
 import androidx.fragment.app.Fragment;
+import androidx.core.content.ContextCompat;
 
 import com.fadcam.R;
 import com.google.android.material.button.MaterialButton;
@@ -68,16 +72,126 @@ public class AboutFragment extends BaseFragment {
         MaterialCardView privacyInfoCard = view.findViewById(R.id.privacy_info_card);
         ScrollView scrollView = view.findViewById(R.id.scroll_view);
 
+        int colorHeading = resolveThemeColor(R.attr.colorHeading);
+        int colorButton = resolveThemeColor(R.attr.colorButton);
+        int colorDialog = resolveThemeColor(R.attr.colorDialog);
+        int colorOnPrimary = resolveThemeColor(android.R.attr.textColorPrimary);
+        int colorOnSurface = resolveThemeColor(android.R.attr.textColorSecondary);
+        
+        // Get current theme
+        String currentTheme = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, "Midnight Dusk");
+        
+        // Define theme-specific colors
+        int themeTextColor;
+        if ("Midnight Dusk".equals(currentTheme)) {
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.colorPrimary); // Light purple (#cfbafd)
+        } else if ("Crimson Bloom".equals(currentTheme)) {
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.red_theme_secondary); // Bright red (#FF5252)
+        } else if ("Premium Gold".equals(currentTheme)) {
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary); // Gold (#FFD700)
+        } else if ("Silent Forest".equals(currentTheme)) {
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary); // Green (#26A69A)
+        } else if ("Shadow Alloy".equals(currentTheme)) {
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary); // Silver (#A5A9AB)
+        } else if ("Pookie Pink".equals(currentTheme)) {
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary); // Pink (#F06292)
+        } else {
+            themeTextColor = Color.WHITE; // Default for Faded Night
+        }
+
         appIcon.setImageResource(R.mipmap.ic_launcher);
         appName.setText(getString(R.string.app_name));
-        appVersion.setText(String.format("Version %s", getAppVersion()));
-
-        String descriptionString = getString(R.string.app_description);
-        Spanned formattedDescription = HtmlCompat.fromHtml(descriptionString, HtmlCompat.FROM_HTML_MODE_LEGACY);
-
-        // Set the formatted text to the TextView
-        appDescription.setText(formattedDescription);
-
+        // Set app name to theme color instead of default colorHeading
+        appName.setTextColor(themeTextColor);
+        
+        try {
+            String versionName = requireContext().getPackageManager().getPackageInfo(requireContext().getPackageName(), 0).versionName;
+            appVersion.setText(getString(R.string.version_format, versionName));
+            appVersion.setTextColor(Color.WHITE);
+        } catch (Exception e) {
+            appVersion.setText("");
+        }
+        String appDesc = getString(R.string.app_description);
+        // Use theme-specific colors for highlighting
+        String highlightColorHex;
+        if ("Midnight Dusk".equals(currentTheme)) {
+            highlightColorHex = "#cfbafd"; // Light purple for Midnight Dusk
+        } else if ("Crimson Bloom".equals(currentTheme)) {
+            highlightColorHex = "#FF5252"; // Red theme secondary color for Crimson Bloom
+        } else if ("Premium Gold".equals(currentTheme)) {
+            highlightColorHex = "#FFD700"; // Gold color for Premium Gold
+        } else if ("Silent Forest".equals(currentTheme)) {
+            highlightColorHex = "#26A69A"; // Green color for Silent Forest
+        } else if ("Shadow Alloy".equals(currentTheme)) {
+            highlightColorHex = "#A5A9AB"; // Silver color for Shadow Alloy
+        } else if ("Pookie Pink".equals(currentTheme)) {
+            highlightColorHex = "#F06292"; // Pink color for Pookie Pink
+        } else {
+            highlightColorHex = "#AAAAAA"; // Default dark gray for other themes (like Faded Night)
+        }
+        
+        appDesc = appDesc.replaceAll("#cfbafd", highlightColorHex);
+        appDescription.setText(Html.fromHtml(appDesc, Html.FROM_HTML_MODE_LEGACY));
+        appDescription.setTextColor(Color.WHITE);
+        checkUpdatesButton.setTextColor(Color.WHITE);
+        checkUpdatesButton.setIconTint(ColorStateList.valueOf(Color.WHITE));
+        checkUpdatesButton.setStrokeColor(ColorStateList.valueOf(colorButton));
+        fadSecInfoCard.setCardBackgroundColor(colorDialog);
+        fadSecInfoCard.setStrokeColor(colorButton);
+        TextView fadSecInfoText = fadSecInfoCard.findViewById(R.id.fadsec_info_text);
+        if (fadSecInfoText != null) fadSecInfoText.setTextColor(Color.WHITE);
+        sourceCodeButton.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.gray_button_filled)));
+        sourceCodeButton.setStrokeColor(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.gray)));
+        sourceCodeButton.setTextColor(Color.WHITE);
+        sourceCodeButton.setIconTint(ColorStateList.valueOf(Color.WHITE));
+        int gold = ContextCompat.getColor(requireContext(), R.color.gold);
+        int black = ContextCompat.getColor(requireContext(), R.color.black);
+        donateButton.setBackgroundTintList(ColorStateList.valueOf(gold));
+        donateButton.setTextColor(black);
+        donateButton.setIconTint(ColorStateList.valueOf(black));
+        emailText.setTextColor(Color.WHITE);
+        discordText.setTextColor(Color.WHITE);
+        privacyInfoCard.setCardBackgroundColor(colorDialog);
+        privacyInfoCard.setStrokeColor(colorButton);
+        LinearLayout privacyHeader = privacyInfoCard.findViewById(R.id.privacy_info_header);
+        if (privacyHeader != null) {
+            TextView privacyTitle = privacyHeader.findViewById(R.id.privacy_info_title);
+            if (privacyTitle != null) privacyTitle.setTextColor(themeTextColor);
+            ImageView expandIcon = privacyHeader.findViewById(R.id.expand_icon);
+            if (expandIcon != null) expandIcon.setColorFilter(themeTextColor);
+        }
+        TextView privacyInfoContent = privacyInfoCard.findViewById(R.id.privacy_info_content);
+        if (privacyInfoContent != null) privacyInfoContent.setTextColor(Color.WHITE);
+        String[] questions = getResources().getStringArray(R.array.questions_array);
+        String[] answers = getResources().getStringArray(R.array.answers_array);
+        
+        // Check current theme to determine answers color
+        String currentThemeAnswers = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, "Midnight Dusk");
+        
+        // Use theme-specific colors for answers
+        String answerColorHex;
+        if ("Midnight Dusk".equals(currentThemeAnswers)) {
+            answerColorHex = "#cfbafd"; // Light purple for Midnight Dusk
+        } else if ("Crimson Bloom".equals(currentThemeAnswers)) {
+            answerColorHex = "#FF5252"; // Red theme secondary color for Crimson Bloom
+        } else if ("Premium Gold".equals(currentThemeAnswers)) {
+            answerColorHex = "#FFD700"; // Gold color for Premium Gold
+        } else if ("Silent Forest".equals(currentThemeAnswers)) {
+            answerColorHex = "#26A69A"; // Green color for Silent Forest
+        } else if ("Shadow Alloy".equals(currentThemeAnswers)) {
+            answerColorHex = "#A5A9AB"; // Silver color for Shadow Alloy
+        } else if ("Pookie Pink".equals(currentThemeAnswers)) {
+            answerColorHex = "#F06292"; // Pink color for Pookie Pink
+        } else {
+            answerColorHex = "#AAAAAA"; // Default dark gray for other themes (like Faded Night)
+        }
+        
+        StringBuilder qnaContent = new StringBuilder();
+        for (int i = 0; i < questions.length; i++) {
+            qnaContent.append("<b><font color='#FFFFFF'>").append(questions[i]).append("</font></b><br>")
+                    .append("<font color='" + answerColorHex + "'>").append(answers[i]).append("</font><br><br>");
+        }
+        privacyInfoContent.setText(Html.fromHtml(qnaContent.toString(), Html.FROM_HTML_MODE_LEGACY));
         sourceCodeButton.setOnClickListener(v -> openUrl("https://github.com/fadsec-lab/"));
         donateButton.setOnClickListener(v -> {
             KoFiSupportBottomSheet bottomSheet = new KoFiSupportBottomSheet();
@@ -86,9 +200,32 @@ public class AboutFragment extends BaseFragment {
         checkUpdatesButton.setOnClickListener(v -> checkForUpdates());
         emailText.setOnClickListener(v -> sendEmail());
         discordText.setOnClickListener(v -> openUrl("https://discord.gg/kvAZvdkuuN"));
-
         setupPrivacyInfo(privacyInfoCard, scrollView);
         view.findViewById(R.id.check_updates_button).setOnClickListener(v -> checkForUpdates());
+
+        // Find text elements with specific content and set their colors
+        ScrollView scrollViewObj = view.findViewById(R.id.scroll_view);
+        if (scrollViewObj != null && scrollViewObj.getChildCount() > 0) {
+            ViewGroup rootLayout = (ViewGroup) scrollViewObj.getChildAt(0);
+            for (int i = 0; i < rootLayout.getChildCount(); i++) {
+                View child = rootLayout.getChildAt(i);
+                if (child instanceof TextView) {
+                    TextView textView = (TextView) child;
+                    CharSequence text = textView.getText();
+                    if (text != null) {
+                        String textStr = text.toString();
+                        // Set copyright text color
+                        if (textStr.contains(getString(R.string.copyright_info))) {
+                            textView.setTextColor(themeTextColor);
+                        } 
+                        // Set contact heading color
+                        else if (textStr.equals(getString(R.string.contact))) {
+                            textView.setTextColor(themeTextColor);
+                        }
+                    }
+                }
+            }
+        }
 
         executorService = Executors.newSingleThreadExecutor();
         alertDialogBuilder = new MaterialAlertDialogBuilder(requireContext())
@@ -99,15 +236,34 @@ public class AboutFragment extends BaseFragment {
 
     private void setupPrivacyInfo(MaterialCardView cardView, ScrollView scrollView) {
         String[] questions = getResources().getStringArray(R.array.questions_array);
-
         String[] answers = getResources().getStringArray(R.array.answers_array);
-
+        
+        // Check current theme to determine answers color
+        String currentTheme = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, "Midnight Dusk");
+        
+        // Use theme-specific colors for answers
+        String answerColorHex;
+        if ("Midnight Dusk".equals(currentTheme)) {
+            answerColorHex = "#cfbafd"; // Light purple for Midnight Dusk
+        } else if ("Crimson Bloom".equals(currentTheme)) {
+            answerColorHex = "#FF5252"; // Red theme secondary color for Crimson Bloom
+        } else if ("Premium Gold".equals(currentTheme)) {
+            answerColorHex = "#FFD700"; // Gold color for Premium Gold
+        } else if ("Silent Forest".equals(currentTheme)) {
+            answerColorHex = "#26A69A"; // Green color for Silent Forest
+        } else if ("Shadow Alloy".equals(currentTheme)) {
+            answerColorHex = "#A5A9AB"; // Silver color for Shadow Alloy
+        } else if ("Pookie Pink".equals(currentTheme)) {
+            answerColorHex = "#F06292"; // Pink color for Pookie Pink
+        } else {
+            answerColorHex = "#AAAAAA"; // Default dark gray for other themes (like Faded Night)
+        }
+        
         StringBuilder qnaContent = new StringBuilder();
         for (int i = 0; i < questions.length; i++) {
             qnaContent.append("<b><font color='#FFFFFF'>").append(questions[i]).append("</font></b><br>")
-                    .append("<font color='#CFBAFD'>").append(answers[i]).append("</font><br><br>");
+                    .append("<font color='" + answerColorHex + "'>").append(answers[i]).append("</font><br><br>");
         }
-
         TextView privacyInfoContent = cardView.findViewById(R.id.privacy_info_content);
         privacyInfoContent.setText(Html.fromHtml(qnaContent.toString(), Html.FROM_HTML_MODE_LEGACY));
 
@@ -197,25 +353,7 @@ public class AboutFragment extends BaseFragment {
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     // Code for checking updates
-
-
-
-
 
 
     private void checkForUpdates() {
@@ -313,8 +451,13 @@ public class AboutFragment extends BaseFragment {
 
     private void showLoadingDialog(String message) {
         requireActivity().runOnUiThread(() -> {
-            AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-            builder.setMessage(message);
+            TextView messageView = new TextView(requireContext());
+            messageView.setText(message);
+            messageView.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+            messageView.setPadding(48, 32, 48, 32);
+            messageView.setTextSize(16);
+            MaterialAlertDialogBuilder builder = themedDialogBuilder(requireContext());
+            builder.setView(messageView);
             builder.setCancelable(false);
             loadingDialog = builder.create();
             loadingDialog.show();
@@ -328,44 +471,55 @@ public class AboutFragment extends BaseFragment {
     }
 
 
-
-
     private void showUpdateAvailableDialog(String newVersion) {
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle(getString(R.string.update_available_title)) // Use string resource for title
-                .setMessage(getString(R.string.update_available_message, newVersion)) // Use string resource for message with format
+        MaterialAlertDialogBuilder builder = themedDialogBuilder(requireContext())
+                .setTitle(getString(R.string.update_available_title))
+                .setMessage(getString(R.string.update_available_message, newVersion))
                 .setPositiveButton(getString(R.string.visit_fdroid), (dialog, which) -> {
-                    openUpdateUrl("https://f-droid.org/packages/com.fadcam"); // Replace with your app's F-Droid URL
+                    openUpdateUrl("https://f-droid.org/packages/com.fadcam");
                 })
                 .setNegativeButton(getString(R.string.visit_github), (dialog, which) -> {
-                    openUpdateUrl("https://github.com/anonfaded/FadCam"); // Replace with your GitHub repository URL
-                })
-                .show();
+                    openUpdateUrl("https://github.com/anonfaded/FadCam");
+                });
+        
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(dialogInterface -> setDialogButtonsWhite(dialog));
+        dialog.show();
     }
 
 
     private void showUpToDateDialog() {
-        new MaterialAlertDialogBuilder(requireContext())
+        TextView messageView = new TextView(requireContext());
+        messageView.setText(getString(R.string.up_to_date_description));
+        messageView.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+        messageView.setPadding(48, 32, 48, 32);
+        messageView.setTextSize(16);
+        
+        MaterialAlertDialogBuilder builder = themedDialogBuilder(requireContext())
                 .setTitle(getString(R.string.up_to_date))
-                .setMessage(getString(R.string.up_to_date_description))
-                .setPositiveButton("OK", null)
-                .show();
+                .setView(messageView)
+                .setPositiveButton("OK", null);
+        
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(dialogInterface -> setDialogButtonsWhite(dialog));
+        dialog.show();
     }
 
     private void showErrorDialog(String message) {
-        new MaterialAlertDialogBuilder(requireContext())
+        MaterialAlertDialogBuilder builder = themedDialogBuilder(requireContext())
                 .setTitle("Error")
                 .setMessage(message)
-                .setPositiveButton("OK", null)
-                .show();
+                .setPositiveButton("OK", null);
+        
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(dialogInterface -> setDialogButtonsWhite(dialog));
+        dialog.show();
     }
 
     private void openUpdateUrl(String url) {
         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
         startActivity(intent);
     }
-
-
 
 
 // Below is the old version of update-checking logic where it downloads the apk too
@@ -443,18 +597,23 @@ public class AboutFragment extends BaseFragment {
 //    }
 
 
+    private int resolveThemeColor(int attr) {
+        android.util.TypedValue typedValue = new android.util.TypedValue();
+        requireContext().getTheme().resolveAttribute(attr, typedValue, true);
+        return typedValue.data;
+    }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    private MaterialAlertDialogBuilder themedDialogBuilder(Context context) {
+        // Simply return the themed builder without trying to set listeners
+        return new MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_FadCam_Dialog);
+    }
+    
+    // Helper method to make dialog buttons white
+    private void setDialogButtonsWhite(AlertDialog dialog) {
+        if (dialog != null) {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.WHITE);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.WHITE);
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(Color.WHITE);
+        }
+    }
 }

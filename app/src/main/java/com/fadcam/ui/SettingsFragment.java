@@ -8,10 +8,12 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
@@ -106,6 +108,8 @@ import android.text.Editable;
 import android.text.TextWatcher;
 // ----- Fix Ended for this class (SettingsFragment_video_splitting_imports) -----
 
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.Color;
 
 public class SettingsFragment extends BaseFragment {
 
@@ -470,6 +474,7 @@ public class SettingsFragment extends BaseFragment {
         MaterialButton audioSettingsButton = view.findViewById(R.id.audio_settings_button);
         if (audioSettingsButton != null) {
             audioSettingsButton.setOnClickListener(v -> showAudioSettingsDialog());
+            audioSettingsButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
         }
 
         // Initialize Storage UI elements
@@ -542,12 +547,14 @@ public class SettingsFragment extends BaseFragment {
         MaterialButton videoBitrateButton = view.findViewById(R.id.video_bitrate_button);
         if (videoBitrateButton != null) {
             videoBitrateButton.setOnClickListener(v -> showVideoBitrateDialog());
+            videoBitrateButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
         }
 
         // ----- Fix Start for onCreateView: Setup Choose Button for mic selection -----
         MaterialButton audioInputSourceButton = view.findViewById(R.id.audio_input_source_button);
         if (audioInputSourceButton != null) {
             audioInputSourceButton.setOnClickListener(v -> showMicSelectionDialog());
+            audioInputSourceButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
         }
         // Remove row click logic for audio_input_source_layout
         // ... existing code ...
@@ -574,6 +581,15 @@ public class SettingsFragment extends BaseFragment {
         // ----- Fix Start: Apply theme colors to headings, buttons, toggles using theme attributes -----
         applyThemeToUI(view);
         // ----- Fix End: Apply theme colors to headings, buttons, toggles using theme attributes -----
+
+        // ----- Fix Start: Apply theme color to top bar and buttons -----
+        // Top app bar
+        if (toolbar != null && "Crimson Bloom".equals(sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk"))) {
+            toolbar.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.red_theme_primary_variant));
+        } else if (toolbar != null) {
+            toolbar.setBackgroundColor(resolveThemeColor(R.attr.colorTopBar));
+        }
+        // ----- Fix End: Apply theme color to top bar and buttons -----
 
         return view;
     }
@@ -797,13 +813,108 @@ public class SettingsFragment extends BaseFragment {
 
     // Method to visually update toggle button group state
     private void updateButtonAppearance(MaterialButton button, boolean isSelected) {
-        if(getContext() == null) return; // Prevent crashes if context is gone
-        int buttonColor = resolveThemeColor(R.attr.colorButton);
-        int textColor = isSelected ? android.R.color.black : android.R.color.white;
-        button.setIconTintResource(isSelected ? android.R.color.black : android.R.color.transparent);
-        button.setStrokeColorResource(isSelected ? R.color.black : R.color.material_on_surface_stroke);
-        button.setTextColor(ContextCompat.getColor(requireContext(), textColor));
-        button.setBackgroundColor(buttonColor);
+        if (button == null) return;
+        
+        int themeColor = resolveThemeColor(R.attr.colorButton); // Theme color for selected
+        int black = ContextCompat.getColor(requireContext(), R.color.black); // Black for unselected in Faded Night
+        int white = ContextCompat.getColor(requireContext(), android.R.color.white);
+        int purpleColor = ContextCompat.getColor(requireContext(), R.color.colorPrimary); // #cfbafd
+        
+        // Check current theme to apply different styles
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        
+        if (isSelected) {
+            if ("Midnight Dusk".equals(currentTheme)) {
+                // For Midnight Dusk, ALWAYS use #cfbafd color directly for selected buttons
+                // Don't use themeColor or resolveThemeColor which might return gray
+                button.setBackgroundColor(purpleColor);
+                button.setTextColor(black); // Black text on light purple background
+                button.setStrokeColor(ColorStateList.valueOf(purpleColor)); // No visible border
+                button.setIconTintResource(android.R.color.black); // Icon should be black too for contrast
+            } else if ("Premium Gold".equals(currentTheme)) {
+                // For Gold theme, use gold color with black text for contrast
+                button.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.gold_theme_primary));
+                button.setTextColor(black); // Black text on gold background
+                button.setStrokeColor(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.gold_theme_primary)));
+                button.setIconTintResource(android.R.color.black);
+            } else if ("Silent Forest".equals(currentTheme)) {
+                // For Silent Forest theme, use green/teal color with black text for contrast
+                button.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary));
+                button.setTextColor(black); // Black text on green background
+                button.setStrokeColor(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary)));
+                button.setIconTintResource(android.R.color.black);
+            } else if ("Shadow Alloy".equals(currentTheme)) {
+                // For Shadow Alloy theme, use silver color with black text for contrast
+                button.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary));
+                button.setTextColor(black); // Black text on silver background
+                button.setStrokeColor(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary)));
+                button.setIconTintResource(android.R.color.black);
+            } else {
+                // For other themes, use theme color
+                button.setBackgroundColor(themeColor);
+                button.setTextColor(white);
+                button.setStrokeColor(ColorStateList.valueOf(themeColor)); // No visible border
+                button.setIconTintResource(android.R.color.white);
+            }
+        } else {
+            // Unselected button style (different per theme)
+            if ("Faded Night".equals(currentTheme) || "AMOLED".equals(currentTheme) || "Amoled".equals(currentTheme) || "Midnight Dusk".equals(currentTheme)) {
+                // Faded Night and Midnight Dusk themes - black background, white text, no stroke
+                button.setBackgroundColor(black);
+                button.setTextColor(white);
+                button.setStrokeWidth(0); // Remove stroke completely
+                button.setStrokeColor(ColorStateList.valueOf(black)); // Set stroke to match background
+                button.setIconTintResource(android.R.color.white);
+            } else if ("Crimson Bloom".equals(currentTheme)) {
+                // Crimson Bloom theme - darker red background, white text
+                int darkRed = ContextCompat.getColor(requireContext(), R.color.red_theme_primary_variant);
+                button.setBackgroundColor(darkRed);
+                button.setTextColor(white);
+                button.setStrokeWidth(0);
+                button.setStrokeColor(ColorStateList.valueOf(darkRed));
+                button.setIconTintResource(android.R.color.white);
+            } else if ("Premium Gold".equals(currentTheme)) {
+                // Premium Gold theme - darker gold background, white text
+                int darkGold = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary_variant);
+                button.setBackgroundColor(darkGold);
+                button.setTextColor(white);
+                button.setStrokeWidth(0);
+                button.setStrokeColor(ColorStateList.valueOf(darkGold));
+                button.setIconTintResource(android.R.color.white);
+            } else if ("Silent Forest".equals(currentTheme)) {
+                // Silent Forest theme - darker green background, white text
+                int darkGreen = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary_variant);
+                button.setBackgroundColor(darkGreen);
+                button.setTextColor(white);
+                button.setStrokeWidth(0);
+                button.setStrokeColor(ColorStateList.valueOf(darkGreen));
+                button.setIconTintResource(android.R.color.white);
+            } else if ("Shadow Alloy".equals(currentTheme)) {
+                // Shadow Alloy theme - darker silver background, white text
+                int darkSilver = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary_variant);
+                button.setBackgroundColor(darkSilver);
+                button.setTextColor(white);
+                button.setStrokeWidth(0);
+                button.setStrokeColor(ColorStateList.valueOf(darkSilver));
+                button.setIconTintResource(android.R.color.white);
+            } else if ("Pookie Pink".equals(currentTheme)) {
+                // Pookie Pink theme - darker pink background, white text
+                int darkPink = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary_variant);
+                button.setBackgroundColor(darkPink);
+                button.setTextColor(white);
+                button.setStrokeWidth(0);
+                button.setStrokeColor(ColorStateList.valueOf(darkPink));
+                button.setIconTintResource(android.R.color.white);
+            } else {
+                // Fallback for any other theme - dark gray with white text
+                int darkGray = ContextCompat.getColor(requireContext(), R.color.gray_button_filled);
+                button.setBackgroundColor(darkGray);
+                button.setTextColor(white);
+                button.setStrokeWidth(0);
+                button.setStrokeColor(ColorStateList.valueOf(darkGray));
+                button.setIconTintResource(android.R.color.white);
+            }
+        }
     }
 
 
@@ -925,6 +1036,32 @@ public class SettingsFragment extends BaseFragment {
         if (sharedPreferencesManager == null) {
             sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
         }
+        
+        // Force refresh the camera toggle buttons appearance
+        if (cameraSelectionToggle != null && view != null) {
+            MaterialButton backCameraButton = view.findViewById(R.id.button_back_camera);
+            MaterialButton frontCameraButton = view.findViewById(R.id.button_front_camera);
+            if (backCameraButton != null && frontCameraButton != null) {
+                CameraType selected = sharedPreferencesManager.getCameraSelection();
+                updateButtonAppearance(backCameraButton, selected == CameraType.BACK);
+                updateButtonAppearance(frontCameraButton, selected == CameraType.FRONT);
+                
+                // Special handling for Midnight Dusk theme to ensure purple color
+                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+                if ("Midnight Dusk".equals(currentTheme)) {
+                    // Force apply correct purple colors to selected button
+                    MaterialButton selectedButton = (selected == CameraType.BACK) ? backCameraButton : frontCameraButton;
+                    int purpleColor = ContextCompat.getColor(requireContext(), R.color.colorPrimary); // #cfbafd
+                    selectedButton.setBackgroundColor(purpleColor);
+                    selectedButton.setTextColor(Color.BLACK);
+                    selectedButton.setStrokeColor(ColorStateList.valueOf(purpleColor));
+                    selectedButton.setIconTintResource(android.R.color.black);
+                    
+                    Log.d(TAG_SETTINGS, "onResume: Forcing purple color for Midnight Dusk theme");
+                }
+            }
+        }
+        
         // Sync UI state with current preferences
         syncCameraSwitch(view, cameraSelectionToggle);
         updateBackLensSpinnerVisibility(); // Sync lens visibility based on F/B state
@@ -1274,6 +1411,115 @@ public class SettingsFragment extends BaseFragment {
                 sharedPreferencesManager.sharedPreferences.edit().putString(Constants.PREF_CAMERA_SELECTION, CameraType.BACK.toString()).apply();
             }
         }
+        
+        // Force refresh button styles for Midnight Dusk and Premium Gold themes
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        if ("Midnight Dusk".equals(currentTheme)) {
+            // Direct approach - bypass theme resolution entirely for Midnight Dusk
+            MaterialButton selectedButton = (selected == CameraType.FRONT) ? frontCameraButton : backCameraButton;
+            
+            // Set explicit colors
+            int purpleColor = ContextCompat.getColor(requireContext(), R.color.colorPrimary); // #cfbafd
+            selectedButton.setBackgroundColor(purpleColor);
+            selectedButton.setTextColor(Color.BLACK);
+            selectedButton.setStrokeColor(ColorStateList.valueOf(purpleColor));
+            selectedButton.setIconTintResource(android.R.color.black);
+            
+            // Make sure unselected button is black with white text
+            MaterialButton unselectedButton = (selected == CameraType.FRONT) ? backCameraButton : frontCameraButton;
+            unselectedButton.setBackgroundColor(Color.BLACK);
+            unselectedButton.setTextColor(Color.WHITE);
+            unselectedButton.setStrokeWidth(0);
+            unselectedButton.setStrokeColor(ColorStateList.valueOf(Color.BLACK));
+            unselectedButton.setIconTintResource(android.R.color.white);
+            
+            Log.d(TAG_SETTINGS, "Applied direct colors for Midnight Dusk theme");
+        } else if ("Premium Gold".equals(currentTheme)) {
+            // Direct approach for Premium Gold theme
+            MaterialButton selectedButton = (selected == CameraType.FRONT) ? frontCameraButton : backCameraButton;
+            
+            // Set explicit colors for Gold theme
+            int goldColor = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary);
+            selectedButton.setBackgroundColor(goldColor);
+            selectedButton.setTextColor(Color.BLACK); // Black text on gold background
+            selectedButton.setStrokeColor(ColorStateList.valueOf(goldColor));
+            selectedButton.setIconTintResource(android.R.color.black);
+            
+            // Make sure unselected button is dark gold with white text
+            MaterialButton unselectedButton = (selected == CameraType.FRONT) ? backCameraButton : frontCameraButton;
+            int darkGold = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary_variant);
+            unselectedButton.setBackgroundColor(darkGold);
+            unselectedButton.setTextColor(Color.WHITE);
+            unselectedButton.setStrokeWidth(0);
+            unselectedButton.setStrokeColor(ColorStateList.valueOf(darkGold));
+            unselectedButton.setIconTintResource(android.R.color.white);
+            
+            Log.d(TAG_SETTINGS, "Applied direct colors for Premium Gold theme");
+        } else if ("Silent Forest".equals(currentTheme)) {
+            // Direct approach for Silent Forest theme
+            MaterialButton selectedButton = (selected == CameraType.FRONT) ? frontCameraButton : backCameraButton;
+            
+            // Set explicit colors for Silent Forest theme
+            int greenColor = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary);
+            selectedButton.setBackgroundColor(greenColor);
+            selectedButton.setTextColor(Color.BLACK); // Black text on green background
+            selectedButton.setStrokeColor(ColorStateList.valueOf(greenColor));
+            selectedButton.setIconTintResource(android.R.color.black);
+            
+            // Make sure unselected button is dark green with white text
+            MaterialButton unselectedButton = (selected == CameraType.FRONT) ? backCameraButton : frontCameraButton;
+            int darkGreen = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary_variant);
+            unselectedButton.setBackgroundColor(darkGreen);
+            unselectedButton.setTextColor(Color.WHITE);
+            unselectedButton.setStrokeWidth(0);
+            unselectedButton.setStrokeColor(ColorStateList.valueOf(darkGreen));
+            unselectedButton.setIconTintResource(android.R.color.white);
+            
+            Log.d(TAG_SETTINGS, "Applied direct colors for Silent Forest theme");
+        } else if ("Shadow Alloy".equals(currentTheme)) {
+            // Direct approach for Shadow Alloy theme
+            MaterialButton selectedButton = (selected == CameraType.FRONT) ? frontCameraButton : backCameraButton;
+            
+            // Set explicit colors for Shadow Alloy theme
+            int silverColor = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary);
+            selectedButton.setBackgroundColor(silverColor);
+            selectedButton.setTextColor(Color.BLACK); // Black text on silver background
+            selectedButton.setStrokeColor(ColorStateList.valueOf(silverColor));
+            selectedButton.setIconTintResource(android.R.color.black);
+            
+            // Make sure unselected button is dark silver with white text
+            MaterialButton unselectedButton = (selected == CameraType.FRONT) ? backCameraButton : frontCameraButton;
+            int darkSilver = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary_variant);
+            unselectedButton.setBackgroundColor(darkSilver);
+            unselectedButton.setTextColor(Color.WHITE);
+            unselectedButton.setStrokeWidth(0);
+            unselectedButton.setStrokeColor(ColorStateList.valueOf(darkSilver));
+            unselectedButton.setIconTintResource(android.R.color.white);
+            
+            Log.d(TAG_SETTINGS, "Applied direct colors for Shadow Alloy theme");
+        } else if ("Pookie Pink".equals(currentTheme)) {
+            // Direct approach for Pookie Pink theme
+            MaterialButton selectedButton = (selected == CameraType.FRONT) ? frontCameraButton : backCameraButton;
+            
+            // Set explicit colors for Pookie Pink theme
+            int pinkColor = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary);
+            selectedButton.setBackgroundColor(pinkColor);
+            selectedButton.setTextColor(Color.BLACK); // Black text on pink background
+            selectedButton.setStrokeColor(ColorStateList.valueOf(pinkColor));
+            selectedButton.setIconTintResource(android.R.color.black);
+            
+            // Make sure unselected button is dark pink with white text
+            MaterialButton unselectedButton = (selected == CameraType.FRONT) ? backCameraButton : frontCameraButton;
+            int darkPink = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary_variant);
+            unselectedButton.setBackgroundColor(darkPink);
+            unselectedButton.setTextColor(Color.WHITE);
+            unselectedButton.setStrokeWidth(0);
+            unselectedButton.setStrokeColor(ColorStateList.valueOf(darkPink));
+            unselectedButton.setIconTintResource(android.R.color.white);
+            
+            Log.d(TAG_SETTINGS, "Applied direct colors for Pookie Pink theme");
+        }
+        
         Log.d(TAG_SETTINGS,"Synced camera switch UI to: " + sharedPreferencesManager.getCameraSelection());
     }
 
@@ -1282,12 +1528,19 @@ public class SettingsFragment extends BaseFragment {
     private void setupCameraSelectionToggle(View view, MaterialButtonToggleGroup toggleGroup) {
         // ... (Existing syncCameraSwitch call and appearance update logic) ...
         if (toggleGroup == null || view == null) return;
+        
+        // Apply initial toggle state and appearance
         syncCameraSwitch(view, toggleGroup);
 
+        // Add listener for toggle changes
         toggleGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (isChecked) {
-                updateButtonAppearance(view.findViewById(R.id.button_back_camera), checkedId == R.id.button_back_camera);
-                updateButtonAppearance(view.findViewById(R.id.button_front_camera), checkedId == R.id.button_front_camera);
+                MaterialButton backCameraButton = view.findViewById(R.id.button_back_camera);
+                MaterialButton frontCameraButton = view.findViewById(R.id.button_front_camera);
+                
+                // Update appearance of both buttons
+                updateButtonAppearance(backCameraButton, checkedId == R.id.button_back_camera);
+                updateButtonAppearance(frontCameraButton, checkedId == R.id.button_front_camera);
 
                 CameraType selectedCamera = (checkedId == R.id.button_front_camera) ? CameraType.FRONT : CameraType.BACK;
                 if(selectedCamera != sharedPreferencesManager.getCameraSelection()) {
@@ -1303,6 +1556,50 @@ public class SettingsFragment extends BaseFragment {
                     Log.d(TAG, "Camera main selection didn't change.");
                     // Still need to update lens spinner visibility if fragment was just created
                     updateBackLensSpinnerVisibility();
+                }
+                
+                // Check special theme handling for Midnight Dusk and Premium Gold
+                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+                if ("Midnight Dusk".equals(currentTheme)) {
+                    // Force apply correct colors
+                    MaterialButton selectedButton = (checkedId == R.id.button_front_camera) ? frontCameraButton : backCameraButton;
+                    int purpleColor = ContextCompat.getColor(requireContext(), R.color.colorPrimary); // #cfbafd
+                    selectedButton.setBackgroundColor(purpleColor);
+                    selectedButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.black));
+                    selectedButton.setStrokeColor(ColorStateList.valueOf(purpleColor));
+                    selectedButton.setIconTintResource(android.R.color.black);
+                } else if ("Premium Gold".equals(currentTheme)) {
+                    // Force apply correct colors for Gold theme
+                    MaterialButton selectedButton = (checkedId == R.id.button_front_camera) ? frontCameraButton : backCameraButton;
+                    int goldColor = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary);
+                    selectedButton.setBackgroundColor(goldColor);
+                    selectedButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.black)); // Black text
+                    selectedButton.setStrokeColor(ColorStateList.valueOf(goldColor));
+                    selectedButton.setIconTintResource(android.R.color.black);
+                } else if ("Silent Forest".equals(currentTheme)) {
+                    // Force apply correct colors for Silent Forest theme
+                    MaterialButton selectedButton = (checkedId == R.id.button_front_camera) ? frontCameraButton : backCameraButton;
+                    int greenColor = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary);
+                    selectedButton.setBackgroundColor(greenColor);
+                    selectedButton.setTextColor(ContextCompat.getColor(requireContext(), R.color.black)); // Black text
+                    selectedButton.setStrokeColor(ColorStateList.valueOf(greenColor));
+                    selectedButton.setIconTintResource(android.R.color.black);
+                } else if ("Shadow Alloy".equals(currentTheme)) {
+                    // Force apply correct colors for Shadow Alloy theme
+                    MaterialButton selectedButton = (checkedId == R.id.button_front_camera) ? frontCameraButton : backCameraButton;
+                    int silverColor = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary);
+                    selectedButton.setBackgroundColor(silverColor);
+                    selectedButton.setTextColor(Color.BLACK); // Black text on silver background
+                    selectedButton.setStrokeColor(ColorStateList.valueOf(silverColor));
+                    selectedButton.setIconTintResource(android.R.color.black);
+                } else if ("Pookie Pink".equals(currentTheme)) {
+                    // Force apply correct colors for Pookie Pink theme
+                    MaterialButton selectedButton = (checkedId == R.id.button_front_camera) ? frontCameraButton : backCameraButton;
+                    int pinkColor = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary);
+                    selectedButton.setBackgroundColor(pinkColor);
+                    selectedButton.setTextColor(Color.BLACK); // Black text on pink background
+                    selectedButton.setStrokeColor(ColorStateList.valueOf(pinkColor));
+                    selectedButton.setIconTintResource(android.R.color.black);
                 }
             }
         });
@@ -1784,13 +2081,22 @@ public class SettingsFragment extends BaseFragment {
         MaterialButton discordButton = dialogView.findViewById(R.id.discord_button);
         if (githubButton != null) {
             githubButton.setOnClickListener(v -> openUrl("https://github.com/anonfaded/FadCam"));
+            githubButton.setTextColor(Color.WHITE);
         }
         if (discordButton != null) {
             discordButton.setOnClickListener(v -> openUrl("https://discord.gg/kvAZvdkuuN"));
+            discordButton.setTextColor(Color.WHITE);
         }
         builder.setView(dialogView);
         builder.setPositiveButton(android.R.string.ok, null); // Use standard OK text
-        builder.show();
+        
+        // Create dialog and set button color to white
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(dialogInterface -> {
+            // Set button text color to white
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.WHITE);
+        });
+        dialog.show();
     }
 
 
@@ -2464,70 +2770,184 @@ public class SettingsFragment extends BaseFragment {
     private void setupThemeSpinner(View view) {
         MaterialButton themeButton = view.findViewById(R.id.theme_choose_button); // Add a button in layout for theme selection
         if (themeButton == null) return;
-        String[] themeNames = {getString(R.string.theme_red), "Dark Mode", "AMOLED Black"};
+        String[] themeNames = {getString(R.string.theme_red), "Midnight Dusk", "Faded Night", getString(R.string.theme_gold), getString(R.string.theme_silentforest), getString(R.string.theme_shadowalloy), getString(R.string.theme_pookiepink)};
         int[] themeColors = {
             ContextCompat.getColor(requireContext(), R.color.red_theme_primary),
             ContextCompat.getColor(requireContext(), R.color.gray),
-            ContextCompat.getColor(requireContext(), R.color.amoled_background)
+            ContextCompat.getColor(requireContext(), R.color.amoled_surface), // Use surface color instead of background
+            ContextCompat.getColor(requireContext(), R.color.gold_theme_primary),
+            ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary),
+            ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary),
+            ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary)
         };
-        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Dark Mode");
-        int tempThemeIndex = 1; // Default to Dark Mode
-        if ("Red Passion".equals(currentTheme)) tempThemeIndex = 0;
-        else if ("AMOLED Black".equals(currentTheme)) tempThemeIndex = 2;
-        final int selectedThemeIndex = tempThemeIndex;
-        themeButton.setText(themeNames[selectedThemeIndex]);
-        themeButton.setOnClickListener(v -> {
-            LayoutInflater inflater = LayoutInflater.from(requireContext());
-            View dialogView = inflater.inflate(R.layout.dialog_theme_chooser, null);
-            LinearLayout themeList = dialogView.findViewById(R.id.theme_list);
-            themeList.removeAllViews();
-            for (int i = 0; i < themeNames.length; i++) {
-                View item = inflater.inflate(R.layout.item_theme_option, themeList, false);
-                TextView name = item.findViewById(R.id.theme_name);
-                View colorCircle = item.findViewById(R.id.theme_color_circle);
-                name.setText(themeNames[i]);
-                name.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
-                colorCircle.getBackground().setTint(themeColors[i]);
-                int idx = i;
-                item.setOnClickListener(iv -> {
-                    sharedPreferencesManager.sharedPreferences.edit().putString(Constants.PREF_APP_THEME, themeNames[idx]).apply();
-                    themeButton.setText(themeNames[idx]);
-                    requireActivity().recreate();
-                });
-                if (i == selectedThemeIndex) item.setBackgroundResource(R.drawable.selected_theme_bg);
-                themeList.addView(item);
-            }
-            themedDialogBuilder(requireContext())
-                .setTitle(R.string.setting_theme_title)
-                .setView(dialogView)
-                .setNegativeButton(R.string.universal_cancel, null)
-                .show();
-        });
-        // Set top app bar color to red if red theme is active
-        MaterialToolbar toolbar = view.findViewById(R.id.topAppBar);
-        if (toolbar != null && "Red Passion".equals(currentTheme)) {
-            toolbar.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.red_theme_primary));
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        int tempThemeIndex = 1; // Default to Dark Mode index
+        if ("Crimson Bloom".equals(currentTheme)) tempThemeIndex = 0;
+        else if ("Faded Night".equals(currentTheme) || "AMOLED".equals(currentTheme) || "Amoled".equals(currentTheme)) tempThemeIndex = 2;
+        else if ("Premium Gold".equals(currentTheme)) tempThemeIndex = 3;
+        else if ("Silent Forest".equals(currentTheme)) tempThemeIndex = 4;
+        else if ("Shadow Alloy".equals(currentTheme)) tempThemeIndex = 5;
+        else if ("Pookie Pink".equals(currentTheme)) tempThemeIndex = 6;
+        
+        final int themeIndex = tempThemeIndex;
+        themeButton.setText(themeNames[themeIndex]);
+        
+        // Set text color based on theme - black for Gold, Silent Forest, Shadow Alloy, and Pookie Pink, white for others
+        if ("Premium Gold".equals(currentTheme) || "Silent Forest".equals(currentTheme) || "Shadow Alloy".equals(currentTheme) || "Pookie Pink".equals(currentTheme)) {
+            themeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black));
+        } else {
+            themeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
         }
+        
+        // Apply the correct background tint based on the current theme
+        if ("Faded Night".equals(currentTheme) || "AMOLED".equals(currentTheme) || "Amoled".equals(currentTheme)) {
+            // For Faded Night theme, use the #232323 color which is more visible than pure black
+            themeButton.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.amoled_surface)));
+        } else {
+            themeButton.setBackgroundTintList(ColorStateList.valueOf(themeColors[themeIndex]));
+        }
+        
+        themeButton.setOnClickListener(v -> {
+            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext(), R.style.ThemeOverlay_FadCam_Dialog);
+            builder.setTitle(R.string.settings_option_theme);
+            
+            // Create a custom adapter for the theme selection with color circles
+            ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), R.layout.item_theme_option, R.id.theme_name, themeNames) {
+                @Override
+                public View getView(int position, View convertView, ViewGroup parent) {
+                    View view = super.getView(position, convertView, parent);
+                    
+                    // Set the theme name
+                    TextView themeName = view.findViewById(R.id.theme_name);
+                    themeName.setText(themeNames[position]);
+                    
+                    // All text in the dialog should be white for better visibility against dark dialog background
+                    themeName.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+                    
+                    // Set the color circle
+                    View colorCircle = view.findViewById(R.id.theme_color_circle);
+                    GradientDrawable drawable = (GradientDrawable) colorCircle.getBackground();
+                    if (position == 2) { // Faded Night position
+                        drawable.setColor(ContextCompat.getColor(requireContext(), R.color.amoled_surface));
+                    } else {
+                        drawable.setColor(themeColors[position]);
+                    }
+                    
+                    // Highlight the current selection
+                    if (position == themeIndex) {
+                        view.setBackgroundResource(R.drawable.selected_theme_bg);
+                    } else {
+                        view.setBackground(null);
+                    }
+                    
+                    return view;
+                }
+            };
+            
+            builder.setSingleChoiceItems(adapter, themeIndex, (dialog, which) -> {
+                String newTheme = themeNames[which];
+                if ("Midnight Dusk".equals(newTheme)) {
+                    newTheme = "Midnight Dusk";
+                } else if ("Faded Night".equals(newTheme)) {
+                    newTheme = "Faded Night";
+                } else if (getString(R.string.theme_gold).equals(newTheme)) {
+                    newTheme = "Premium Gold";
+                } else if (getString(R.string.theme_silentforest).equals(newTheme)) {
+                    newTheme = "Silent Forest";
+                } else if (getString(R.string.theme_shadowalloy).equals(newTheme)) {
+                    newTheme = "Shadow Alloy";
+                } else if (getString(R.string.theme_pookiepink).equals(newTheme)) {
+                    newTheme = "Pookie Pink";
+                } else {
+                    newTheme = "Crimson Bloom";
+                }
+                
+                // Save theme and restart app if needed
+                if (!newTheme.equals(currentTheme)) {
+                    sharedPreferencesManager.sharedPreferences.edit()
+                            .putString(Constants.PREF_APP_THEME, newTheme)
+                            .apply();
+                    
+                    // Update default clock color for the new theme
+                    sharedPreferencesManager.updateDefaultClockColorForTheme();
+
+                    // Schedule app restart
+                    vibrateTouch();
+                    
+                    // Update UI immediately (colors may not fully update until restart)
+                    themeButton.setText(themeNames[which]);
+                    
+                    // Update button background with the right color for the selected theme
+                    if ("Faded Night".equals(newTheme)) {
+                        themeButton.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(requireContext(), R.color.amoled_surface)));
+                    } else {
+                        themeButton.setBackgroundTintList(ColorStateList.valueOf(themeColors[which]));
+                    }
+                    
+                    // Apply theme changes that don't require restart
+                    applyAppTheme(newTheme);
+                    
+                    MaterialToolbar toolbar = requireActivity().findViewById(R.id.topAppBar);
+                    if (toolbar != null && "Crimson Bloom".equals(newTheme)) {
+                        toolbar.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.red_theme_primary_variant));
+                    } else if (toolbar != null) {
+                        // Reset to default toolbar color
+                        toolbar.setBackgroundColor(resolveThemeColor(R.attr.colorTopBar));
+                    }
+                    
+                    Toast.makeText(requireContext(), R.string.settings_theme_changed, Toast.LENGTH_SHORT).show();
+                    
+                    // CRITICAL: Recreate the activity to apply the theme change
+                    requireActivity().recreate();
+                }
+                dialog.dismiss();
+            });
+            
+            builder.setNegativeButton(R.string.universal_cancel, null);
+            AlertDialog dialog = builder.create();
+            dialog.setOnShowListener(dialogInterface -> {
+                // Set Cancel button text color to white
+                Button negativeButton = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
+                if (negativeButton != null) {
+                    negativeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+                }
+            });
+            dialog.show();
+        });
     }
 
-    /**
-     * Applies the selected theme globally by setting the correct theme style on the activity.
-     * This should be called before setContentView in the activity, but for runtime changes,
-     * we call recreate() after updating the preference, and the activity should read the preference
-     * and apply the correct theme in onCreate.
-     */
     private void applyAppTheme(String themeName) {
-        if (getActivity() == null) return;
-        if ("Red Passion".equals(themeName)) {
-            getActivity().setTheme(R.style.Theme_FadCam_Red); // Use the correct style name
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
-        } else if ("AMOLED Black".equals(themeName)) {
-            getActivity().setTheme(R.style.Theme_FadCam_Amoled);
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
-        } else {
-            getActivity().setTheme(R.style.Base_Theme_FadCam);
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+        if ("Crimson Bloom".equals(themeName)) {
+            // Red theme
+            ContextCompat.getColor(requireContext(), R.color.red_theme_primary);
+            // Apply other Red theme-specific UI changes that can be done without recreation
+        } else if ("Faded Night".equals(themeName)) {
+            // AMOLED theme
+            ContextCompat.getColor(requireContext(), R.color.amoled_background);
+            // Apply other AMOLED theme-specific UI changes that can be done without recreation
+        } else if ("Midnight Dusk".equals(themeName)) {
+            // Default dark theme
+            ContextCompat.getColor(requireContext(), R.color.gray);
+            // Apply other default theme-specific UI changes that can be done without recreation
+        } else if ("Premium Gold".equals(themeName)) {
+            // Gold theme
+            ContextCompat.getColor(requireContext(), R.color.gold_theme_primary);
+            // Apply other Gold theme-specific UI changes that can be done without recreation
+        } else if ("Silent Forest".equals(themeName)) {
+            // Silent Forest theme
+            ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary);
+            // Apply other Silent Forest theme-specific UI changes that can be done without recreation
+        } else if ("Shadow Alloy".equals(themeName)) {
+            // Shadow Alloy theme
+            ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary);
+            // Apply other Shadow Alloy theme-specific UI changes that can be done without recreation
+        } else if ("Pookie Pink".equals(themeName)) {
+            // Pookie Pink theme
+            ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary);
+            // Apply other Pookie Pink theme-specific UI changes that can be done without recreation
         }
+        // Apply other theme-agnostic UI updates
+        applyThemeToUI(requireView());
     }
     // --- End Theme Spinner Logic ---
 
@@ -3623,6 +4043,16 @@ public class SettingsFragment extends BaseFragment {
 
     // ----- Fix Start: Apply theme colors to headings, buttons, toggles using theme attributes -----
     private int resolveThemeColor(int attr) {
+        // Special handling for Midnight Dusk theme's colorButton
+        if (attr == R.attr.colorButton) {
+            String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+            if ("Midnight Dusk".equals(currentTheme)) {
+                // Return purple directly for the Midnight Dusk theme's buttons
+                return ContextCompat.getColor(requireContext(), R.color.colorPrimary); // #cfbafd
+            }
+        }
+        
+        // Normal theme attribute resolution for other cases
         android.util.TypedValue typedValue = new android.util.TypedValue();
         requireContext().getTheme().resolveAttribute(attr, typedValue, true);
         return typedValue.data;
@@ -3645,9 +4075,9 @@ public class SettingsFragment extends BaseFragment {
     private MaterialAlertDialogBuilder themedDialogBuilder(Context context) {
         int dialogTheme = R.style.ThemeOverlay_FadCam_Dialog;
         SharedPreferencesManager spm = SharedPreferencesManager.getInstance(context);
-        String currentTheme = spm.sharedPreferences.getString(Constants.PREF_APP_THEME, "Dark Mode");
-        if ("Red Passion".equals(currentTheme)) dialogTheme = R.style.ThemeOverlay_FadCam_Red_Dialog;
-        else if ("AMOLED Black".equals(currentTheme)) dialogTheme = R.style.ThemeOverlay_FadCam_Amoled_MaterialAlertDialog;
+        String currentTheme = spm.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        if ("Crimson Bloom".equals(currentTheme)) dialogTheme = R.style.ThemeOverlay_FadCam_Red_Dialog;
+        else if ("Faded Night".equals(currentTheme)) dialogTheme = R.style.ThemeOverlay_FadCam_Amoled_MaterialAlertDialog;
         return new MaterialAlertDialogBuilder(context, dialogTheme);
     }
     // ----- Fix End: Add themedDialogBuilder helper to SettingsFragment -----
