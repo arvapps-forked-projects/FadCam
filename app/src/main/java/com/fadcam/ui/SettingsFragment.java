@@ -7,6 +7,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -44,6 +45,7 @@ import android.widget.RadioGroup;  // Import RadioGroup
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ImageView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -110,6 +112,7 @@ import android.text.TextWatcher;
 
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 
 public class SettingsFragment extends BaseFragment {
 
@@ -140,6 +143,9 @@ public class SettingsFragment extends BaseFragment {
     // App Lock
     private MaterialButton appLockConfigureButton;
     private static final String PREF_APPLOCK_ENABLED = "applock_enabled";
+
+    // App Icon
+    private MaterialButton appIconChooseButton;
 
     private View view; // Make sure view is accessible
     private View backCameraLensDivider; // *** ADD FIELD FOR THE DIVIDER ***
@@ -314,21 +320,37 @@ public class SettingsFragment extends BaseFragment {
             }
         }
         if (availableInputMics.size() == 1 && availableInputMics.get(0) == null) {
-            int white = ContextCompat.getColor(requireContext(), android.R.color.white);
+            // ----- Fix Start for Audio Input Source dialog text color -----
+            // Check if we're using Snow Veil theme for text color
+            String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+            boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+            int textColor = ContextCompat.getColor(requireContext(), isSnowVeilTheme ? android.R.color.black : android.R.color.white);
+            // ----- Fix End for Audio Input Source dialog text color -----
+            
             TextView messageView = new TextView(requireContext());
             messageView.setText(getString(R.string.audio_input_source_wired_not_available));
-            messageView.setTextColor(white);
+            messageView.setTextColor(textColor);
             messageView.setTextSize(16);
             int padding = (int) (16 * requireContext().getResources().getDisplayMetrics().density);
             messageView.setPadding(padding, padding, padding, padding);
-            themedDialogBuilder(requireContext())
+            AlertDialog dialog = themedDialogBuilder(requireContext())
                 .setTitle(getString(R.string.setting_audio_input_source_title))
                 .setView(messageView)
                 .setPositiveButton(android.R.string.ok, null)
                 .show();
+                
+            // Apply theme-specific colors to dialog buttons
+            setDialogButtonColors(dialog);
             return;
         }
-        int color = ContextCompat.getColor(requireContext(), android.R.color.white);
+        
+        // ----- Fix Start for Audio Input Source dialog text color -----
+        // Check if we're using Snow Veil theme for text color
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+        int color = ContextCompat.getColor(requireContext(), isSnowVeilTheme ? android.R.color.black : android.R.color.white);
+        // ----- Fix End for Audio Input Source dialog text color -----
+        
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_single_choice, availableMicLabels) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
@@ -338,16 +360,19 @@ public class SettingsFragment extends BaseFragment {
                 return view;
             }
         };
-        themedDialogBuilder(requireContext())
+        AlertDialog dialog = themedDialogBuilder(requireContext())
             .setTitle(getString(R.string.setting_audio_input_source_title))
-            .setSingleChoiceItems(adapter, checkedItem, (dialog, which) -> {
+            .setSingleChoiceItems(adapter, checkedItem, (dialogInterface, which) -> {
                 selectedMic = availableInputMics.get(which);
                 updateAudioInputSourceStatusUI();
                 sharedPreferencesManager.setAudioInputSource(selectedMic == null ? SharedPreferencesManager.AUDIO_INPUT_SOURCE_PHONE : SharedPreferencesManager.AUDIO_INPUT_SOURCE_WIRED);
-                dialog.dismiss();
+                dialogInterface.dismiss();
             })
             .setNegativeButton(R.string.universal_cancel, null)
             .show();
+            
+        // Apply theme-specific colors to dialog buttons
+        setDialogButtonColors(dialog);
     }
 
     /**
@@ -472,6 +497,18 @@ public class SettingsFragment extends BaseFragment {
         audioSwitch = view.findViewById(R.id.audio_toggle_group); // Find audio switch
         MaterialButton reviewButton = view.findViewById(R.id.review_button);
         MaterialButton audioSettingsButton = view.findViewById(R.id.audio_settings_button);
+        
+        // ----- Fix Start for button text colors -----
+        // Set white text color for buttons for better visibility
+        if (readmeButton != null) {
+            readmeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+        }
+        
+        if (reviewButton != null) {
+            reviewButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+        }
+        // ----- Fix End for button text colors -----
+        
         if (audioSettingsButton != null) {
             audioSettingsButton.setOnClickListener(v -> showAudioSettingsDialog());
             audioSettingsButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
@@ -584,7 +621,7 @@ public class SettingsFragment extends BaseFragment {
 
         // ----- Fix Start: Apply theme color to top bar and buttons -----
         // Top app bar
-        if (toolbar != null && "Crimson Bloom".equals(sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk"))) {
+        if (toolbar != null && "Crimson Bloom".equals(sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME))) {
             toolbar.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.red_theme_primary_variant));
         } else if (toolbar != null) {
             toolbar.setBackgroundColor(resolveThemeColor(R.attr.colorTopBar));
@@ -596,6 +633,7 @@ public class SettingsFragment extends BaseFragment {
 
     private void setupUI() {
         // Set up the UI with saved preferences
+        setupAppIconButton(view); // Add app icon setup
         setupCameraSelectionToggle(view, cameraSelectionToggle);
         setupResolutionSpinner();
         setupFrameRateSpinner();
@@ -750,6 +788,49 @@ public class SettingsFragment extends BaseFragment {
 
         Log.d(TAG_SETTINGS, "Updating UI - Mode: " + currentMode + ", URI set: " + (customUriString != null));
 
+        // ----- Fix Start: Set radio button text color for Faded Night theme -----
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        boolean isFadedNightTheme = "Faded Night".equals(currentTheme);
+        
+        if (isFadedNightTheme) {
+            // Create a ColorStateList that uses white for both checked and unchecked states
+            int[][] states = new int[][] {
+                new int[] { android.R.attr.state_checked },  // checked state
+                new int[] { -android.R.attr.state_checked }  // unchecked state
+            };
+            
+            int[] colors = new int[] {
+                Color.WHITE,  // color for checked state - WHITE
+                Color.WHITE   // color for unchecked state - WHITE
+            };
+            
+            ColorStateList colorStateList = new ColorStateList(states, colors);
+            
+            // Apply to specific radio buttons
+            if (radioInternalStorage != null) {
+                radioInternalStorage.setTextColor(colorStateList);
+                // Also adjust the button tint if needed
+                radioInternalStorage.setButtonTintList(colorStateList);
+            }
+            
+            if (radioCustomLocation != null) {
+                radioCustomLocation.setTextColor(colorStateList);
+                // Also adjust the button tint if needed
+                radioCustomLocation.setButtonTintList(colorStateList);
+            }
+            
+            // Also apply to any other radio buttons in the group
+            for (int i = 0; i < storageLocationRadioGroup.getChildCount(); i++) {
+                View child = storageLocationRadioGroup.getChildAt(i);
+                if (child instanceof RadioButton) {
+                    RadioButton radioButton = (RadioButton) child;
+                    radioButton.setTextColor(colorStateList);
+                    radioButton.setButtonTintList(colorStateList);
+                }
+            }
+        }
+        // ----- Fix End: Set radio button text color for Faded Night theme -----
+
         if (isInCustomMode) {
             storageLocationRadioGroup.check(R.id.radio_custom_location);
             buttonChooseCustomLocation.setVisibility(View.VISIBLE);
@@ -821,7 +902,7 @@ public class SettingsFragment extends BaseFragment {
         int purpleColor = ContextCompat.getColor(requireContext(), R.color.colorPrimary); // #cfbafd
         
         // Check current theme to apply different styles
-        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         
         if (isSelected) {
             if ("Midnight Dusk".equals(currentTheme)) {
@@ -905,6 +986,14 @@ public class SettingsFragment extends BaseFragment {
                 button.setStrokeWidth(0);
                 button.setStrokeColor(ColorStateList.valueOf(darkPink));
                 button.setIconTintResource(android.R.color.white);
+            } else if ("Snow Veil".equals(currentTheme)) {
+                // Snow Veil theme - light grey background, black text
+                int lightGrey = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary_variant);
+                button.setBackgroundColor(lightGrey);
+                button.setTextColor(black);
+                button.setStrokeWidth(0);
+                button.setStrokeColor(ColorStateList.valueOf(lightGrey));
+                button.setIconTintResource(android.R.color.black);
             } else {
                 // Fallback for any other theme - dark gray with white text
                 int darkGray = ContextCompat.getColor(requireContext(), R.color.gray_button_filled);
@@ -1047,7 +1136,7 @@ public class SettingsFragment extends BaseFragment {
                 updateButtonAppearance(frontCameraButton, selected == CameraType.FRONT);
                 
                 // Special handling for Midnight Dusk theme to ensure purple color
-                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
                 if ("Midnight Dusk".equals(currentTheme)) {
                     // Force apply correct purple colors to selected button
                     MaterialButton selectedButton = (selected == CameraType.BACK) ? backCameraButton : frontCameraButton;
@@ -1413,7 +1502,7 @@ public class SettingsFragment extends BaseFragment {
         }
         
         // Force refresh button styles for Midnight Dusk and Premium Gold themes
-        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         if ("Midnight Dusk".equals(currentTheme)) {
             // Direct approach - bypass theme resolution entirely for Midnight Dusk
             MaterialButton selectedButton = (selected == CameraType.FRONT) ? frontCameraButton : backCameraButton;
@@ -1518,6 +1607,27 @@ public class SettingsFragment extends BaseFragment {
             unselectedButton.setIconTintResource(android.R.color.white);
             
             Log.d(TAG_SETTINGS, "Applied direct colors for Pookie Pink theme");
+        } else if ("Snow Veil".equals(currentTheme)) {
+            // Direct approach for Snow Veil theme
+            MaterialButton selectedButton = (selected == CameraType.FRONT) ? frontCameraButton : backCameraButton;
+            
+            // Set explicit colors for Snow Veil theme
+            int snowColor = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary);
+            selectedButton.setBackgroundColor(snowColor);
+            selectedButton.setTextColor(Color.BLACK); // Black text on white background
+            selectedButton.setStrokeColor(ColorStateList.valueOf(snowColor));
+            selectedButton.setIconTintResource(android.R.color.black);
+            
+            // Make sure unselected button is light grey with black text
+            MaterialButton unselectedButton = (selected == CameraType.FRONT) ? backCameraButton : frontCameraButton;
+            int lightGrey = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary_variant);
+            unselectedButton.setBackgroundColor(lightGrey);
+            unselectedButton.setTextColor(Color.BLACK);
+            unselectedButton.setStrokeWidth(0);
+            unselectedButton.setStrokeColor(ColorStateList.valueOf(lightGrey));
+            unselectedButton.setIconTintResource(android.R.color.black);
+            
+            Log.d(TAG_SETTINGS, "Applied direct colors for Snow Veil theme");
         }
         
         Log.d(TAG_SETTINGS,"Synced camera switch UI to: " + sharedPreferencesManager.getCameraSelection());
@@ -1559,7 +1669,7 @@ public class SettingsFragment extends BaseFragment {
                 }
                 
                 // Check special theme handling for Midnight Dusk and Premium Gold
-                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
                 if ("Midnight Dusk".equals(currentTheme)) {
                     // Force apply correct colors
                     MaterialButton selectedButton = (checkedId == R.id.button_front_camera) ? frontCameraButton : backCameraButton;
@@ -1599,6 +1709,14 @@ public class SettingsFragment extends BaseFragment {
                     selectedButton.setBackgroundColor(pinkColor);
                     selectedButton.setTextColor(Color.BLACK); // Black text on pink background
                     selectedButton.setStrokeColor(ColorStateList.valueOf(pinkColor));
+                    selectedButton.setIconTintResource(android.R.color.black);
+                } else if ("Snow Veil".equals(currentTheme)) {
+                    // Force apply correct colors for Snow Veil theme
+                    MaterialButton selectedButton = (checkedId == R.id.button_front_camera) ? frontCameraButton : backCameraButton;
+                    int snowColor = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary);
+                    selectedButton.setBackgroundColor(snowColor);
+                    selectedButton.setTextColor(Color.BLACK); // Black text on white background
+                    selectedButton.setStrokeColor(ColorStateList.valueOf(snowColor));
                     selectedButton.setIconTintResource(android.R.color.black);
                 }
             }
@@ -2077,26 +2195,30 @@ public class SettingsFragment extends BaseFragment {
         builder.setTitle(R.string.dialog_welcome_title);
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_readme, null);
         if(dialogView == null) return; // Check if inflation failed
+        
+        // Check if we're using Snow Veil theme
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+        
         MaterialButton githubButton = dialogView.findViewById(R.id.github_button);
         MaterialButton discordButton = dialogView.findViewById(R.id.discord_button);
         if (githubButton != null) {
             githubButton.setOnClickListener(v -> openUrl("https://github.com/anonfaded/FadCam"));
-            githubButton.setTextColor(Color.WHITE);
+            githubButton.setTextColor(isSnowVeilTheme ? Color.BLACK : Color.WHITE);
         }
         if (discordButton != null) {
             discordButton.setOnClickListener(v -> openUrl("https://discord.gg/kvAZvdkuuN"));
-            discordButton.setTextColor(Color.WHITE);
+            discordButton.setTextColor(isSnowVeilTheme ? Color.BLACK : Color.WHITE);
         }
         builder.setView(dialogView);
         builder.setPositiveButton(android.R.string.ok, null); // Use standard OK text
         
-        // Create dialog and set button color to white
+        // Create dialog and show it
         AlertDialog dialog = builder.create();
-        dialog.setOnShowListener(dialogInterface -> {
-            // Set button text color to white
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.WHITE);
-        });
         dialog.show();
+        
+        // Set button colors based on theme
+        setDialogButtonColors(dialog);
     }
 
 
@@ -2125,7 +2247,13 @@ public class SettingsFragment extends BaseFragment {
         int selectedIndex = getLanguageIndex(savedLanguageCode);
         chooseButton.setText(languages[selectedIndex]);
         chooseButton.setOnClickListener(v -> {
-            int color = ContextCompat.getColor(requireContext(), android.R.color.white);
+            // ----- Fix Start for Language Dialog text color -----
+            // Check if we're using Snow Veil theme for text color
+            String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+            boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+            int color = ContextCompat.getColor(requireContext(), isSnowVeilTheme ? android.R.color.black : android.R.color.white);
+            // ----- Fix End for Language Dialog text color -----
+            
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_single_choice, languages) {
                 @Override
                 public View getView(int position, View convertView, ViewGroup parent) {
@@ -2135,9 +2263,10 @@ public class SettingsFragment extends BaseFragment {
                     return view;
                 }
             };
-            themedDialogBuilder(requireContext())
+            
+            AlertDialog dialog = themedDialogBuilder(requireContext())
                 .setTitle(R.string.setting_language_title)
-                .setSingleChoiceItems(adapter, selectedIndex, (dialog, which) -> {
+                .setSingleChoiceItems(adapter, selectedIndex, (dialogInterface, which) -> {
                     String newLangCode = getLanguageCode(which);
                     if (!newLangCode.equals(sharedPreferencesManager.getLanguage())) {
                         saveLanguagePreference(newLangCode);
@@ -2148,10 +2277,13 @@ public class SettingsFragment extends BaseFragment {
                         }
                     }
                     chooseButton.setText(languages[which]);
-                    dialog.dismiss();
+                    dialogInterface.dismiss();
                 })
                 .setNegativeButton(R.string.universal_cancel, null)
                 .show();
+                
+            // Apply button colors for Snow Veil theme
+            setDialogButtonColors(dialog);
         });
     }
 
@@ -2770,7 +2902,7 @@ public class SettingsFragment extends BaseFragment {
     private void setupThemeSpinner(View view) {
         MaterialButton themeButton = view.findViewById(R.id.theme_choose_button); // Add a button in layout for theme selection
         if (themeButton == null) return;
-        String[] themeNames = {getString(R.string.theme_red), "Midnight Dusk", "Faded Night", getString(R.string.theme_gold), getString(R.string.theme_silentforest), getString(R.string.theme_shadowalloy), getString(R.string.theme_pookiepink)};
+        String[] themeNames = {getString(R.string.theme_red), "Midnight Dusk", "Faded Night", getString(R.string.theme_gold), getString(R.string.theme_silentforest), getString(R.string.theme_shadowalloy), getString(R.string.theme_pookiepink), getString(R.string.theme_snowveil)};
         int[] themeColors = {
             ContextCompat.getColor(requireContext(), R.color.red_theme_primary),
             ContextCompat.getColor(requireContext(), R.color.gray),
@@ -2778,9 +2910,10 @@ public class SettingsFragment extends BaseFragment {
             ContextCompat.getColor(requireContext(), R.color.gold_theme_primary),
             ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary),
             ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary),
-            ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary)
+            ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary),
+            ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary)
         };
-        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         int tempThemeIndex = 1; // Default to Dark Mode index
         if ("Crimson Bloom".equals(currentTheme)) tempThemeIndex = 0;
         else if ("Faded Night".equals(currentTheme) || "AMOLED".equals(currentTheme) || "Amoled".equals(currentTheme)) tempThemeIndex = 2;
@@ -2788,12 +2921,17 @@ public class SettingsFragment extends BaseFragment {
         else if ("Silent Forest".equals(currentTheme)) tempThemeIndex = 4;
         else if ("Shadow Alloy".equals(currentTheme)) tempThemeIndex = 5;
         else if ("Pookie Pink".equals(currentTheme)) tempThemeIndex = 6;
+        else if ("Snow Veil".equals(currentTheme)) tempThemeIndex = 7;
         
         final int themeIndex = tempThemeIndex;
-        themeButton.setText(themeNames[themeIndex]);
         
-        // Set text color based on theme - black for Gold, Silent Forest, Shadow Alloy, and Pookie Pink, white for others
-        if ("Premium Gold".equals(currentTheme) || "Silent Forest".equals(currentTheme) || "Shadow Alloy".equals(currentTheme) || "Pookie Pink".equals(currentTheme)) {
+        // ----- Fix Start for theme button text display -----
+        // Set the button text to show the CURRENT theme name, not a hardcoded value
+        themeButton.setText(themeNames[themeIndex]);
+        // ----- Fix End for theme button text display -----
+        
+        // Set text color based on theme - black for Gold, Silent Forest, Shadow Alloy, Pookie Pink, and Snow Veil, white for others
+        if ("Premium Gold".equals(currentTheme) || "Silent Forest".equals(currentTheme) || "Shadow Alloy".equals(currentTheme) || "Pookie Pink".equals(currentTheme) || "Snow Veil".equals(currentTheme)) {
             themeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black));
         } else {
             themeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
@@ -2808,8 +2946,17 @@ public class SettingsFragment extends BaseFragment {
         }
         
         themeButton.setOnClickListener(v -> {
-            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext(), R.style.ThemeOverlay_FadCam_Dialog);
+            // Use the themed dialog builder instead of creating a new one directly
+            // ----- Fix Start for theme selection dialog -----
+            MaterialAlertDialogBuilder builder = themedDialogBuilder(requireContext());
+            // ----- Fix End for theme selection dialog -----
             builder.setTitle(R.string.settings_option_theme);
+            
+            // Get current theme for text color decisions
+            // ----- Fix Start for theme selection dialog -----
+            
+            boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+            // ----- Fix End for theme selection dialog -----
             
             // Create a custom adapter for the theme selection with color circles
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), R.layout.item_theme_option, R.id.theme_name, themeNames) {
@@ -2821,8 +2968,14 @@ public class SettingsFragment extends BaseFragment {
                     TextView themeName = view.findViewById(R.id.theme_name);
                     themeName.setText(themeNames[position]);
                     
-                    // All text in the dialog should be white for better visibility against dark dialog background
-                    themeName.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+                    // ----- Fix Start for theme selection dialog -----
+                    // Use black text for Snow Veil theme, white for all other themes
+                    if (isSnowVeilTheme) {
+                        themeName.setTextColor(Color.BLACK);
+                    } else {
+                        themeName.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+                    }
+                    // ----- Fix End for theme selection dialog -----
                     
                     // Set the color circle
                     View colorCircle = view.findViewById(R.id.theme_color_circle);
@@ -2833,12 +2986,24 @@ public class SettingsFragment extends BaseFragment {
                         drawable.setColor(themeColors[position]);
                     }
                     
-                    // Highlight the current selection
+                    // ----- Fix Start for theme selection dialog -----
+                    // Highlight the current selection using theme-appropriate background
                     if (position == themeIndex) {
-                        view.setBackgroundResource(R.drawable.selected_theme_bg);
+                        if (isSnowVeilTheme) {
+                            // For Snow Veil theme (light theme), use a slightly darker background
+                            // that creates better contrast with white background
+                            GradientDrawable highlightBg = new GradientDrawable();
+                            highlightBg.setCornerRadius(8 * getResources().getDisplayMetrics().density); // 8dp
+                            highlightBg.setColor(ContextCompat.getColor(requireContext(), R.color.snowveil_theme_accent));
+                            view.setBackground(highlightBg);
+                        } else {
+                            // For dark themes, use the standard selection background
+                            view.setBackgroundResource(R.drawable.selected_theme_bg);
+                        }
                     } else {
                         view.setBackground(null);
                     }
+                    // ----- Fix End for theme selection dialog -----
                     
                     return view;
                 }
@@ -2858,6 +3023,8 @@ public class SettingsFragment extends BaseFragment {
                     newTheme = "Shadow Alloy";
                 } else if (getString(R.string.theme_pookiepink).equals(newTheme)) {
                     newTheme = "Pookie Pink";
+                } else if (getString(R.string.theme_snowveil).equals(newTheme)) {
+                    newTheme = "Snow Veil";
                 } else {
                     newTheme = "Crimson Bloom";
                 }
@@ -2906,11 +3073,10 @@ public class SettingsFragment extends BaseFragment {
             builder.setNegativeButton(R.string.universal_cancel, null);
             AlertDialog dialog = builder.create();
             dialog.setOnShowListener(dialogInterface -> {
-                // Set Cancel button text color to white
-                Button negativeButton = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
-                if (negativeButton != null) {
-                    negativeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
-                }
+                // ----- Fix Start for theme selection dialog -----
+                // Apply appropriate button text colors for the current theme
+                setDialogButtonColors(dialog);
+                // ----- Fix End for theme selection dialog -----
             });
             dialog.show();
         });
@@ -2945,6 +3111,10 @@ public class SettingsFragment extends BaseFragment {
             // Pookie Pink theme
             ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary);
             // Apply other Pookie Pink theme-specific UI changes that can be done without recreation
+        } else if ("Snow Veil".equals(themeName)) {
+            // Snow Veil theme
+            ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary);
+            // Apply other Snow Veil theme-specific UI changes that can be done without recreation
         }
         // Apply other theme-agnostic UI updates
         applyThemeToUI(requireView());
@@ -3248,9 +3418,24 @@ public class SettingsFragment extends BaseFragment {
         final TextView samplingRateError = dialogView.findViewById(R.id.audio_sampling_rate_error);
         final TextView infoText = dialogView.findViewById(R.id.audio_info_text);
 
-        int white = ContextCompat.getColor(requireContext(), android.R.color.white);
-        summaryText.setTextColor(white);
-        if (infoText != null) infoText.setTextColor(white);
+        // ----- Fix Start for Audio Settings dialog text color -----
+        // Check if we're using Snow Veil theme for text color
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+        boolean isFadedNightTheme = "Faded Night".equals(currentTheme);
+        
+        int textColor = ContextCompat.getColor(requireContext(), isSnowVeilTheme ? android.R.color.black : android.R.color.white);
+        
+        summaryText.setTextColor(textColor);
+        if (infoText != null) infoText.setTextColor(textColor);
+        if (bitrateLabel != null) bitrateLabel.setTextColor(textColor);
+        if (samplingRateLabel != null) samplingRateLabel.setTextColor(textColor);
+        
+        // Set reset button text color to white specifically for Faded Night theme
+        if (isFadedNightTheme && resetButton != null) {
+            resetButton.setTextColor(Color.WHITE);
+        }
+        // ----- Fix End for Audio Settings dialog text color -----
 
         int currentBitrate = sharedPreferencesManager.getAudioBitrate();
         int currentSamplingRate = sharedPreferencesManager.getAudioSamplingRate();
@@ -3364,6 +3549,11 @@ public class SettingsFragment extends BaseFragment {
                     dialog.dismiss();
                 }
             });
+            
+            // ----- Fix Start for Audio Settings dialog button colors -----
+            // Apply theme-specific colors to dialog buttons
+            setDialogButtonColors(dialog);
+            // ----- Fix End for Audio Settings dialog button colors -----
         });
         dialog.show();
     }
@@ -3504,13 +3694,20 @@ public class SettingsFragment extends BaseFragment {
         final TextView helper = new TextView(context);
         helper.setTextSize(14);
         helper.setPadding(0, padding / 2, 0, 0);
-        int white = ContextCompat.getColor(context, android.R.color.white);
-        helper.setTextColor(white);
+        
+        // ----- Fix Start for Bitrate dialog text color -----
+        // Check if we're using Snow Veil theme for text color
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+        int textColor = ContextCompat.getColor(context, isSnowVeilTheme ? android.R.color.black : android.R.color.white);
+        helper.setTextColor(textColor);
+        // ----- Fix End for Bitrate dialog text color -----
+        
         layout.addView(input);
         layout.addView(helper);
         Runnable updateHelper = () -> {
             String text = input.getText().toString().trim();
-            int color = white;
+            int color = textColor;
             String msg = context.getString(R.string.bitrate_info_ok);
             try {
                 int value = Integer.parseInt(text);
@@ -3565,12 +3762,15 @@ public class SettingsFragment extends BaseFragment {
         // Set the dialog message as a white TextView
         TextView messageView = new TextView(context);
         messageView.setText(getString(R.string.bitrate_explanation_text));
-        messageView.setTextColor(white);
+        messageView.setTextColor(textColor);
         messageView.setTextSize(14);
         messageView.setPadding(0, padding / 2, 0, padding / 2);
         layout.addView(messageView, 0); // Add at the top
         builder.setView(layout);
-        builder.show();
+        AlertDialog dialog = builder.show();
+        
+        // Set button colors based on theme
+        setDialogButtonColors(dialog);
     }
 
     // --- Bitrate Preference Helpers ---
@@ -3911,7 +4111,14 @@ public class SettingsFragment extends BaseFragment {
             options.add(getString(R.string.applock_change_pin));
             options.add(getString(R.string.applock_remove_pin));
         }
-        int color = ContextCompat.getColor(requireContext(), android.R.color.white);
+        
+        // ----- Fix Start for App Lock dialog text color -----
+        // Check if we're using Snow Veil theme for text color
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+        int color = ContextCompat.getColor(requireContext(), isSnowVeilTheme ? android.R.color.black : android.R.color.white);
+        // ----- Fix End for App Lock dialog text color -----
+        
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_1, options) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
@@ -3921,9 +4128,10 @@ public class SettingsFragment extends BaseFragment {
                 return view;
             }
         };
-        themedDialogBuilder(requireContext())
+        
+        AlertDialog dialog = themedDialogBuilder(requireContext())
             .setTitle(R.string.applock_dialog_title)
-            .setAdapter(adapter, (dialog, which) -> {
+            .setAdapter(adapter, (dialogInterface, which) -> {
                 String selectedOption = options.get(which);
                 if (selectedOption.equals(getString(R.string.applock_enable))) {
                     if (isEnrolled) {
@@ -3950,6 +4158,9 @@ public class SettingsFragment extends BaseFragment {
                 }
             })
             .show();
+            
+        // Apply button colors for Snow Veil theme
+        setDialogButtonColors(dialog);
     }
     
     /**
@@ -4016,8 +4227,13 @@ public class SettingsFragment extends BaseFragment {
         MaterialButton readmeButton = view.findViewById(R.id.readme_button);
         MaterialButton languageChooseButton = view.findViewById(R.id.language_choose_button);
         
-
-
+        // ----- Fix Start for README button text color -----
+        // Always set README button text color to white for better visibility
+        if (readmeButton != null) {
+            readmeButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+        }
+        // ----- Fix End for README button text color -----
+        
         cameraSelectionToggle = view.findViewById(R.id.camera_selection_toggle);
         
         // Initialize and setup the lens section
@@ -4038,14 +4254,117 @@ public class SettingsFragment extends BaseFragment {
         setupOrientationSpinner();
         setupAppLockButton();
         
-        // ... existing code ...
+        // Apply theme-specific UI adjustments for Snow Veil theme
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        if ("Snow Veil".equals(currentTheme)) {
+            applySnowVeilThemeToUI(view);
+        }
+        
+        // ... rest of existing code ...
+    }
+    
+    // New method to handle Snow Veil theme UI adjustments
+    private void applySnowVeilThemeToUI(View rootView) {
+        // Find all icon views and set them to black for better contrast
+        tintAllIcons(rootView, Color.BLACK);
+        
+        // Ensure all text views have proper contrast
+        ensureTextContrast(rootView);
+        
+        // ----- Fix Start: Explicitly set README and REVIEW buttons to white -----
+        // Force white text for specific buttons regardless of theme
+        MaterialButton readmeButton = rootView.findViewById(R.id.readme_button);
+        if (readmeButton != null) {
+            readmeButton.setTextColor(Color.WHITE);
+        }
+        
+        MaterialButton reviewButton = rootView.findViewById(R.id.review_button);
+        if (reviewButton != null) {
+            reviewButton.setTextColor(Color.WHITE);
+        }
+        // ----- Fix End: Explicitly set README and REVIEW buttons to white -----
+        
+        // ----- Fix Start: Make dividers darker for better visibility in Snow Veil theme -----
+        // Find all divider views and set them to a darker color
+        findAndColorDividers(rootView);
+        // ----- Fix End: Make dividers darker for better visibility in Snow Veil theme -----
+    }
+    
+    /**
+     * Recursively finds all divider views (1dp height Views with listDivider background)
+     * and sets them to a darker color for better visibility in Snow Veil theme
+     */
+    private void findAndColorDividers(View view) {
+        if (view instanceof ViewGroup) {
+            ViewGroup viewGroup = (ViewGroup) view;
+            for (int i = 0; i < viewGroup.getChildCount(); i++) {
+                View child = viewGroup.getChildAt(i);
+                findAndColorDividers(child);
+            }
+        } else if (view != null && view.getLayoutParams() != null && 
+                  view.getLayoutParams().height == (int) (1 * getResources().getDisplayMetrics().density)) {
+            // This is likely a divider (1dp height View)
+            // Check if it has the listDivider background or any background set
+            Drawable background = view.getBackground();
+            if (background != null) {
+                // Set a dark gray color for dividers (using color with 20% opacity for subtle appearance)
+                view.setBackgroundColor(Color.argb(51, 0, 0, 0)); // #33000000 (20% black)
+            }
+        }
+    }
+    
+    // Helper method to tint all icons in the view hierarchy
+    private void tintAllIcons(View view, int color) {
+        if (view instanceof ViewGroup) {
+            ViewGroup viewGroup = (ViewGroup) view;
+            for (int i = 0; i < viewGroup.getChildCount(); i++) {
+                tintAllIcons(viewGroup.getChildAt(i), color);
+            }
+        } else if (view instanceof ImageView) {
+            ((ImageView) view).setColorFilter(color);
+        } else if (view instanceof MaterialButton) {
+            MaterialButton button = (MaterialButton) view;
+            if (button.getIcon() != null) {
+                button.setIconTint(ColorStateList.valueOf(color));
+            }
+        }
+    }
+    
+    // Helper method to ensure text has proper contrast
+    private void ensureTextContrast(View view) {
+        if (view instanceof ViewGroup) {
+            ViewGroup viewGroup = (ViewGroup) view;
+            for (int i = 0; i < viewGroup.getChildCount(); i++) {
+                ensureTextContrast(viewGroup.getChildAt(i));
+            }
+        } else if (view instanceof TextView) {
+            TextView textView = (TextView) view;
+            // Special handling for readme and review buttons - always keep them white
+            int viewId = view.getId();
+            if (viewId == R.id.readme_button || viewId == R.id.review_button) {
+                textView.setTextColor(Color.WHITE);
+                return;
+            }
+            
+            // Only override if the text is very light (poor contrast against white)
+            int currentColor = textView.getCurrentTextColor();
+            if (isLightColor(currentColor)) {
+                textView.setTextColor(Color.BLACK);
+            }
+        }
+    }
+    
+    // Helper method to determine if a color is light
+    private boolean isLightColor(int color) {
+        double darkness = 1 - (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) / 255;
+        return darkness < 0.5; // If darkness is less than 0.5, it's a light color
     }
 
     // ----- Fix Start: Apply theme colors to headings, buttons, toggles using theme attributes -----
     private int resolveThemeColor(int attr) {
         // Special handling for Midnight Dusk theme's colorButton
         if (attr == R.attr.colorButton) {
-            String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+            String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
             if ("Midnight Dusk".equals(currentTheme)) {
                 // Return purple directly for the Midnight Dusk theme's buttons
                 return ContextCompat.getColor(requireContext(), R.color.colorPrimary); // #cfbafd
@@ -4075,10 +4394,202 @@ public class SettingsFragment extends BaseFragment {
     private MaterialAlertDialogBuilder themedDialogBuilder(Context context) {
         int dialogTheme = R.style.ThemeOverlay_FadCam_Dialog;
         SharedPreferencesManager spm = SharedPreferencesManager.getInstance(context);
-        String currentTheme = spm.sharedPreferences.getString(Constants.PREF_APP_THEME, "Midnight Dusk");
+        String currentTheme = spm.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         if ("Crimson Bloom".equals(currentTheme)) dialogTheme = R.style.ThemeOverlay_FadCam_Red_Dialog;
         else if ("Faded Night".equals(currentTheme)) dialogTheme = R.style.ThemeOverlay_FadCam_Amoled_MaterialAlertDialog;
+        else if ("Snow Veil".equals(currentTheme)) dialogTheme = R.style.ThemeOverlay_FadCam_SnowVeil_Dialog;
         return new MaterialAlertDialogBuilder(context, dialogTheme);
     }
     // ----- Fix End: Add themedDialogBuilder helper to SettingsFragment -----
+
+    /**
+     * Sets button text colors for dialogs based on the current theme
+     * Use this after showing the dialog to ensure proper contrast
+     * @param dialog The dialog whose buttons need color adjustment
+     */
+    private void setDialogButtonColors(AlertDialog dialog) {
+        if (dialog == null) return;
+        
+        // Check if we're using Snow Veil theme
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+        
+        // Set text color for all dialog buttons
+        int buttonTextColor = isSnowVeilTheme ? Color.BLACK : Color.WHITE;
+        
+        if (dialog.getButton(DialogInterface.BUTTON_POSITIVE) != null) {
+            dialog.getButton(DialogInterface.BUTTON_POSITIVE).setTextColor(buttonTextColor);
+        }
+        if (dialog.getButton(DialogInterface.BUTTON_NEGATIVE) != null) {
+            dialog.getButton(DialogInterface.BUTTON_NEGATIVE).setTextColor(buttonTextColor);
+        }
+        if (dialog.getButton(DialogInterface.BUTTON_NEUTRAL) != null) {
+            dialog.getButton(DialogInterface.BUTTON_NEUTRAL).setTextColor(buttonTextColor);
+        }
+    }
+
+    // --- App Icon Selection Logic ---
+    private void setupAppIconButton(View view) {
+        appIconChooseButton = view.findViewById(R.id.app_icon_choose_button);
+        if (appIconChooseButton == null) return;
+        
+        // Get currently selected app icon
+        String currentIcon = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_ICON, Constants.APP_ICON_DEFAULT);
+        
+        // Set the button text to show the current icon name
+        appIconChooseButton.setText(currentIcon.equals(Constants.APP_ICON_DEFAULT) ? 
+                getString(R.string.app_icon_default) : getString(R.string.app_icon_alternative));
+                
+        // Set proper text color based on current theme
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        if ("Premium Gold".equals(currentTheme) || "Silent Forest".equals(currentTheme) || 
+            "Shadow Alloy".equals(currentTheme) || "Pookie Pink".equals(currentTheme) || 
+            "Snow Veil".equals(currentTheme)) {
+            appIconChooseButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black));
+        } else {
+            appIconChooseButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+        }
+        
+        // Set button click listener to show icon selection dialog
+        appIconChooseButton.setOnClickListener(v -> showAppIconSelectionDialog());
+    }
+    
+    /**
+     * Shows a dialog for selecting the app icon
+     */
+    private void showAppIconSelectionDialog() {
+        // Get current app icon
+        String currentIcon = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_ICON, Constants.APP_ICON_DEFAULT);
+        
+        // Create dialog builder with themed style
+        MaterialAlertDialogBuilder builder = themedDialogBuilder(requireContext());
+        builder.setTitle(R.string.app_icon_dialog_title);
+        
+        // Icon options
+        String[] iconNames = {
+            getString(R.string.app_icon_default),
+            getString(R.string.app_icon_alternative)
+        };
+        
+        // Create a custom list adapter for the app icons
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), R.layout.item_app_icon_option, R.id.app_icon_name, iconNames) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                
+                // Get references to views
+                TextView iconName = view.findViewById(R.id.app_icon_name);
+                ImageView iconPreview = view.findViewById(R.id.app_icon_preview);
+                RadioButton radioButton = view.findViewById(R.id.app_icon_radio_button);
+                
+                // Set icon preview image
+                if (position == 0) {
+                    // Default icon
+                    iconPreview.setImageResource(R.mipmap.ic_launcher);
+                } else {
+                    // Detective icon
+                    iconPreview.setImageResource(R.mipmap.ic_launcher_2);
+                }
+                
+                // Set text color based on current theme
+                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+                boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
+                
+                if (isSnowVeilTheme) {
+                    iconName.setTextColor(Color.BLACK);
+                } else {
+                    iconName.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
+                }
+                
+                // Select current icon
+                String iconKey = position == 0 ? Constants.APP_ICON_DEFAULT : Constants.APP_ICON_ALTERNATIVE;
+                radioButton.setChecked(iconKey.equals(currentIcon));
+                
+                // Highlight background if selected
+                if (radioButton.isChecked()) {
+                    if (isSnowVeilTheme) {
+                        // Light highlight for Snow Veil theme
+                        GradientDrawable highlightBg = new GradientDrawable();
+                        highlightBg.setCornerRadius(8 * getResources().getDisplayMetrics().density); // 8dp
+                        highlightBg.setColor(ContextCompat.getColor(requireContext(), R.color.snowveil_theme_accent));
+                        view.setBackground(highlightBg);
+                    } else {
+                        // Standard selection background for other themes
+                        view.setBackgroundResource(R.drawable.selected_theme_bg);
+                    }
+                } else {
+                    view.setBackground(null);
+                }
+                
+                return view;
+            }
+        };
+        
+        // Set click listener for each item
+        builder.setSingleChoiceItems(adapter, currentIcon.equals(Constants.APP_ICON_DEFAULT) ? 0 : 1, (dialog, which) -> {
+            String newIcon = which == 0 ? Constants.APP_ICON_DEFAULT : Constants.APP_ICON_ALTERNATIVE;
+            
+            if (!newIcon.equals(currentIcon)) {
+                // Save the new icon preference
+                sharedPreferencesManager.sharedPreferences.edit()
+                        .putString(Constants.PREF_APP_ICON, newIcon)
+                        .apply();
+                
+                // Update button text
+                appIconChooseButton.setText(which == 0 ? 
+                        getString(R.string.app_icon_default) : getString(R.string.app_icon_alternative));
+                
+                // Apply the icon change
+                updateAppIcon(newIcon);
+                
+                // Give feedback
+                vibrateTouch();
+                Toast.makeText(requireContext(), R.string.app_icon_changed, Toast.LENGTH_SHORT).show();
+            }
+            
+            dialog.dismiss();
+        });
+        
+        builder.setNegativeButton(R.string.universal_cancel, null);
+        
+        // Create and show dialog
+        AlertDialog dialog = builder.create();
+        dialog.setOnShowListener(dialogInterface -> {
+            // Apply appropriate button text colors for the current theme
+            setDialogButtonColors(dialog);
+        });
+        dialog.show();
+    }
+    
+    /**
+     * Updates the app icon by enabling/disabling activity-alias components
+     * @param iconKey The key of the icon to enable
+     */
+    private void updateAppIcon(String iconKey) {
+        PackageManager pm = requireContext().getPackageManager();
+        
+        // Component names for our activity aliases
+        ComponentName defaultIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity");
+        ComponentName alternativeIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity.AlternativeIcon");
+        
+        // Enable/disable appropriate components based on selected icon
+        if (Constants.APP_ICON_DEFAULT.equals(iconKey)) {
+            pm.setComponentEnabledSetting(defaultIcon, 
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
+                    PackageManager.DONT_KILL_APP);
+            pm.setComponentEnabledSetting(alternativeIcon, 
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
+                    PackageManager.DONT_KILL_APP);
+        } else {
+            pm.setComponentEnabledSetting(defaultIcon, 
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
+                    PackageManager.DONT_KILL_APP);
+            pm.setComponentEnabledSetting(alternativeIcon, 
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
+                    PackageManager.DONT_KILL_APP);
+        }
+    }
+
+
 }

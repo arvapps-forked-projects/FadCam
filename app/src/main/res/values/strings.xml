@@ -288,12 +288,14 @@
         <item>Silent Forest</item>
         <item>Shadow Alloy</item>
         <item>Pookie Pink</item>
+        <item>Snow Veil</item>
     </string-array>
     <string name="theme_red">Crimson Bloom</string>
     <string name="theme_gold">Premium Gold</string>
     <string name="theme_silentforest">Silent Forest</string>
     <string name="theme_shadowalloy">Shadow Alloy</string>
     <string name="theme_pookiepink">Pookie Pink</string>
+    <string name="theme_snowveil">Snow Veil</string>
     <string name="remote_access_title">Remote Access/Control</string>
     <string name="remote_toast_coming_soon">Coming soon! In Sha Allah</string>
     <string name="remote_coming_soon">Remote control for FadCam is coming soon.</string>
@@ -518,5 +520,15 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="version_format">v%s</string>
 
     <string name="edit_with_faditorx">Edit with FaditorX</string>
+
+    <!-- App Icon Strings -->
+    <string name="setting_app_icon_title">App Icon</string>
+    <string name="setting_app_icon_desc">Change the app\'s launcher icon</string>
+    <string name="app_icon_dialog_title">Choose App Icon</string>
+    <string name="app_icon_default">Default</string>
+    <string name="app_icon_alternative">Detective</string>
+    <string name="app_icon_changed">App icon changed</string>
+    
+    <!-- Misc -->
 
 </resources>

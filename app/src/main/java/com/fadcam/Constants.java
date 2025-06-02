@@ -26,6 +26,13 @@ public abstract class Constants {
     public static final String PREF_WATERMARK_OPTION = "watermark_option";
     public static final String PREF_VIDEO_CODEC = "video_codec";
     public static final String PREF_APP_THEME = "app_theme";
+    /**
+     * Default theme used throughout the app.
+     * This constant should be used as the fallback value whenever getting the theme from SharedPreferences.
+     * Previously hardcoded as "Midnight Dusk", now changed to "Crimson Bloom".
+     * NOTE: Some files may still reference "Midnight Dusk" directly and should be updated to use this constant.
+     */
+    public static final String DEFAULT_APP_THEME = "Crimson Bloom"; // Default theme changed from Midnight Dusk to Crimson Bloom
     public static final String PREF_IS_RECORDING_IN_PROGRESS = "is_recording_in_progress";
     public static final String PREF_RECORD_AUDIO = "pref_record_audio";
     public static final String PREF_AUDIO_BITRATE = "audio_bitrate";
@@ -125,4 +132,9 @@ public abstract class Constants {
 
     // Add the location reinitialize intent action
     public static final String INTENT_ACTION_REINITIALIZE_LOCATION = "com.fadcam.INTENT_ACTION_REINITIALIZE_LOCATION";
+    
+    // ----- App Icon Preference -----
+    public static final String PREF_APP_ICON = "app_icon";
+    public static final String APP_ICON_DEFAULT = "default"; // Default icon
+    public static final String APP_ICON_ALTERNATIVE = "alternative"; // Detective icon
 }

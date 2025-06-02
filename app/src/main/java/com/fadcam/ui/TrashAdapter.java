@@ -24,6 +24,7 @@ import android.util.Log;
 import android.widget.Toast;
 import com.fadcam.SharedPreferencesManager;
 import java.util.concurrent.TimeUnit;
+import com.fadcam.Constants;
 
 public class TrashAdapter extends RecyclerView.Adapter<TrashAdapter.TrashViewHolder> {
 
@@ -33,6 +34,7 @@ public class TrashAdapter extends RecyclerView.Adapter<TrashAdapter.TrashViewHol
     private final OnTrashItemInteractionListener interactionListener;
     private final OnTrashItemLongClickListener longClickListener; // Optional
     private final SharedPreferencesManager sharedPreferencesManager;
+    private boolean isSnowVeilTheme = false;
 
     public interface OnTrashItemInteractionListener {
         void onItemCheckChanged(TrashItem item, boolean isChecked);
@@ -53,7 +55,11 @@ public class TrashAdapter extends RecyclerView.Adapter<TrashAdapter.TrashViewHol
         this.trashItems = trashItems;
         this.interactionListener = interactionListener;
         this.longClickListener = longClickListener;
-        this.sharedPreferencesManager = SharedPreferencesManager.getInstance(context);
+        
+        // Get current theme for theming
+        sharedPreferencesManager = SharedPreferencesManager.getInstance(context);
+        String currentTheme = sharedPreferencesManager.sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        this.isSnowVeilTheme = "Snow Veil".equals(currentTheme);
     }
 
     @NonNull
@@ -67,6 +73,24 @@ public class TrashAdapter extends RecyclerView.Adapter<TrashAdapter.TrashViewHol
     public void onBindViewHolder(@NonNull TrashViewHolder holder, int position) {
         TrashItem item = trashItems.get(position);
         holder.bind(item);
+        
+        // Apply Snow Veil theme if needed (apply after normal binding)
+        if (isSnowVeilTheme && holder.itemView instanceof androidx.cardview.widget.CardView) {
+            // Set white background for card
+            ((androidx.cardview.widget.CardView) holder.itemView).setCardBackgroundColor(android.graphics.Color.WHITE);
+            
+            // Set black text for better contrast
+            if (holder.tvOriginalName != null) {
+                holder.tvOriginalName.setTextColor(android.graphics.Color.BLACK);
+            }
+            if (holder.tvDateTrashed != null) {
+                holder.tvDateTrashed.setTextColor(android.graphics.Color.BLACK);
+            }
+            if (holder.tvOriginalLocation != null) {
+                holder.tvOriginalLocation.setTextColor(android.graphics.Color.BLACK);
+            }
+            // Keep the remaining time text color dynamic based on urgency
+        }
     }
 
     @Override

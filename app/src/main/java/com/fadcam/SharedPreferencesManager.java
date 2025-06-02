@@ -70,7 +70,7 @@ public class SharedPreferencesManager {
      * For AMOLED theme, special handling ensures the clock card always uses Dark Grey.
      */
     public String getClockCardColor() {
-        String currentTheme = sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, "Midnight Dusk");
+        String currentTheme = sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         
         // Special case for AMOLED theme - always return Dark Grey
         if (currentTheme != null && 
@@ -87,6 +87,8 @@ public class SharedPreferencesManager {
             return "#A5A9AB"; // Silver for Shadow Alloy theme
         } else if (currentTheme.equals("Pookie Pink")) {
             return "#F06292"; // Pink for Pookie Pink theme
+        } else if (currentTheme.equals("Snow Veil")) {
+            return "#E0E0E0"; // Light Grey for Snow Veil theme
         }
         
         // For other themes or default
@@ -98,7 +100,7 @@ public class SharedPreferencesManager {
      * This should be called whenever the theme changes or on app startup.
      */
     public void updateDefaultClockColorForTheme() {
-        String currentTheme = sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, "Midnight Dusk");
+        String currentTheme = sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         
         // Only update if the theme changes and the color wasn't manually set by the user
         if (currentTheme != null) {
@@ -115,6 +117,8 @@ public class SharedPreferencesManager {
                 setClockCardColor("#A5A9AB"); // Silver for Shadow Alloy theme
             } else if (currentTheme.equals("Pookie Pink")) {
                 setClockCardColor("#F06292"); // Pink for Pookie Pink theme
+            } else if (currentTheme.equals("Snow Veil")) {
+                setClockCardColor("#E0E0E0"); // Light Grey for Snow Veil theme
             } else {
                 setClockCardColor(DEFAULT_CLOCK_CARD_COLOR); // Default purple for other themes
             }
