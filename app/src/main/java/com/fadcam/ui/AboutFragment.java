@@ -14,6 +14,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.text.Html;
 import android.text.Spanned;
+import android.text.SpannableStringBuilder;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,6 +24,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.graphics.drawable.Drawable;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.cardview.widget.CardView;
 import androidx.core.text.HtmlCompat;
@@ -91,39 +93,40 @@ public class AboutFragment extends BaseFragment {
         MaterialCardView privacyInfoCard = view.findViewById(R.id.privacy_info_card);
         ScrollView scrollView = view.findViewById(R.id.scroll_view);
 
+        // Initialize footer elements
+        ImageView ivFadSecLabLogo = view.findViewById(R.id.ivFadSecLabLogo);
+        TextView tvAboutFooter = view.findViewById(R.id.tvAboutFooter);
+
         int colorHeading = resolveThemeColor(R.attr.colorHeading);
         int colorButton = resolveThemeColor(R.attr.colorButton);
         int colorDialog = resolveThemeColor(R.attr.colorDialog);
         int colorOnPrimary = resolveThemeColor(android.R.attr.textColorPrimary);
         int colorOnSurface = resolveThemeColor(android.R.attr.textColorSecondary);
         
-        // Get current theme
+        // Get current theme directly from Constants to ensure consistent theme naming
         String currentTheme = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         
-        // Define theme-specific colors
+        // Define theme-specific colors - use theme-specific colors from resources instead of hardcoded values
         int themeTextColor;
         if ("Midnight Dusk".equals(currentTheme)) {
             themeTextColor = ContextCompat.getColor(requireContext(), R.color.colorPrimary); // Light purple (#cfbafd)
         } else if ("Crimson Bloom".equals(currentTheme)) {
-            themeTextColor = ContextCompat.getColor(requireContext(), R.color.red_theme_secondary); // Bright red (#FF5252)
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.red_theme_primary); // Red primary color
         } else if ("Premium Gold".equals(currentTheme)) {
-            themeTextColor = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary); // Gold (#FFD700)
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary); // Gold
         } else if ("Silent Forest".equals(currentTheme)) {
-            themeTextColor = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary); // Green (#26A69A)
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary); // Green
         } else if ("Shadow Alloy".equals(currentTheme)) {
-            themeTextColor = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary); // Silver (#A5A9AB)
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary); // Silver
         } else if ("Pookie Pink".equals(currentTheme)) {
-            themeTextColor = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary); // Pink (#F06292)
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary); // Pink
         } else if ("Snow Veil".equals(currentTheme)) {
-            themeTextColor = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_text_primary); // Black (#212121)
-            // Set any Snow Veil specific theme elements to black
-            appDescription.setTextColor(Color.BLACK);
-            emailText.setTextColor(Color.BLACK);
-            discordText.setTextColor(Color.BLACK);
-            checkUpdatesButton.setTextColor(Color.BLACK);
-            checkUpdatesButton.setIconTint(ColorStateList.valueOf(Color.BLACK));
-        } else {
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_text_primary); // Black
+        } else if ("Faded Night".equals(currentTheme)) {
             themeTextColor = Color.WHITE; // Default for Faded Night
+        } else {
+            // Default to Crimson Bloom if no matches
+            themeTextColor = ContextCompat.getColor(requireContext(), R.color.red_theme_primary);
         }
 
         appIcon.setImageResource(R.mipmap.ic_launcher);
@@ -139,27 +142,34 @@ public class AboutFragment extends BaseFragment {
             appVersion.setText("");
         }
         String appDesc = getString(R.string.app_description);
-        // Use theme-specific colors for highlighting
+
+        // The text with format markers for highlights and links
+        String formattedAppDesc = "";
+        
+        // Setup highlight colors that match the theme colors
         String highlightColorHex;
         if ("Midnight Dusk".equals(currentTheme)) {
-            highlightColorHex = "#cfbafd"; // Light purple for Midnight Dusk
+            highlightColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.colorPrimary)));
         } else if ("Crimson Bloom".equals(currentTheme)) {
-            highlightColorHex = "#FF5252"; // Red theme secondary color for Crimson Bloom
+            highlightColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.red_theme_primary)));
         } else if ("Premium Gold".equals(currentTheme)) {
-            highlightColorHex = "#FFD700"; // Gold color for Premium Gold
+            highlightColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.gold_theme_primary)));
         } else if ("Silent Forest".equals(currentTheme)) {
-            highlightColorHex = "#26A69A"; // Green color for Silent Forest
+            highlightColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary)));
         } else if ("Shadow Alloy".equals(currentTheme)) {
-            highlightColorHex = "#A5A9AB"; // Silver color for Shadow Alloy
+            highlightColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary)));
         } else if ("Pookie Pink".equals(currentTheme)) {
-            highlightColorHex = "#F06292"; // Pink color for Pookie Pink
+            highlightColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary)));
         } else if ("Snow Veil".equals(currentTheme)) {
-            highlightColorHex = "#2196F3"; // Light Blue for Snow Veil
+            highlightColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.snowveil_theme_text_primary)));
         } else {
-            highlightColorHex = "#AAAAAA"; // Default dark gray for other themes (like Faded Night)
+            // Faded Night or default
+            highlightColorHex = "#FFFFFF"; // White for Faded Night
         }
         
+        // Replace any hardcoded color with the theme-specific one
         appDesc = appDesc.replaceAll("#cfbafd", highlightColorHex);
+        
         appDescription.setText(Html.fromHtml(appDesc, Html.FROM_HTML_MODE_LEGACY));
         appDescription.setTextColor(Color.WHITE);
         checkUpdatesButton.setTextColor(Color.WHITE);
@@ -194,27 +204,81 @@ public class AboutFragment extends BaseFragment {
         String[] questions = getResources().getStringArray(R.array.questions_array);
         String[] answers = getResources().getStringArray(R.array.answers_array);
         
+        // Setup footer text with Palestine and Pakistan flags
+        if (tvAboutFooter != null) {
+            String footer = "Made with Palestine at FadSec Lab in Pakistan";
+            android.text.SpannableString spannable = new android.text.SpannableString(footer);
+            
+            // Palestine flag image
+            Drawable palestine = androidx.core.content.res.ResourcesCompat.getDrawable(getResources(), R.drawable.palestine, null);
+            if (palestine != null) {
+                int size = (int) android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_DIP, 18, getResources().getDisplayMetrics());
+                palestine.setBounds(0, 0, size, size);
+                android.text.style.ImageSpan palestineSpan = new android.text.style.ImageSpan(palestine, android.text.style.ImageSpan.ALIGN_BOTTOM);
+                int palestineIndex = footer.indexOf("Palestine");
+                if (palestineIndex != -1) {
+                    spannable.setSpan(palestineSpan, palestineIndex, palestineIndex + "Palestine".length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+            }
+            
+            // Pakistan flag image
+            Drawable pakistan = androidx.core.content.res.ResourcesCompat.getDrawable(getResources(), R.drawable.pakistan, null);
+            if (pakistan != null) {
+                int size = (int) android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_DIP, 18, getResources().getDisplayMetrics());
+                pakistan.setBounds(0, 0, size, size);
+                android.text.style.ImageSpan pakistanSpan = new android.text.style.ImageSpan(pakistan, android.text.style.ImageSpan.ALIGN_BOTTOM);
+                int pakistanIndex = footer.indexOf("Pakistan");
+                if (pakistanIndex != -1) {
+                    spannable.setSpan(pakistanSpan, pakistanIndex, pakistanIndex + "Pakistan".length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+            }
+            
+            // FadSec Lab clickable, bold, and red
+            int fadSecLabStart = footer.indexOf("FadSec Lab");
+            int fadSecLabEnd = fadSecLabStart + "FadSec Lab".length();
+            if (fadSecLabStart >= 0) {
+                spannable.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), fadSecLabStart, fadSecLabEnd, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                spannable.setSpan(new android.text.style.ClickableSpan() {
+                    @Override
+                    public void onClick(@NonNull View widget) {
+                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/fadsec-lab"));
+                        widget.getContext().startActivity(browserIntent);
+                    }
+                    @Override
+                    public void updateDrawState(android.text.TextPaint ds) {
+                        super.updateDrawState(ds);
+                        ds.setColor(Color.parseColor("#E43C3C")); // Red color
+                        ds.setUnderlineText(false); // No underline
+                    }
+                }, fadSecLabStart, fadSecLabEnd, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            
+            tvAboutFooter.setText(spannable);
+            tvAboutFooter.setTextColor(isSnowVeilTheme() ? Color.BLACK : Color.WHITE);
+            tvAboutFooter.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+        }
+        
         // Check current theme to determine answers color
         String currentThemeAnswers = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         
         // Use theme-specific colors for answers
         String answerColorHex;
         if ("Midnight Dusk".equals(currentThemeAnswers)) {
-            answerColorHex = "#cfbafd"; // Light purple for Midnight Dusk
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.colorPrimary)));
         } else if ("Crimson Bloom".equals(currentThemeAnswers)) {
-            answerColorHex = "#FF5252"; // Red theme secondary color for Crimson Bloom
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.red_theme_primary)));
         } else if ("Premium Gold".equals(currentThemeAnswers)) {
-            answerColorHex = "#FFD700"; // Gold color for Premium Gold
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.gold_theme_primary)));
         } else if ("Silent Forest".equals(currentThemeAnswers)) {
-            answerColorHex = "#26A69A"; // Green color for Silent Forest
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary)));
         } else if ("Shadow Alloy".equals(currentThemeAnswers)) {
-            answerColorHex = "#A5A9AB"; // Silver color for Shadow Alloy
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary)));
         } else if ("Pookie Pink".equals(currentThemeAnswers)) {
-            answerColorHex = "#F06292"; // Pink color for Pookie Pink
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary)));
         } else if ("Snow Veil".equals(currentThemeAnswers)) {
-            answerColorHex = "#2196F3"; // Light Blue for Snow Veil theme
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.snowveil_theme_text_primary)));
         } else {
-            answerColorHex = "#AAAAAA"; // Default dark gray for other themes (like Faded Night)
+            answerColorHex = "#FFFFFF"; // White for Faded Night
         }
         
         StringBuilder qnaContent = new StringBuilder();
@@ -248,10 +312,6 @@ public class AboutFragment extends BaseFragment {
                         // Set copyright text color
                         if (textStr.contains(getString(R.string.copyright_info))) {
                             textView.setTextColor(themeTextColor);
-                        } 
-                        // Set contact heading color
-                        else if (textStr.equals(getString(R.string.contact))) {
-                            textView.setTextColor(themeTextColor);
                         }
                     }
                 }
@@ -274,21 +334,21 @@ public class AboutFragment extends BaseFragment {
         // Use theme-specific colors for answers
         String answerColorHex;
         if ("Midnight Dusk".equals(currentTheme)) {
-            answerColorHex = "#cfbafd"; // Light purple for Midnight Dusk
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.colorPrimary)));
         } else if ("Crimson Bloom".equals(currentTheme)) {
-            answerColorHex = "#FF5252"; // Red theme secondary color for Crimson Bloom
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.red_theme_primary)));
         } else if ("Premium Gold".equals(currentTheme)) {
-            answerColorHex = "#FFD700"; // Gold color for Premium Gold
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.gold_theme_primary)));
         } else if ("Silent Forest".equals(currentTheme)) {
-            answerColorHex = "#26A69A"; // Green color for Silent Forest
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary)));
         } else if ("Shadow Alloy".equals(currentTheme)) {
-            answerColorHex = "#A5A9AB"; // Silver color for Shadow Alloy
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary)));
         } else if ("Pookie Pink".equals(currentTheme)) {
-            answerColorHex = "#F06292"; // Pink color for Pookie Pink
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary)));
         } else if ("Snow Veil".equals(currentTheme)) {
-            answerColorHex = "#2196F3"; // Light Blue for Snow Veil
+            answerColorHex = String.format("#%06X", (0xFFFFFF & ContextCompat.getColor(requireContext(), R.color.snowveil_theme_text_primary)));
         } else {
-            answerColorHex = "#AAAAAA"; // Default dark gray for other themes (like Faded Night)
+            answerColorHex = "#FFFFFF"; // White for Faded Night
         }
         
         // Determine question text color based on theme
@@ -851,5 +911,11 @@ public class AboutFragment extends BaseFragment {
     private boolean isLightColor(int color) {
         double darkness = 1 - (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) / 255;
         return darkness < 0.5; // If darkness is less than 0.5, it's a light color
+    }
+
+    // Helper method to check if Snow Veil theme is active
+    private boolean isSnowVeilTheme() {
+        String currentTheme = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+        return "Snow Veil".equals(currentTheme);
     }
 }

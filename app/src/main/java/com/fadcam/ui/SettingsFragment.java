@@ -29,12 +29,16 @@ import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.DocumentsContract;
+import android.text.InputFilter;
 import android.text.InputType;
 import android.util.Log; // Make sure Log is imported
 import android.util.Size;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AnimationUtils;
+import android.view.animation.LayoutAnimationController;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -59,6 +63,8 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.fadcam.CameraType;
 import com.fadcam.Constants;
@@ -69,11 +75,13 @@ import com.fadcam.R;
 import com.fadcam.SharedPreferencesManager;
 import com.fadcam.Utils;
 import com.fadcam.VideoCodec;
+import com.fadcam.utils.CameraXFrameRateUtil;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textview.MaterialTextView;
 
 // Add AppLock imports
@@ -113,6 +121,8 @@ import android.text.TextWatcher;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 public class SettingsFragment extends BaseFragment {
 
@@ -262,7 +272,7 @@ public class SettingsFragment extends BaseFragment {
                     }
                 }
             }
-            android.util.Log.i(TAG_SETTINGS, logBuilder.toString());
+            Log.i(TAG_SETTINGS, logBuilder.toString());
         } else {
             // Fallback for older devices: use legacy intent sticky
             Intent intent = requireContext().registerReceiver(null, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
@@ -272,7 +282,7 @@ public class SettingsFragment extends BaseFragment {
                 availableInputMics.add(null); // No AudioDeviceInfo, but we can still show
                 wiredMicDetected = true;
             }
-            android.util.Log.i(TAG_SETTINGS, "Legacy headset plug state: " + legacyWired);
+            Log.i(TAG_SETTINGS, "Legacy headset plug state: " + legacyWired);
         }
         // Add special label if only headphones (no mic) detected
         if (!wiredMicDetected && headphonesNoMicDetected) {
@@ -401,7 +411,7 @@ public class SettingsFragment extends BaseFragment {
             status = getString(R.string.setting_audio_input_source_status_wired) + ":\n" + selectedMic.getProductName();
         }
         audioInputSourceStatus.setText(status);
-        android.util.Log.i(TAG_SETTINGS, "Audio input source status updated. Selected: " + selectedMic);
+        Log.i(TAG_SETTINGS, "Audio input source status updated. Selected: " + selectedMic);
     }
 
     // --- Activity Result Launcher Initialization & onCreate---
@@ -409,7 +419,7 @@ public class SettingsFragment extends BaseFragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         // Use standard Log
-        android.util.Log.d(TAG_SETTINGS,"onCreate: Initializing fragment.");
+        Log.d(TAG_SETTINGS,"onCreate: Initializing fragment.");
         // Initialize helpers/managers FIRST
         locationHelper = new LocationHelper(requireContext());
         sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
@@ -481,7 +491,7 @@ public class SettingsFragment extends BaseFragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         view = inflater.inflate(R.layout.fragment_settings, container, false);
-        android.util.Log.d(TAG_SETTINGS,"onCreateView: Inflating layout and setting up views.");
+        Log.d(TAG_SETTINGS,"onCreateView: Inflating layout and setting up views.");
 
         // Find views by ID
         MaterialToolbar toolbar = view.findViewById(R.id.topAppBar);
@@ -664,7 +674,7 @@ public class SettingsFragment extends BaseFragment {
     public void onStart()
     {
         super.onStart();
-        android.util.Log.d(TAG_SETTINGS,"onStart: Registering receivers.");
+        Log.d(TAG_SETTINGS,"onStart: Registering receivers.");
         registerBroadcastOnRecordingStarted();
         registerBrodcastOnRecordingStopped();
 
@@ -770,12 +780,12 @@ public class SettingsFragment extends BaseFragment {
     }
 
     private void launchDirectoryPicker() {
-        android.util.Log.d(TAG_SETTINGS, "Launching directory picker (ACTION_OPEN_DOCUMENT_TREE)");
+        Log.d(TAG_SETTINGS, "Launching directory picker (ACTION_OPEN_DOCUMENT_TREE)");
         Uri initialUri = null;
         try {
             openDocumentTreeLauncher.launch(initialUri);
         } catch (Exception e) {
-            android.util.Log.e(TAG_SETTINGS, "Error launching directory picker", e);
+            Log.e(TAG_SETTINGS, "Error launching directory picker", e);
             Toast.makeText(requireContext(),"Could not open folder picker", Toast.LENGTH_SHORT).show();
             sharedPreferencesManager.setStorageMode(SharedPreferencesManager.STORAGE_MODE_INTERNAL);
             updateStorageLocationUI(); // Reset UI if launch fails
@@ -1244,13 +1254,13 @@ public class SettingsFragment extends BaseFragment {
                     }
                 }
             }
-            android.util.Log.i(TAG_SETTINGS, logBuilder.toString());
+            Log.i(TAG_SETTINGS, logBuilder.toString());
         } else {
             // Fallback for older devices: use legacy intent sticky
             Intent intent = requireContext().registerReceiver(null, new IntentFilter(Intent.ACTION_HEADSET_PLUG));
             isWiredMicConnected = intent != null && intent.getIntExtra("state", 0) == 1;
             selectedMic = null; // No AudioDeviceInfo available on legacy
-            android.util.Log.i(TAG_SETTINGS, "Legacy headset plug state: " + isWiredMicConnected);
+            Log.i(TAG_SETTINGS, "Legacy headset plug state: " + isWiredMicConnected);
         }
     }
 
@@ -3090,40 +3100,54 @@ public class SettingsFragment extends BaseFragment {
     }
 
     private void applyAppTheme(String themeName) {
+        int themeColor;
+        
         if ("Crimson Bloom".equals(themeName)) {
             // Red theme
-            ContextCompat.getColor(requireContext(), R.color.red_theme_primary);
-            // Apply other Red theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.red_theme_primary);
         } else if ("Faded Night".equals(themeName)) {
             // AMOLED theme
-            ContextCompat.getColor(requireContext(), R.color.amoled_background);
-            // Apply other AMOLED theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.amoled_background);
         } else if ("Midnight Dusk".equals(themeName)) {
             // Default dark theme
-            ContextCompat.getColor(requireContext(), R.color.gray);
-            // Apply other default theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.gray);
         } else if ("Premium Gold".equals(themeName)) {
             // Gold theme
-            ContextCompat.getColor(requireContext(), R.color.gold_theme_primary);
-            // Apply other Gold theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary);
         } else if ("Silent Forest".equals(themeName)) {
             // Silent Forest theme
-            ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary);
-            // Apply other Silent Forest theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary);
         } else if ("Shadow Alloy".equals(themeName)) {
             // Shadow Alloy theme
-            ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary);
-            // Apply other Shadow Alloy theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary);
         } else if ("Pookie Pink".equals(themeName)) {
             // Pookie Pink theme
-            ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary);
-            // Apply other Pookie Pink theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary);
         } else if ("Snow Veil".equals(themeName)) {
             // Snow Veil theme
-            ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary);
-            // Apply other Snow Veil theme-specific UI changes that can be done without recreation
+            themeColor = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary);
+            // Special handling for light theme
+            applySnowVeilThemeToUI(requireView());
+            return;
+        } else {
+            // Default to Crimson Bloom if unknown
+            themeColor = ContextCompat.getColor(requireContext(), R.color.red_theme_primary);
         }
-        // Apply other theme-agnostic UI updates
+        
+        // Apply theme color to UI elements
+        MaterialToolbar toolbar = requireActivity().findViewById(R.id.topAppBar);
+        if (toolbar != null) {
+            if ("Crimson Bloom".equals(themeName)) {
+                toolbar.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.red_theme_primary_variant));
+            } else {
+                toolbar.setBackgroundColor(themeColor);
+            }
+        }
+        
+        // Apply other theme-specific UI updates that can be done without recreation
+        // (UI elements that respond to theme but don't require activity recreation)
+        
+        // Apply theme-agnostic UI updates
         applyThemeToUI(requireView());
     }
     // --- End Theme Spinner Logic ---
@@ -3147,7 +3171,7 @@ public class SettingsFragment extends BaseFragment {
         // Use the new CameraX utility for framerate detection
         try {
             Log.i(TAG_SETTINGS, "Using CameraX API for framerate detection");
-            return com.fadcam.utils.CameraXFrameRateUtil.getHardwareSupportedFrameRates(requireContext(), cameraType);
+            return CameraXFrameRateUtil.getHardwareSupportedFrameRates(requireContext(), cameraType);
         } catch (Exception e) {
             Log.e(TAG_SETTINGS, "Error using CameraX for framerate detection, falling back to Camera2", e);
             // Fallback to Camera2 API implementation - retain original logic
@@ -3418,8 +3442,8 @@ public class SettingsFragment extends BaseFragment {
         final TextView summaryText = dialogView.findViewById(R.id.audio_settings_summary);
         final TextView bitrateLabel = dialogView.findViewById(R.id.audio_bitrate_label);
         final TextView samplingRateLabel = dialogView.findViewById(R.id.audio_sampling_rate_label);
-        final android.widget.EditText bitrateInput = dialogView.findViewById(R.id.audio_bitrate_input);
-        final android.widget.EditText samplingRateInput = dialogView.findViewById(R.id.audio_sampling_rate_input);
+        final EditText bitrateInput = dialogView.findViewById(R.id.audio_bitrate_input);
+        final EditText samplingRateInput = dialogView.findViewById(R.id.audio_sampling_rate_input);
         final MaterialButton resetButton = dialogView.findViewById(R.id.audio_reset_button);
         final TextView bitrateError = dialogView.findViewById(R.id.audio_bitrate_error);
         final TextView samplingRateError = dialogView.findViewById(R.id.audio_sampling_rate_error);
@@ -3508,15 +3532,15 @@ public class SettingsFragment extends BaseFragment {
             }
         };
 
-        bitrateInput.addTextChangedListener(new android.text.TextWatcher() {
+        bitrateInput.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) { validate.run(); }
-            public void afterTextChanged(android.text.Editable s) {}
+            public void afterTextChanged(Editable s) {}
         });
-        samplingRateInput.addTextChangedListener(new android.text.TextWatcher() {
+        samplingRateInput.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) { validate.run(); }
-            public void afterTextChanged(android.text.Editable s) {}
+            public void afterTextChanged(Editable s) {}
         });
 
         resetButton.setOnClickListener(v -> {
@@ -3529,19 +3553,19 @@ public class SettingsFragment extends BaseFragment {
         builder.setView(dialogView);
         builder.setPositiveButton(R.string.dialog_audio_save, null); // We'll override this
         builder.setNegativeButton(R.string.dialog_audio_cancel, null);
-        final androidx.appcompat.app.AlertDialog dialog = builder.create();
+        final AlertDialog dialog = builder.create();
         dialog.setOnShowListener(dlg -> {
-            final android.widget.Button saveBtn = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
+            final Button saveBtn = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
             validate.run();
             saveBtn.setEnabled(validation.bitrateValid && validation.samplingValid);
             // Live enable/disable
-            android.text.TextWatcher watcher = new android.text.TextWatcher() {
+            TextWatcher watcher = new TextWatcher() {
                 public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
                     validate.run();
                     saveBtn.setEnabled(validation.bitrateValid && validation.samplingValid);
                 }
-                public void afterTextChanged(android.text.Editable s) {}
+                public void afterTextChanged(Editable s) {}
             };
             bitrateInput.addTextChangedListener(watcher);
             samplingRateInput.addTextChangedListener(watcher);
@@ -3681,13 +3705,13 @@ public class SettingsFragment extends BaseFragment {
         int padding = (int) (16 * context.getResources().getDisplayMetrics().density);
         layout.setPadding(padding, padding, padding, padding);
         final EditText input = new EditText(context);
-        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
         input.setHint("1 - 200 Mbps");
         int currentMbps = getBitrateCustomValue() / 1000;
         input.setText(String.valueOf(currentMbps));
         input.setSelection(input.getText().length());
-        input.setFilters(new android.text.InputFilter[]{
-            new android.text.InputFilter.LengthFilter(3),
+        input.setFilters(new InputFilter[]{
+            new InputFilter.LengthFilter(3),
             (source, start, end, dest, dstart, dend) -> {
                 try {
                     String result = dest.toString().substring(0, dstart) + source + dest.toString().substring(dend);
@@ -3734,10 +3758,10 @@ public class SettingsFragment extends BaseFragment {
             helper.setText(msg);
             helper.setTextColor(color);
         };
-        input.addTextChangedListener(new android.text.TextWatcher() {
+        input.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) { updateHelper.run(); }
-            public void afterTextChanged(android.text.Editable s) {}
+            public void afterTextChanged(Editable s) {}
         });
         updateHelper.run();
         MaterialAlertDialogBuilder builder = themedDialogBuilder(context)
@@ -3938,8 +3962,8 @@ public class SettingsFragment extends BaseFragment {
         View dialogView = inflater.inflate(R.layout.dialog_custom_split_size, null); // You'll need to create this layout
         builder.setView(dialogView);
 
-        final com.google.android.material.textfield.TextInputEditText inputEditText = dialogView.findViewById(R.id.custom_split_size_edittext); // ID in your dialog_custom_split_size.xml
-        final com.google.android.material.textview.MaterialTextView errorTextView = dialogView.findViewById(R.id.custom_split_size_error_textview); // ID in your dialog_custom_split_size.xml
+        final TextInputEditText inputEditText = dialogView.findViewById(R.id.custom_split_size_edittext); // ID in your dialog_custom_split_size.xml
+        final MaterialTextView errorTextView = dialogView.findViewById(R.id.custom_split_size_error_textview); // ID in your dialog_custom_split_size.xml
 
         int currentCustomSize = sharedPreferencesManager.getVideoSplitSizeMb();
         // If current value is one of the presets, default to 2048 for custom, otherwise use current custom.
@@ -3960,13 +3984,13 @@ public class SettingsFragment extends BaseFragment {
 
         AlertDialog alertDialog = builder.create();
 
-        inputEditText.addTextChangedListener(new android.text.TextWatcher() {
+        inputEditText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override
-            public void afterTextChanged(android.text.Editable s) {
+            public void afterTextChanged(Editable s) {
                 validateCustomSplitSizeInput(s.toString(), errorTextView, alertDialog.getButton(AlertDialog.BUTTON_POSITIVE));
             }
         });
@@ -4379,7 +4403,7 @@ public class SettingsFragment extends BaseFragment {
         }
         
         // Normal theme attribute resolution for other cases
-        android.util.TypedValue typedValue = new android.util.TypedValue();
+        TypedValue typedValue = new TypedValue();
         requireContext().getTheme().resolveAttribute(attr, typedValue, true);
         return typedValue.data;
     }
@@ -4437,13 +4461,14 @@ public class SettingsFragment extends BaseFragment {
 
     // --- App Icon Selection Logic ---
     private void setupAppIconButton(View view) {
+        // Find the button
         appIconChooseButton = view.findViewById(R.id.app_icon_choose_button);
         if (appIconChooseButton == null) return;
         
-        // Get currently selected app icon
+        // Get current app icon
         String currentIcon = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_ICON, Constants.APP_ICON_DEFAULT);
         
-        // Set the button text to show the current icon name
+        // Set button text based on current icon
         if (currentIcon.equals(Constants.APP_ICON_DEFAULT)) {
             appIconChooseButton.setText(getString(R.string.app_icon_default));
         } else if (currentIcon.equals(Constants.APP_ICON_ALTERNATIVE)) {
@@ -4470,8 +4495,14 @@ public class SettingsFragment extends BaseFragment {
             appIconChooseButton.setText(getString(R.string.app_icon_clock));
         } else if (currentIcon.equals(Constants.APP_ICON_WEATHER)) {
             appIconChooseButton.setText(getString(R.string.app_icon_weather));
+        } else if (currentIcon.equals(Constants.APP_ICON_FOOTBALL)) {
+            appIconChooseButton.setText(getString(R.string.app_icon_football));
+        } else if (currentIcon.equals(Constants.APP_ICON_CAR)) {
+            appIconChooseButton.setText(getString(R.string.app_icon_car));
+        } else if (currentIcon.equals(Constants.APP_ICON_JET)) {
+            appIconChooseButton.setText(getString(R.string.app_icon_jet));
         }
-        
+                
         // Set proper text color based on current theme
         String currentTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
         if ("Premium Gold".equals(currentTheme) || "Silent Forest".equals(currentTheme) || 
@@ -4487,255 +4518,31 @@ public class SettingsFragment extends BaseFragment {
     }
     
     /**
-     * Shows a dialog for selecting the app icon
+     * Shows a custom bottom sheet for selecting the app icon with grid layout and animations
      */
     private void showAppIconSelectionDialog() {
-        // Get current app icon
-        String currentIcon = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_ICON, Constants.APP_ICON_DEFAULT);
+        // Create and show the app icon selection bottom sheet
+        AppIconGridBottomSheet bottomSheet = new AppIconGridBottomSheet(
+                (iconKey, iconName) -> {
+                    // Update button text
+                    appIconChooseButton.setText(iconName);
+                    
+                    // Update app icon
+                    updateAppIcon(iconKey);
+                    
+                    // Add subtle vibration feedback
+                    vibrateTouch();
+                });
         
-        // Create dialog builder with themed style
-        MaterialAlertDialogBuilder builder = themedDialogBuilder(requireContext());
-        builder.setTitle(R.string.app_icon_dialog_title);
-        
-        // Icon options
-        String[] iconNames = {
-            getString(R.string.app_icon_default),
-            getString(R.string.app_icon_alternative),
-            getString(R.string.app_icon_faded),
-            getString(R.string.app_icon_palestine),
-            getString(R.string.app_icon_pakistan),
-            getString(R.string.app_icon_fadseclab),
-            getString(R.string.app_icon_noor),
-            getString(R.string.app_icon_bat),
-            getString(R.string.app_icon_redbinary),
-            getString(R.string.app_icon_notes),
-            getString(R.string.app_icon_calculator),
-            getString(R.string.app_icon_clock),
-            getString(R.string.app_icon_weather)
-        };
-        
-        // Create a custom list adapter for the app icons
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(requireContext(), R.layout.item_app_icon_option, R.id.app_icon_name, iconNames) {
-            @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
-                View view = super.getView(position, convertView, parent);
-                
-                // Get references to views
-                TextView iconName = view.findViewById(R.id.app_icon_name);
-                ImageView iconPreview = view.findViewById(R.id.app_icon_preview);
-                RadioButton radioButton = view.findViewById(R.id.app_icon_radio_button);
-                
-                // Set icon preview image
-                if (position == 0) {
-                    // Default/Original icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher);
-                } else if (position == 1) {
-                    // Detective icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_2);
-                } else if (position == 2) {
-                    // Faded icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_faded);
-                } else if (position == 3) {
-                    // Palestine/Sumud icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_palestine);
-                } else if (position == 4) {
-                    // Pakistan/MadeInPK icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_pakistan);
-                } else if (position == 5) {
-                    // FadSecLab/r00t icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_fadseclab);
-                } else if (position == 6) {
-                    // Noor icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_noor);
-                } else if (position == 7) {
-                    // FadBat icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_bat);
-                } else if (position == 8) {
-                    // Red Binary icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_redbinary);
-                } else if (position == 9) {
-                    // Notes icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_notes);
-                } else if (position == 10) {
-                    // Calculator icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_calculator);
-                } else if (position == 11) {
-                    // Clock icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_clock);
-                } else if (position == 12) {
-                    // Weather icon
-                    iconPreview.setImageResource(R.mipmap.ic_launcher_weather);
-                }
-                
-                // Set text color based on current theme
-                String currentTheme = sharedPreferencesManager.sharedPreferences.getString(
-                        Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
-                boolean isSnowVeilTheme = "Snow Veil".equals(currentTheme);
-                
-                if (isSnowVeilTheme) {
-                    iconName.setTextColor(Color.BLACK);
-                } else {
-                    iconName.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white));
-                }
-                
-                // Select current icon
-                String iconKey;
-                if (position == 0) {
-                    iconKey = Constants.APP_ICON_DEFAULT;
-                } else if (position == 1) {
-                    iconKey = Constants.APP_ICON_ALTERNATIVE;
-                } else if (position == 2) {
-                    iconKey = Constants.APP_ICON_FADED;
-                } else if (position == 3) {
-                    iconKey = Constants.APP_ICON_PALESTINE;
-                } else if (position == 4) {
-                    iconKey = Constants.APP_ICON_PAKISTAN;
-                } else if (position == 5) {
-                    iconKey = Constants.APP_ICON_FADSECLAB;
-                } else if (position == 6) {
-                    iconKey = Constants.APP_ICON_NOOR;
-                } else if (position == 7) {
-                    iconKey = Constants.APP_ICON_BAT;
-                } else if (position == 8) {
-                    iconKey = Constants.APP_ICON_REDBINARY;
-                } else if (position == 9) {
-                    iconKey = Constants.APP_ICON_NOTES;
-                } else if (position == 10) {
-                    iconKey = Constants.APP_ICON_CALCULATOR;
-                } else if (position == 11) {
-                    iconKey = Constants.APP_ICON_CLOCK;
-                } else {
-                    iconKey = Constants.APP_ICON_WEATHER;
-                }
-                radioButton.setChecked(iconKey.equals(currentIcon));
-                
-                return view;
-            }
-        };
-        
-        // Determine which item is currently selected (for initial selection in dialog)
-        int selectedPosition = 0; // Default position
-        if (Constants.APP_ICON_ALTERNATIVE.equals(currentIcon)) {
-            selectedPosition = 1;
-        } else if (Constants.APP_ICON_FADED.equals(currentIcon)) {
-            selectedPosition = 2;
-        } else if (Constants.APP_ICON_PALESTINE.equals(currentIcon)) {
-            selectedPosition = 3;
-        } else if (Constants.APP_ICON_PAKISTAN.equals(currentIcon)) {
-            selectedPosition = 4;
-        } else if (Constants.APP_ICON_FADSECLAB.equals(currentIcon)) {
-            selectedPosition = 5;
-        } else if (Constants.APP_ICON_NOOR.equals(currentIcon)) {
-            selectedPosition = 6;
-        } else if (Constants.APP_ICON_BAT.equals(currentIcon)) {
-            selectedPosition = 7;
-        } else if (Constants.APP_ICON_REDBINARY.equals(currentIcon)) {
-            selectedPosition = 8;
-        } else if (Constants.APP_ICON_NOTES.equals(currentIcon)) {
-            selectedPosition = 9;
-        } else if (Constants.APP_ICON_CALCULATOR.equals(currentIcon)) {
-            selectedPosition = 10;
-        } else if (Constants.APP_ICON_CLOCK.equals(currentIcon)) {
-            selectedPosition = 11;
-        } else if (Constants.APP_ICON_WEATHER.equals(currentIcon)) {
-            selectedPosition = 12;
-        }
-        
-        builder.setSingleChoiceItems(adapter, selectedPosition, (dialog, which) -> {
-            // Determine which icon was selected based on position
-            String newIcon = Constants.APP_ICON_DEFAULT; // Initialize with default value to avoid "might not have been initialized" error
-            
-            if (which == 0) {
-                newIcon = Constants.APP_ICON_DEFAULT;
-            } else if (which == 1) {
-                newIcon = Constants.APP_ICON_ALTERNATIVE;
-            } else if (which == 2) {
-                newIcon = Constants.APP_ICON_FADED;
-            } else if (which == 3) {
-                newIcon = Constants.APP_ICON_PALESTINE;
-            } else if (which == 4) {
-                newIcon = Constants.APP_ICON_PAKISTAN;
-            } else if (which == 5) {
-                newIcon = Constants.APP_ICON_FADSECLAB;
-            } else if (which == 6) {
-                newIcon = Constants.APP_ICON_NOOR;
-            } else if (which == 7) {
-                newIcon = Constants.APP_ICON_BAT;
-            } else if (which == 8) {
-                newIcon = Constants.APP_ICON_REDBINARY;
-            } else if (which == 9) {
-                newIcon = Constants.APP_ICON_NOTES;
-            } else if (which == 10) {
-                newIcon = Constants.APP_ICON_CALCULATOR;
-            } else if (which == 11) {
-                newIcon = Constants.APP_ICON_CLOCK;
-            } else if (which == 12) {
-                newIcon = Constants.APP_ICON_WEATHER;
-            }
-            
-            if (!newIcon.equals(currentIcon)) {
-                // Save the new icon preference
-                sharedPreferencesManager.sharedPreferences.edit()
-                        .putString(Constants.PREF_APP_ICON, newIcon)
-                        .apply();
-                
-                // Update button text
-                if (which == 0) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_default));
-                } else if (which == 1) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_alternative));
-                } else if (which == 2) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_faded));
-                } else if (which == 3) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_palestine));
-                } else if (which == 4) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_pakistan));
-                } else if (which == 5) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_fadseclab));
-                } else if (which == 6) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_noor));
-                } else if (which == 7) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_bat));
-                } else if (which == 8) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_redbinary));
-                } else if (which == 9) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_notes));
-                } else if (which == 10) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_calculator));
-                } else if (which == 11) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_clock));
-                } else if (which == 12) {
-                    appIconChooseButton.setText(getString(R.string.app_icon_weather));
-                }
-                
-                // Apply the icon change
-                updateAppIcon(newIcon);
-                
-                // Give feedback
-                vibrateTouch();
-                Toast.makeText(requireContext(), R.string.app_icon_changed, Toast.LENGTH_SHORT).show();
-            }
-            
-            dialog.dismiss();
-        });
-        
-        builder.setNegativeButton(R.string.universal_cancel, null);
-        
-        // Create and show dialog
-        AlertDialog dialog = builder.create();
-        dialog.setOnShowListener(dialogInterface -> {
-            // Apply appropriate button text colors for the current theme
-            setDialogButtonColors(dialog);
-        });
-        dialog.show();
+        bottomSheet.show(getParentFragmentManager(), "AppIconGridBottomSheet");
     }
-    
+
     /**
      * Updates the app icon by enabling/disabling activity-alias components
      * @param iconKey The key of the icon to enable
      */
     private void updateAppIcon(String iconKey) {
-        PackageManager pm = requireContext().getPackageManager();
+            PackageManager pm = requireContext().getPackageManager();
         
         // Component names for our activity aliases
         ComponentName defaultIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity");
@@ -4751,6 +4558,9 @@ public class SettingsFragment extends BaseFragment {
         ComponentName calculatorIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity.CalculatorIcon");
         ComponentName clockIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity.ClockIcon");
         ComponentName weatherIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity.WeatherIcon");
+        ComponentName footballIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity.FootballIcon");
+        ComponentName carIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity.CarIcon");
+        ComponentName jetIcon = new ComponentName(requireContext(), "com.fadcam.MainActivity.JetIcon");
         
         // Disable all icon activity-aliases first
         pm.setComponentEnabledSetting(defaultIcon, 
@@ -4792,58 +4602,79 @@ public class SettingsFragment extends BaseFragment {
         pm.setComponentEnabledSetting(weatherIcon, 
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
                 PackageManager.DONT_KILL_APP);
+        pm.setComponentEnabledSetting(footballIcon, 
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
+                PackageManager.DONT_KILL_APP);
+        pm.setComponentEnabledSetting(carIcon, 
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
+                PackageManager.DONT_KILL_APP);
+        pm.setComponentEnabledSetting(jetIcon, 
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 
+                PackageManager.DONT_KILL_APP);
         
         // Enable only the selected icon
         if (Constants.APP_ICON_DEFAULT.equals(iconKey)) {
             pm.setComponentEnabledSetting(defaultIcon, 
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                     PackageManager.DONT_KILL_APP);
         } else if (Constants.APP_ICON_ALTERNATIVE.equals(iconKey)) {
             pm.setComponentEnabledSetting(alternativeIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_FADED.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_FADED.equals(iconKey)) {
             pm.setComponentEnabledSetting(fadedIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_PALESTINE.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_PALESTINE.equals(iconKey)) {
             pm.setComponentEnabledSetting(palestineIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_PAKISTAN.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_PAKISTAN.equals(iconKey)) {
             pm.setComponentEnabledSetting(pakistanIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_FADSECLAB.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_FADSECLAB.equals(iconKey)) {
             pm.setComponentEnabledSetting(fadseclabIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_NOOR.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_NOOR.equals(iconKey)) {
             pm.setComponentEnabledSetting(noorIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_BAT.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_BAT.equals(iconKey)) {
             pm.setComponentEnabledSetting(batIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_REDBINARY.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_REDBINARY.equals(iconKey)) {
             pm.setComponentEnabledSetting(redbinaryIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_NOTES.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_NOTES.equals(iconKey)) {
             pm.setComponentEnabledSetting(notesIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_CALCULATOR.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_CALCULATOR.equals(iconKey)) {
             pm.setComponentEnabledSetting(calculatorIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_CLOCK.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_CLOCK.equals(iconKey)) {
             pm.setComponentEnabledSetting(clockIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
-        } else if (Constants.APP_ICON_WEATHER.equals(iconKey)) {
+                    } else if (Constants.APP_ICON_WEATHER.equals(iconKey)) {
             pm.setComponentEnabledSetting(weatherIcon, 
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP);
+        } else if (Constants.APP_ICON_FOOTBALL.equals(iconKey)) {
+            pm.setComponentEnabledSetting(footballIcon, 
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
+                    PackageManager.DONT_KILL_APP);
+        } else if (Constants.APP_ICON_CAR.equals(iconKey)) {
+            pm.setComponentEnabledSetting(carIcon, 
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
+                    PackageManager.DONT_KILL_APP);
+        } else if (Constants.APP_ICON_JET.equals(iconKey)) {
+            pm.setComponentEnabledSetting(jetIcon, 
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED, 
                     PackageManager.DONT_KILL_APP);
         }
