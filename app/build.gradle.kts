@@ -20,19 +20,18 @@ android {
         applicationId = "com.fadcam"
         minSdk = 24
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.2.1-beta"
+        versionCode = 11
+        versionName = "1.3.0"
 
 //        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            // Disable R8/ProGuard completely for testing
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
     
