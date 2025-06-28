@@ -110,7 +110,9 @@
     <string name="note_quailty">Επιλέξτε ποιότητα\n(Προεπιλογή: HD)</string>
     <string name="note_framerate">Επιλέξτε ρυθμό καρέ\n(Προεπιλογή: %1$d)</string>
     <string name="setting_codec_title">Κωδικοποιητής Βίντεο</string>
-    <string name="note_codec">Επιλέξτε κωδικοποιητή\n(Προεπιλογή: %1$s)</string>
+    <string name="note_codec">Επιλέξτε κωδικοποιητή
+(Προεπιλογή: %1$s)
+Συμβουλή: Με το H.265 (HEVC), μπορείτε να χρησιμοποιήσετε περίπου το μισό bitrate του H.264 για ίδια ποιότητα. Παράδειγμα: Για FHD, χρησιμοποιήστε 8 Mbps αντί για 16 Mbps.</string>
     <string name="setting_watermark">Υδατογράφημα</string>
     <string name="note_watermark">Επιλέξτε επιλογή υδατογραφήματος\n(Προεπιλογή: Σφραγίδα χρόνου με FadCam)</string>
     <string name="note_watermark_extra">Για γρήγορη αποθήκευση, επιλέξτε \'Χωρίς Υδατογράφημα\'. Προσθέτετε υδατογράφημα; Αξίζει η αναμονή, λίγο περισσότερο για επεξεργασία!</string>
@@ -600,4 +602,19 @@
     <string name="video_menu_upload_drive">Μεταφόρτωση στο Google Drive</string>
     <string name="toast_no_youtube_app">Η εφαρμογή YouTube δεν βρέθηκε</string>
     <string name="toast_no_drive_app">Η εφαρμογή Google Drive δεν βρέθηκε</string>
+    <string name="dialog_audio_noise_suppression_label">Καταστολή Θορύβου</string>
+
+    <string name="fix_video_menu_title">Επιδιόρθωση βίντεο (Επιδιόρθωση αναπαραγωγής)</string>
+    <string name="fix_video_repairing">Επιδιόρθωση… Αυτό μπορεί να διαρκέσει μερικά δευτερόλεπτα.</string>
+    <string name="fix_video_success">Το βίντεο επιδιορθώθηκε! Αποθηκεύτηκε ως: %1$s</string>
+    <string name="fix_video_fail">Η επιδιόρθωση απέτυχε. Δείτε τα αρχεία καταγραφής για λεπτομέρειες.</string>
+    <string name="fix_video_invalid">Μη έγκυρο αρχείο βίντεο.</string>
+    <string name="fix_video_file_not_exist">Το αρχείο δεν υπάρχει.</string>
+    <string name="fix_video_fixed_exists">Το αρχείο FIXED_ υπάρχει ήδη.</string>
+    <string name="fix_video_internal_only">Η επιδιόρθωση υποστηρίζεται μόνο για εσωτερικά ή προσβάσιμα αρχεία.</string>
+    <string name="fix_video_saf_copy_fail">Αποτυχία αντιγραφής βίντεο SAF για επιδιόρθωση.</string>
+    <string name="fix_video_saf_write_fail">Δεν είναι δυνατή η αποθήκευση του επιδιορθωμένου αρχείου στο φάκελο SAF. Αποθηκεύτηκε στην αποθήκευση της εφαρμογής.</string>
+    <string name="fix_video_saf_success">Το βίντεο επιδιορθώθηκε! Αποθηκεύτηκε ως: %1$s.</string>
+    <string name="fix_video_saf_export">Εξάγετε ή μοιραστείτε το επιδιορθωμένο αρχείο από την αποθήκευση της εφαρμογής αν χρειάζεται.</string>
+
 </resources>

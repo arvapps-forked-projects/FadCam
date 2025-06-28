@@ -74,7 +74,9 @@
     <string name="setting_quailty_title">Qualità video</string>
     <string name="note_quailty">Scelta di qualità\n(Predefinita: HD)</string>
     <string name="setting_codec_title">Codec Video</string>
-    <string name="note_codec">Scegli codec\n(Predefinito: %1$s)</string>
+    <string name="note_codec">Scegli codec
+(Predefinito: %1$s)
+Suggerimento: Con H.265 (HEVC) puoi usare circa la metà del bitrate di H.264 per la stessa qualità. Esempio: per FHD, usa 8 Mbps invece di 16 Mbps.</string>
     <string name="setting_watermark">Filigrana</string>
     <string name="note_watermark">Seleziona l\'opzione filigrana (predefinita: timestamp con Fadcam)</string>
     <string name="note_watermark_extra">Per un backup rapido, seleziona \'Nessuno\'. Aggiungere una filigrana? Vale la pena aspettare, solo un po\' più a lungo per l\'elaborazione !</string>
@@ -433,4 +435,19 @@ Consigliato: 192000 bps, 48000 Hz per la maggior parte degli utenti.</string>
     <string name="video_menu_upload_drive">Carica su Google Drive</string>
     <string name="toast_no_youtube_app">App YouTube non trovata</string>
     <string name="toast_no_drive_app">App Google Drive non trovata</string>
+
+    <string name="dialog_audio_noise_suppression_label">Soppressione del rumore</string>
+    <string name="fix_video_menu_title">Ripara Video (Ripristina Riproduzione)</string>
+    <string name="fix_video_repairing">Riparazione in corso… Potrebbe richiedere alcuni secondi.</string>
+    <string name="fix_video_success">Video riparato! Salvato come: %1$s</string>
+    <string name="fix_video_fail">Riparazione fallita. Vedi i log per i dettagli.</string>
+    <string name="fix_video_invalid">File video non valido.</string>
+    <string name="fix_video_file_not_exist">Il file non esiste.</string>
+    <string name="fix_video_fixed_exists">Il file FIXED_ esiste già.</string>
+    <string name="fix_video_internal_only">La riparazione è supportata solo per file interni o accessibili.</string>
+    <string name="fix_video_saf_copy_fail">Copia del video SAF per la riparazione non riuscita.</string>
+    <string name="fix_video_saf_write_fail">Impossibile scrivere il file riparato nella cartella SAF. Salvato nella memoria dell\'app.</string>
+    <string name="fix_video_saf_success">Video riparato! Salvato come: %1$s.</string>
+    <string name="fix_video_saf_export">Esporta o condividi il file riparato dalla memoria dell\'app se necessario.</string>
+
 </resources>
