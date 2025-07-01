@@ -174,6 +174,8 @@ FadCam is developed with the goal of providing a powerful, privacy-focused tool 
 - [tech_overwatch on Insta](https://www.instagram.com/reel/DJ6Nn5uNHxq/)
 - [Wuincy Tran on YouTube](https://youtu.be/gLY1SstSwgo?si=_h3eyb0Zh3oo14jK)
 - [El Androide Feliz on YouTube](https://youtu.be/5SCl5X_miTc?si=E44ej0ZfPGTz3HfR)
+- [msn.com](https://www.msn.com/es-es/noticias/tecnologia/esta-app-convierte-tu-m%C3%B3vil-en-una-c%C3%A1mara-discreta-graba-v%C3%ADdeo-sin-encender-la-pantalla/ar-AA1Hf4dR)
+- [softonic on X](https://x.com/softonic/status/1939598582643830840)
 <!-- - [Someone in comments mentioned about fadcam, on TikTok](https://www.tiktok.com/@unijpeg/video/7438464230807948600) -->
 <!-- - [Tech Knowing](https://youtu.be/5ZqjensX_XQ?si=iXIY4tMf1iBW9zoR) -->
 <!-- - [EI Tech - Emanuele Iafulla on YouTube](https://youtu.be/n8k9J4GnoCY?si=D6RVGSD832jOFhiQ) -->
@@ -241,6 +243,7 @@ FadCam is developed with the goal of providing a powerful, privacy-focused tool 
 - [xatakandroid.com](https://www.xatakandroid.com/aplicaciones-android/esta-app-convierte-tu-movil-camara-discreta-graba-video-encender-pantalla)
 - [blog.csdn.net](https://blog.csdn.net/2501_91832086/article/details/148797756)
 - [lewz.cn](https://www.lewz.cn/jprj/10448.html)
+- [ruanyazyk.com](https://ruanyazyk.com/tools/media/imageProduction.html#fadcam)
 <!-- - https://www.cityrumors.it/tecnologia/il-trucco-per-fare-video-di-nascosto-con-il-tuo-smartphone-tutti-lo-stanno-provando.html -->
 
 
