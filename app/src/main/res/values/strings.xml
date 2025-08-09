@@ -20,7 +20,7 @@
     <string name="send_email">Send email</string>
     <string name="join_community">Join community for help, sharing ideas, and future app updates</string>
     <string name="privacy_information">Privacy Information</string>
-    <string name="copyright_info"> 2024-2025 https://fadedhood.github.io/fadcam\nLicensed under GPL-3.0</string>
+    <string name="copyright_info"> 2024-2025 https://fadcam.faded.dev\nLicensed under GPL-3.0</string>
     <string-array name="video_resolutions_keys">
         <item>7680x4320</item> <!-- 8K -->
         <item>3840x2160</item> <!-- 4K -->
@@ -111,8 +111,10 @@
     <string name="button_settings_cam_front">Front</string>
     <string name="setting_quailty_title">Video Quality</string>
     <string name="setting_framerate_title">Video Framerate</string>
+    <string name="setting_zoom_ratio_title">Zoom Ratio</string>
     <string name="note_quailty">Choose quality\n(Default: HD)</string>
     <string name="note_framerate">Choose framerate\n(Default: %1$d)</string>
+    <string name="note_zoom_ratio">Choose zoom ratio\n(Default: %1$.1fx - no zoom)</string>
     <string name="setting_codec_title">Video Codec</string>
     <string name="note_codec">Choose codec\n(Default: %1$s)\nTip: With H.265 (HEVC), you can use about half the bitrate of H.264 for the same quality. Example: For FHD, use 8 Mbps instead of 16 Mbps.</string>
     <string name="setting_watermark">Watermark</string>
@@ -365,6 +367,9 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="trash_empty_toast_message">No items to delete.</string>
     <string name="trash_emptied_toast">All items deleted.</string>
     <string name="trash_items_deleted_toast">%1$d item(s) deleted permanently.</string>
+    <!-- Auto-delete (Trash) -->
+    <string name="auto_delete_immediate">Immediate</string>
+    <string name="trash_auto_delete_info_immediate">Items are deleted immediately.</string>
     <string name="trash_error_deleting_items_toast">Error deleting items.</string>
     <string name="trash_dialog_empty_all_title">Delete All Items?</string>
     <string name="trash_button_empty_all_action">Delete All</string>

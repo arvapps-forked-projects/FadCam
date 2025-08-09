@@ -1,4 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="auto_delete_immediate">Anında</string>
+    <string name="trash_auto_delete_info_immediate">Öğeler anında silinir.</string>
     <string name="check_for_updates">Güncellemeleri Kontrol Et</string>
     <string name="fadsec_info">FadCam, FadSec Lab paketinin bir parçasıdır. Daha fazla bilgi için aşağıda \'kaynak kodu görüntüle\' seçeneğine tıklayın.</string>
 
@@ -16,7 +18,7 @@
     <string name="send_email">E-posta gönder</string>
     <string name="join_community">Yardım, fikir paylaşımı ve gelecek uygulama güncellemeleri için topluluğa katıl</string>
     <string name="privacy_information">Gizlilik Bilgileri</string>
-    <string name="copyright_info"> 2024 https://fadedhood.github.io/fadcam\nGPL-3.0 lisansı altında</string>
+    <string name="copyright_info"> 2024 https://fadcam.faded.dev\nGPL-3.0 lisansı altında</string>
     <string-array name="video_resolutions_keys">
         <item>7680x4320</item> <!-- 8K -->
         <item>3840x2160</item> <!-- 4K -->

@@ -32,6 +32,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -64,8 +65,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Add Intent import
@@ -675,8 +678,27 @@ public class RecordingService extends Service {
         String cameraToOpenId = null;
 
         try {
-            String[] availableCameraIds = cameraManager.getCameraIdList();
-            Log.d(TAG, "Available Camera IDs: " + Arrays.toString(availableCameraIds));
+            String[] basicCameraIds = cameraManager.getCameraIdList();
+            Set<String> allAvailableCameraIds = new HashSet<>(Arrays.asList(basicCameraIds));
+            
+            // On Android P+, also include physical cameras from logical cameras
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                for (String id : basicCameraIds) {
+                    try {
+                        CameraCharacteristics chars = cameraManager.getCameraCharacteristics(id);
+                        Set<String> physicalIds = chars.getPhysicalCameraIds();
+                        if (physicalIds != null && !physicalIds.isEmpty()) {
+                            allAvailableCameraIds.addAll(physicalIds);
+                            Log.d(TAG, "Added physical camera IDs from logical camera " + id + ": " + physicalIds);
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "Error checking physical IDs for camera " + id, e);
+                    }
+                }
+            }
+            
+            String[] availableCameraIds = allAvailableCameraIds.toArray(new String[0]);
+            Log.d(TAG, "Available Camera IDs (including physical): " + Arrays.toString(availableCameraIds));
 
             if (selectedType == CameraType.FRONT) {
                 for (String id : availableCameraIds) {
@@ -692,18 +714,42 @@ public class RecordingService extends Service {
                 String preferredBackId = sharedPreferencesManager.getSelectedBackCameraId();
                 Log.d(TAG,"Preferred BACK camera ID from prefs: " + preferredBackId);
                 boolean isValidAndAvailable = false;
+                
+                // First, check if the preferred camera ID exists in our available cameras
                 for(String id : availableCameraIds){
                     if(id.equals(preferredBackId)){
-                        CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                        Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                        if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
-                            isValidAndAvailable = true;
-                            break;
-            } else {
-                            Log.w(TAG,"Preferred back ID "+preferredBackId+" exists but is not LENS_FACING_BACK!");
+                        try {
+                            CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                            Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                            
+                            // For physical cameras, they might not have LENS_FACING_BACK set
+                            // but if they're in our availableCameraIds and were detected as back cameras
+                            // in SettingsFragment, we should trust that they're valid back cameras
+                            if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
+                                isValidAndAvailable = true;
+                                Log.d(TAG, "Preferred back camera ID '" + preferredBackId + "' validated with LENS_FACING_BACK");
+                                break;
+                            } else {
+                                // For physical cameras, check if this ID was part of a logical back camera
+                                // If it's in our availableCameraIds, it means it was detected as a back camera
+                                Log.w(TAG,"Preferred back ID "+preferredBackId+" exists but LENS_FACING is: " + facing);
+                                
+                                // Additional validation: check if this is a physical camera from a logical back camera
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                    boolean isPhysicalBackCamera = isPhysicalBackCamera(preferredBackId, basicCameraIds, cameraManager);
+                                    if (isPhysicalBackCamera) {
+                                        isValidAndAvailable = true;
+                                        Log.d(TAG, "Preferred camera ID '" + preferredBackId + "' validated as physical back camera");
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (CameraAccessException e) {
+                            Log.e(TAG, "Error getting characteristics for preferred camera " + preferredBackId, e);
                         }
                     }
                 }
+                
                 if (isValidAndAvailable) {
                     cameraToOpenId = preferredBackId;
                     Log.d(TAG, "Using preferred BACK camera ID: " + cameraToOpenId);
@@ -1130,9 +1176,11 @@ public class RecordingService extends Service {
                 // ... (same Samsung/Huawei/high-speed logic as before)
             }
             if (useHighSpeedSession) {
-                createHighSpeedSession(surfaces, characteristics, targetFrameRate);
+                // ----- Fix Start for this method(createCameraPreviewSession)-----
+                createHighSpeedSession(surfaces, characteristics, targetFrameRate, cameraType);
             } else {
-                createStandardSession(surfaces, targetFrameRate, characteristics);
+                createStandardSession(surfaces, targetFrameRate, characteristics, cameraType);
+                // ----- Fix Ended for this method(createCameraPreviewSession)-----
             }
             return;
         }
@@ -1194,12 +1242,12 @@ public class RecordingService extends Service {
                         // For SM-G990E (S21 FE Exynos) specifically, or other devices known to work with high-speed sessions
                         Log.d(TAG, "Device status is HIGH_SPEED_COMPATIBLE. Attempting constrained high-speed session for " + targetFrameRate + "fps.");
                         useHighSpeedSession = true;
-                        createHighSpeedSession(surfaces, characteristics, targetFrameRate);
+                        createHighSpeedSession(surfaces, characteristics, targetFrameRate, cameraType);
                     } else if (fpsStatus == SamsungFrameRateHelper.SamsungFpsStatus.REQUIRES_VENDOR_KEYS || fpsStatus == SamsungFrameRateHelper.SamsungFpsStatus.FULLY_COMPATIBLE || fpsStatus == SamsungFrameRateHelper.SamsungFpsStatus.UNKNOWN) {
                         // For other Samsung devices that use vendor keys in standard session, or unknown devices
                         Log.d(TAG, "Device status is REQUIRES_VENDOR_KEYS or FULLY_COMPATIBLE or UNKNOWN. Attempting standard session with Samsung vendor keys for " + targetFrameRate + "fps.");
                         useHighSpeedSession = false; // Ensure it's a standard session
-                    createStandardSession(surfaces, targetFrameRate, characteristics);
+                        createStandardSession(surfaces, targetFrameRate, characteristics, cameraType);
                     } else if (fpsStatus == SamsungFrameRateHelper.SamsungFpsStatus.KNOWN_INCOMPATIBLE) {
                         // For known incompatible Samsung devices, do not attempt 60fps+
                         Log.e(TAG, "Device is KNOWN_INCOMPATIBLE with 60fps+. Blocking request.");
@@ -1238,10 +1286,10 @@ public class RecordingService extends Service {
             // Create the appropriate type of session
             if (useHighSpeedSession) {
                 // For high-speed sessions
-                createHighSpeedSession(surfaces, characteristics, targetFrameRate);
+                createHighSpeedSession(surfaces, characteristics, targetFrameRate, cameraType);
             } else {
                 // Create a standard session with appropriate frame rate settings
-                createStandardSession(surfaces, targetFrameRate, characteristics);
+                createStandardSession(surfaces, targetFrameRate, characteristics, cameraType);
             }
         } catch (CameraAccessException e) {
             Log.e(TAG, "createCameraPreviewSession: Camera Access Exception", e);
@@ -1391,7 +1439,7 @@ public class RecordingService extends Service {
                 
                 // Create standard session as fallback
                 if (!surfaces.isEmpty()) {
-                    createStandardSession(surfaces, targetFrameRate, characteristics);
+                    createStandardSession(surfaces, targetFrameRate, characteristics, cameraType);
                 } else {
                     Log.e(TAG, "Failed to create surfaces for fallback session");
                     stopRecording();
@@ -2166,7 +2214,7 @@ public class RecordingService extends Service {
      * Creates a high-speed constrained capture session for 60fps+ recording
      */
     private void createHighSpeedSession(List<Surface> surfaces, CameraCharacteristics characteristics, 
-                                       int targetFrameRate) {
+                                        int targetFrameRate, CameraType cameraType) {
         try {
             // For high-speed recording, we need a constrained high-speed capture session
             Log.d(TAG, "Creating constrained high-speed session for " + targetFrameRate + "fps");
@@ -2178,7 +2226,7 @@ public class RecordingService extends Service {
             if (highSpeedSize == null) {
                 Log.d(TAG, "No suitable high-speed size found");
                 // Fallback to standard session
-                createStandardSession(surfaces, targetFrameRate, characteristics);
+                createStandardSession(surfaces, targetFrameRate, characteristics, cameraType);
                 return;
             }
             
@@ -2189,7 +2237,7 @@ public class RecordingService extends Service {
             if (captureRequestBuilder == null) {
                 Log.d(TAG, "Failed to create high-speed request builder");
                 // Fallback to standard session
-                createStandardSession(surfaces, targetFrameRate, characteristics);
+                createStandardSession(surfaces, targetFrameRate, characteristics, cameraType);
                 return;
             }
             
@@ -2197,6 +2245,9 @@ public class RecordingService extends Service {
             for (Surface surface : surfaces) {
                 captureRequestBuilder.addTarget(surface);
             }
+
+            // Apply zoom settings for back camera
+            applyZoomSettings(captureRequestBuilder, cameraType);
             
             // Set torch mode if enabled
             if (isRecordingTorchEnabled) {
@@ -2216,7 +2267,7 @@ public class RecordingService extends Service {
             Log.e(TAG, "Failed to create high-speed session", e);
             // Fallback to standard session
             try {
-                createStandardSession(surfaces, targetFrameRate, characteristics);
+                createStandardSession(surfaces, targetFrameRate, characteristics, cameraType);
             } catch (Exception e2) {
                 Log.e(TAG, "Failed to create fallback standard session", e2);
                 stopRecording();
@@ -2228,7 +2279,7 @@ public class RecordingService extends Service {
      * Fallback to create a standard session with the best possible frame rate settings
      */
     private void createStandardSession(List<Surface> surfaces, int targetFrameRate, 
-                                     CameraCharacteristics characteristics) {
+                                       CameraCharacteristics characteristics, CameraType cameraType) {
         try {
             Log.d(TAG, "Creating standard session with optimized frame rate settings");
             
@@ -2242,6 +2293,9 @@ public class RecordingService extends Service {
             
             // Apply frame rate settings
             applyFrameRateSettings(captureRequestBuilder, targetFrameRate, characteristics);
+
+            // Apply zoom settings for back camera
+            applyZoomSettings(captureRequestBuilder, cameraType);
             
             // Set torch mode if enabled
             if (isRecordingTorchEnabled) {
@@ -2276,6 +2330,20 @@ public class RecordingService extends Service {
         if (DeviceHelper.isHuawei() && targetFrameRate >= 60) {
             HuaweiFrameRateHelper.applyFrameRateSettings(builder, targetFrameRate);
         }
+    }
+
+    /**
+     * Apply zoom settings for the specified camera type
+     */
+    private void applyZoomSettings(CaptureRequest.Builder builder, CameraType cameraType) {
+        // ----- Fix Start for this method(applyZoomSettings)-----
+        // Get zoom ratio from settings for the specific camera type
+        float zoomRatio = sharedPreferencesManager.getSpecificZoomRatio(cameraType);
+        
+        // Apply zoom ratio to the capture request
+        builder.set(CaptureRequest.CONTROL_ZOOM_RATIO, zoomRatio);
+        Log.d(TAG, "Applied zoom ratio " + zoomRatio + " for " + cameraType + " camera");
+        // ----- Fix Ended for this method(applyZoomSettings)-----
     }
 
     /**
@@ -2688,6 +2756,38 @@ public class RecordingService extends Service {
         Log.d(TAG, "Started camera reconnection attempts (infinite)");
     }
     
+    /**
+     * Helper method to check if a camera ID is a physical camera from a logical back camera
+     * This is needed because physical cameras might not have LENS_FACING_BACK set properly
+     * 
+     * @param cameraId The camera ID to check
+     * @param basicCameraIds Array of basic camera IDs from getCameraIdList()
+     * @param cameraManager The camera manager instance
+     * @return true if this is a physical camera from a logical back camera
+     */
+    @RequiresApi(api = Build.VERSION_CODES.P)
+    private boolean isPhysicalBackCamera(String cameraId, String[] basicCameraIds, CameraManager cameraManager) {
+        try {
+            // Check if this camera ID is a physical camera from any logical back camera
+            for (String logicalId : basicCameraIds) {
+                CameraCharacteristics logicalChars = cameraManager.getCameraCharacteristics(logicalId);
+                Integer logicalFacing = logicalChars.get(CameraCharacteristics.LENS_FACING);
+                
+                // Only check logical cameras that are back-facing
+                if (logicalFacing != null && logicalFacing == CameraCharacteristics.LENS_FACING_BACK) {
+                    Set<String> physicalIds = logicalChars.getPhysicalCameraIds();
+                    if (physicalIds != null && physicalIds.contains(cameraId)) {
+                        Log.d(TAG, "Camera ID '" + cameraId + "' is a physical camera from logical back camera '" + logicalId + "'");
+                        return true;
+                    }
+                }
+            }
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "Error checking if camera " + cameraId + " is a physical back camera", e);
+        }
+        return false;
+    }
+
     /**
      * Attempts to reconnect to the camera
      * 
