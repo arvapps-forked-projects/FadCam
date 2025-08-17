@@ -82,6 +82,10 @@ public abstract class Constants {
     public static final boolean DEFAULT_RECORD_AUDIO = true;
     public static final int DEFAULT_AUDIO_BITRATE = 192000; // 192 kbps stereo AAC
     public static final int DEFAULT_AUDIO_SAMPLING_RATE = 48000; // 48 kHz
+    // -------------- Fix Start for this class(Constants_video_bitrate_defaults)-----------
+    public static final String PREF_VIDEO_BITRATE = "video_bitrate"; // stored in raw bps
+    public static final int DEFAULT_VIDEO_BITRATE = 8_000_000; // 8 Mbps default
+    // -------------- Fix Ended for this class(Constants_video_bitrate_defaults)-----------
 
     public static final String INTENT_ACTION_TOGGLE_RECORDING_TORCH = "com.fadcam.TOGGLE_RECORDING_TORCH";
     // Broadcast action sent by RecordingService when video processing is done
@@ -103,6 +107,13 @@ public abstract class Constants {
 
     // Extra key for the URI of the file being processed (usually the temp file)
     public static final String EXTRA_PROCESSING_URI_STRING = "com.fadcam.EXTRA_PROCESSING_URI_STRING";
+
+    // -------------- Fix Start: Add constant for recording failure broadcast -----------
+    // Broadcast action sent by RecordingService when it fails to start
+    public static final String ACTION_RECORDING_FAILED = "com.fadcam.RECORDING_FAILED";
+    public static final String EXTRA_ERROR_MESSAGE = "com.fadcam.EXTRA_ERROR_MESSAGE";
+    public static final String EXTRA_STACK_TRACE = "com.fadcam.EXTRA_STACK_TRACE";
+    // -------------- Fix Ended for this constant -----------
 
     // ----- Fix Start for this class (Constants_video_splitting_broadcast) -----
     // Broadcast action sent by RecordingService when a video segment is complete (due to splitting)
@@ -163,4 +174,14 @@ public abstract class Constants {
     public static final String APP_ICON_CAR = "car"; // Car icon
     public static final String APP_ICON_JET = "jet"; // Jet fighter icon
     public static final String APP_ICON_MINIMAL = "minimal";
+    public static final String APP_ICON_BLACK = "black"; // Full black icon
+    // Quick speed preference key for press-and-hold quick speed
+    public static final String PREF_QUICK_SPEED = "pref_quick_speed";
+    public static final float DEFAULT_QUICK_SPEED = 2.0f;
+    // Mute playback preference
+    public static final String PREF_PLAYBACK_MUTED = "pref_playback_muted";
+    // Keep screen awake during video playback
+    public static final String PREF_PLAYER_KEEP_SCREEN_ON = "pref_player_keep_screen_on"; // default true
+    // Background playback preference
+    public static final String PREF_PLAYER_BACKGROUND_PLAYBACK = "pref_player_background_playback"; // default false
 }
