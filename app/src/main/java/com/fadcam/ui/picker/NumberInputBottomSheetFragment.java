@@ -35,6 +35,7 @@ public class NumberInputBottomSheetFragment extends BottomSheetDialogFragment {
     public static final String ARG_DESCRIPTION = "description"; // static helper/description shown above dynamic hints
     public static final String ARG_DEFAULT_VALUE = "default_value"; // value to reset to
     public static final String ARG_SHOW_RESET = "show_reset"; // boolean
+    public static final String ARG_ENABLE_TIMER_CALC = "enable_timer_calc"; // boolean, when true shows minutes→hours calc UI for timer sheet only
     public static final String RESULT_NUMBER = "number_value";
 
     public static NumberInputBottomSheetFragment newInstance(String title, int min, int max, int value, String hint,
@@ -57,6 +58,7 @@ public class NumberInputBottomSheetFragment extends BottomSheetDialogFragment {
     }
 
     private int min, max, value, lowTh, highTh, defaultValue; private String title, hint, lowMsg, highMsg, resultKey; private EditText field; private TextView helper; private Button ok; private TextView descriptionView; private String descriptionText; private Button resetButton; private boolean showReset;
+    private TextView calcView; private boolean enableTimerCalc;
 
     @Nullable @Override public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.number_input_bottom_sheet, container, false);
@@ -79,6 +81,7 @@ public class NumberInputBottomSheetFragment extends BottomSheetDialogFragment {
             resultKey = a.getString(ARG_RESULT_KEY, "number_input_result");
             defaultValue = a.getInt(ARG_DEFAULT_VALUE, value);
             showReset = a.getBoolean(ARG_SHOW_RESET, false);
+            enableTimerCalc = a.getBoolean(ARG_ENABLE_TIMER_CALC, false);
             descriptionText = a.getString(ARG_DESCRIPTION, null);
         }
         TextView titleView = view.findViewById(R.id.number_input_title);
@@ -90,13 +93,41 @@ public class NumberInputBottomSheetFragment extends BottomSheetDialogFragment {
         resetButton = view.findViewById(R.id.number_input_reset);
         if(titleView!=null) titleView.setText(title);
         if(field!=null){ field.setHint(hint); field.setText(String.valueOf(value)); field.setSelection(field.getText().length()); }
-        if(descriptionView!=null){ if(descriptionText!=null && !descriptionText.isEmpty()){ descriptionView.setText(descriptionText); descriptionView.setVisibility(View.VISIBLE);} else { descriptionView.setVisibility(View.GONE);} }
+            if(descriptionView!=null){ 
+                if(descriptionText!=null && !descriptionText.isEmpty()){ 
+                    descriptionView.setText(descriptionText); 
+                    descriptionView.setVisibility(View.VISIBLE);
+                } else { 
+                    descriptionView.setVisibility(View.GONE); 
+                } 
+            }
         if(resetButton!=null){
             if(showReset){
                 resetButton.setVisibility(View.VISIBLE);
                 resetButton.setOnClickListener(v-> { field.setText(String.valueOf(defaultValue)); });
             } else { resetButton.setVisibility(View.GONE); }
         }
+            // Set an initial helper; keep the description in its own view to avoid duplication
+            if(helper!=null){ helper.setText(getString(R.string.number_input_default_helper)); }
+            calcView = view.findViewById(R.id.number_input_calc);
+            // Optional: timer calculator (minutes → hours). Only enable when requested by caller.
+            if(calcView!=null){
+                if(enableTimerCalc && field!=null){
+                    field.addTextChangedListener(new android.text.TextWatcher(){ public void beforeTextChanged(CharSequence s,int a,int b,int c){} public void onTextChanged(CharSequence s,int a,int b,int c){
+                            try{
+                                String txt = s.toString().trim();
+                                if(txt.isEmpty()){ calcView.setVisibility(View.GONE); return; }
+                                int minutes = Integer.parseInt(txt);
+                                double hours = minutes / 60.0;
+                                String human = String.format(getResources().getString(R.string.timer_custom_calc_format), minutes+" min", hours);
+                                calcView.setText(human);
+                                calcView.setVisibility(View.VISIBLE);
+                            }catch(Exception e){ calcView.setVisibility(View.GONE); }
+                    } public void afterTextChanged(android.text.Editable e){} });
+                } else {
+                    calcView.setVisibility(View.GONE);
+                }
+            }
         cancel.setOnClickListener(v-> dismiss());
         ok.setOnClickListener(v->{
             Integer parsed = parseField();
@@ -117,7 +148,7 @@ public class NumberInputBottomSheetFragment extends BottomSheetDialogFragment {
     // Threshold hints
     if(lowTh>0 && val<lowTh && !lowMsg.isEmpty()){ helper.setText(lowMsg); helper.setTextColor(getResources().getColor(android.R.color.holo_orange_light, requireContext().getTheme())); }
     else if(highTh>0 && val>highTh && !highMsg.isEmpty()){ helper.setText(highMsg); helper.setTextColor(getResources().getColor(android.R.color.holo_red_light, requireContext().getTheme())); }
-    else { helper.setText(getString(R.string.universal_ok)); helper.setTextColor(getResources().getColor(android.R.color.holo_green_light, requireContext().getTheme())); }
+    else { helper.setText(getString(R.string.number_input_ok_helper)); helper.setTextColor(getResources().getColor(android.R.color.holo_green_light, requireContext().getTheme())); }
         ok.setEnabled(true);
     }
 }

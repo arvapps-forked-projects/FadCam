@@ -30,9 +30,12 @@ public class VideoPlayerSettingsFragment extends Fragment {
         TextView subQuick = root.findViewById(R.id.sub_quick_speed);
     LinearLayout rowKeepOn = root.findViewById(R.id.row_keep_screen_on);
     TextView subKeepOn = root.findViewById(R.id.sub_keep_screen_on);
-    LinearLayout rowBgPlayback = root.findViewById(R.id.row_background_playback);
+        LinearLayout rowBgPlayback = root.findViewById(R.id.row_background_playback);
+    LinearLayout rowBgTimer = root.findViewById(R.id.row_background_playback_timer);
     TextView subBgPlayback = root.findViewById(R.id.sub_background_playback);
+    TextView subBgTimer = root.findViewById(R.id.sub_background_playback_timer);
     TextView subMute = root.findViewById(R.id.sub_mute_playback);
+    TextView subAudioWaveform = root.findViewById(R.id.sub_audio_waveform);
 
         // Subtitles
     // Show saved default playback speed (defaults to Normal 1x)
@@ -41,20 +44,51 @@ public class VideoPlayerSettingsFragment extends Fragment {
     subPlayback.setText(getPlaybackLabel(defaultPlayback));
         float quick = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).getQuickSpeed();
         subQuick.setText(formatSpeed(quick));
+    // Seek amount subtitle
+    int seekSec = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).getPlayerSeekSeconds();
+    TextView subSeek = root.findViewById(R.id.sub_seek_amount);
+    if(subSeek!=null) subSeek.setText(getString(R.string.seek_amount_subtitle, seekSec));
     boolean muted = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).isPlaybackMuted();
     subMute.setText(muted? getString(R.string.universal_enable): getString(R.string.universal_disable));
+    boolean waveformEnabled = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).isAudioWaveformEnabled();
+    if(subAudioWaveform!=null) subAudioWaveform.setText(waveformEnabled? getString(R.string.universal_enable): getString(R.string.universal_disable));
     boolean keepOn = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).isPlayerKeepScreenOn();
     if (subKeepOn != null) subKeepOn.setText(keepOn? getString(R.string.universal_enable): getString(R.string.universal_disable));
     boolean bg = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).isBackgroundPlaybackEnabled();
     if (subBgPlayback != null) subBgPlayback.setText(bg? getString(R.string.universal_enable): getString(R.string.universal_disable));
+    // Initialize timer subtitle from saved preference so current selection is visible
+    if(subBgTimer!=null){
+        int savedSeconds = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).getBackgroundPlaybackTimerSeconds();
+        if(savedSeconds==0) subBgTimer.setText(getString(R.string.timer_off_short));
+        else if(savedSeconds<60) subBgTimer.setText(getString(R.string.timer_seconds_short, savedSeconds));
+        else if(savedSeconds<3600) subBgTimer.setText(getString(R.string.timer_minutes_short, savedSeconds/60));
+        else subBgTimer.setText(getString(R.string.timer_hours_short, savedSeconds/3600));
+    }
+    // Set timer row enabled/disabled visual state and click behavior
+    if(rowBgTimer!=null){ rowBgTimer.setEnabled(bg); rowBgTimer.setAlpha(bg?1f:0.4f); }
+    if(subBgTimer!=null){ /* subtitle already updated elsewhere */ }
 
         rowPlayback.setOnClickListener(v -> showPlaybackSpeedPicker());
         rowQuick.setOnClickListener(v -> showQuickSpeedPicker());
+    View rowSeek = root.findViewById(R.id.row_seek_amount);
+    if(rowSeek!=null){ rowSeek.setOnClickListener(v -> showSeekAmountPicker()); }
     if (rowKeepOn != null) rowKeepOn.setOnClickListener(v -> showKeepScreenOnSwitchSheet());
     if (rowBgPlayback != null) rowBgPlayback.setOnClickListener(v -> showBackgroundPlaybackSwitchSheet());
+    if (rowBgTimer != null) rowBgTimer.setOnClickListener(v -> {
+        boolean bgEnabled = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).isBackgroundPlaybackEnabled();
+        if(!bgEnabled){ // subtle bounce to indicate disabled
+            rowBgTimer.animate().scaleX(0.98f).scaleY(0.98f).setDuration(80).withEndAction(() -> rowBgTimer.animate().scaleX(1f).scaleY(1f).setDuration(80)).start();
+            android.widget.Toast.makeText(requireContext(), getString(R.string.timer_disabled_hint), android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        showBackgroundPlaybackTimerPicker();
+    });
         // Mute switch row via picker with switch
         View rowMute = root.findViewById(R.id.row_mute_playback);
         if(rowMute!=null){ rowMute.setOnClickListener(v -> showMuteSwitchSheet()); }
+        // Audio waveform switch row via picker with switch
+        View rowAudioWaveform = root.findViewById(R.id.row_audio_waveform);
+        if(rowAudioWaveform!=null){ rowAudioWaveform.setOnClickListener(v -> showAudioWaveformSwitchSheet()); }
     View back = root.findViewById(R.id.back_button);
     if(back!=null){ back.setOnClickListener(v -> OverlayNavUtil.dismiss(requireActivity())); }
         // -------------- Fix Ended for this method(onCreateView)-----------
@@ -95,14 +129,95 @@ public class VideoPlayerSettingsFragment extends Fragment {
                 if(root!=null){
                     TextView sub = root.findViewById(R.id.sub_background_playback);
                     if(sub!=null){ sub.setText(state? getString(R.string.universal_enable): getString(R.string.universal_disable)); }
+                    // Update timer row enabled state
+                    LinearLayout rowTimer = root.findViewById(R.id.row_background_playback_timer);
+                    TextView subTimer = root.findViewById(R.id.sub_background_playback_timer);
+                    if(rowTimer!=null){ rowTimer.setEnabled(state); rowTimer.setAlpha(state?1f:0.4f); }
+                    if(subTimer!=null){ /* keep existing subtitle text */ }
                 }
             }
         });
         String helper = getString(R.string.background_playback_helper_picker);
-        com.fadcam.ui.picker.PickerBottomSheetFragment sheet = com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceWithSwitch(
-                getString(R.string.background_playback_title), new java.util.ArrayList<>(), null, RK, helper,
-                getString(R.string.background_playback_title), enabled);
+    // Make the timer row (id: row_background_playback_timer) dependent on this switch
+    java.util.ArrayList<String> deps = new java.util.ArrayList<>(); deps.add("row_background_playback_timer");
+    com.fadcam.ui.picker.PickerBottomSheetFragment sheet = com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceWithSwitchDependencies(
+        getString(R.string.background_playback_title), new java.util.ArrayList<>(), null, RK, helper,
+        getString(R.string.background_playback_title), enabled, deps);
         sheet.show(getParentFragmentManager(), "vps_background_playback_switch_sheet");
+    }
+
+    private void showBackgroundPlaybackTimerPicker(){
+        final String RK = "rk_vps_background_playback_timer";
+        // Preset choices in seconds: Off (0), 30s, 1m, 5m, 15m, 30m, 1h
+    java.util.ArrayList<com.fadcam.ui.picker.OptionItem> items = new java.util.ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem("t_off", getString(R.string.timer_off), null, null, null, null, null, null, "block", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("t_30s", getString(R.string.timer_30_seconds), null, null, null, null, null, null, "timer", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("t_1m", getString(R.string.timer_1_minute), null, null, null, null, null, null, "timer", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("t_5m", getString(R.string.timer_5_minutes), null, null, null, null, null, null, "timer", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("t_15m", getString(R.string.timer_15_minutes), null, null, null, null, null, null, "timer", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("t_30m", getString(R.string.timer_30_minutes), null, null, null, null, null, null, "timer", null, null, null));
+    items.add(new com.fadcam.ui.picker.OptionItem("t_1h", getString(R.string.timer_1_hour), null, null, null, null, null, null, "timer", null, null, null));
+    items.add(new com.fadcam.ui.picker.OptionItem("t_custom", getString(R.string.timer_custom_label), null, null, null, null, null, null, "edit", null, null, null));
+
+    // Determine currently saved seconds
+    int cur = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).getBackgroundPlaybackTimerSeconds();
+    String selectedId = "t_off";
+    if (cur == 30) selectedId = "t_30s";
+    else if (cur == 60) selectedId = "t_1m";
+    else if (cur == 300) selectedId = "t_5m";
+    else if (cur == 900) selectedId = "t_15m";
+    else if (cur == 1800) selectedId = "t_30m";
+    else if (cur == 3600) selectedId = "t_1h";
+    else if (cur > 0) selectedId = "t_custom"; // make custom checked when user set a non-preset value
+    com.fadcam.ui.picker.PickerBottomSheetFragment sheet = com.fadcam.ui.picker.PickerBottomSheetFragment.newInstance(getString(R.string.background_playback_timer_title_short), items, selectedId, RK, getString(R.string.background_playback_timer_helper));
+        getParentFragmentManager().setFragmentResultListener(RK, this, (rkRes, b)->{
+            String sel = b.getString(com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID);
+            if(sel==null) return;
+            if("t_custom".equals(sel)){
+                // Show numeric input sheet: min 1 second, max e.g. 86400 (24h)
+                final String RK_NUM = "rk_vps_background_playback_timer_custom";
+        com.fadcam.ui.picker.NumberInputBottomSheetFragment num = com.fadcam.ui.picker.NumberInputBottomSheetFragment.newInstance(
+            getString(R.string.timer_custom_title), 1, 86400, 60, getString(R.string.universal_enter_number), 5, 3600,
+            getString(R.string.timer_custom_low_hint), getString(R.string.timer_custom_high_hint), RK_NUM);
+        // Provide a clear description so the sheet shows what units to enter and example format
+    android.os.Bundle _b = num.getArguments()!=null? num.getArguments() : new android.os.Bundle();
+    _b.putString(com.fadcam.ui.picker.NumberInputBottomSheetFragment.ARG_DESCRIPTION, getString(R.string.timer_custom_description));
+    _b.putBoolean(com.fadcam.ui.picker.NumberInputBottomSheetFragment.ARG_ENABLE_TIMER_CALC, true);
+        num.setArguments(_b);
+                getParentFragmentManager().setFragmentResultListener(RK_NUM, this, (rkN, nb)->{
+                    int minutes = nb.getInt(com.fadcam.ui.picker.NumberInputBottomSheetFragment.RESULT_NUMBER, 0);
+                            if(minutes>0){ int seconds = minutes * 60; com.fadcam.SharedPreferencesManager.getInstance(requireContext()).setBackgroundPlaybackTimerSeconds(seconds);
+                                View root = getView(); if(root!=null){ TextView sub = root.findViewById(R.id.sub_background_playback_timer);
+                                    if(sub!=null) sub.setText(minutes<60? getString(R.string.timer_minutes_short, minutes): getString(R.string.timer_hours_short, minutes/60)); }
+                    }
+                });
+                num.show(getParentFragmentManager(), "vps_background_playback_timer_custom_sheet");
+                return;
+            }
+            int seconds = 0;
+            switch(sel){
+                case "t_30s": seconds = 30; break;
+                case "t_1m": seconds = 60; break;
+                case "t_5m": seconds = 300; break;
+                case "t_15m": seconds = 900; break;
+                case "t_30m": seconds = 1800; break;
+                case "t_1h": seconds = 3600; break;
+                default: seconds = 0; break;
+            }
+            com.fadcam.SharedPreferencesManager.getInstance(requireContext()).setBackgroundPlaybackTimerSeconds(seconds);
+            // Update subtitle in settings UI if visible (show current timer value beside the chevron)
+            View root = getView();
+            if(root!=null){
+                TextView sub = root.findViewById(R.id.sub_background_playback_timer);
+                if(sub!=null){
+                    if(seconds==0) sub.setText(getString(R.string.timer_off_short));
+                    else if(seconds<60) sub.setText(getString(R.string.timer_seconds_short, seconds));
+                    else if(seconds<3600) sub.setText(getString(R.string.timer_minutes_short, seconds/60));
+                    else sub.setText(getString(R.string.timer_hours_short, seconds/3600));
+                }
+            }
+        });
+        sheet.show(getParentFragmentManager(), "vps_background_playback_timer_sheet");
     }
 
     private void showMuteSwitchSheet(){
@@ -131,9 +246,9 @@ public class VideoPlayerSettingsFragment extends Fragment {
 
     private void showPlaybackSpeedPicker(){
         // -------------- Fix Start for this method(showPlaybackSpeedPicker)-----------
-        final String RK = "rk_vps_playback_speed";
-        float[] speedValues = new float[]{0.5f,1.0f,1.5f,2.0f,3.0f,4.0f,6.0f,8.0f,10.0f};
-        CharSequence[] labels = new CharSequence[]{"0.5x","1x (Normal)","1.5x","2x","3x","4x","6x","8x","10x"};
+    final String RK = "rk_vps_playback_speed";
+    float[] speedValues = new float[]{0.5f,0.6f,0.7f,0.8f,0.9f,1.0f,1.5f,2.0f,3.0f,4.0f,6.0f,8.0f,10.0f};
+    CharSequence[] labels = new CharSequence[]{"0.5x","0.6x","0.7x","0.8x","0.9x","1x (Normal)","1.5x","2x","3x","4x","6x","8x","10x"};
         java.util.ArrayList<com.fadcam.ui.picker.OptionItem> items = new java.util.ArrayList<>();
         for(int i=0;i<speedValues.length;i++){
             items.add(new com.fadcam.ui.picker.OptionItem("spd_"+speedValues[i], String.valueOf(labels[i]), null, null, null, null, null, null, "speed", null, null, null));
@@ -166,8 +281,8 @@ public class VideoPlayerSettingsFragment extends Fragment {
     private void showQuickSpeedPicker(){
         // -------------- Fix Start for this method(showQuickSpeedPicker)-----------
         final String RK = "rk_vps_quick_speed";
-        float[] speedValues = new float[]{0.5f,1.0f,1.5f,2.0f,3.0f,4.0f,6.0f,8.0f,10.0f};
-        CharSequence[] labels = new CharSequence[]{"0.5x","1x (Normal)","1.5x","2x","3x","4x","6x","8x","10x"};
+    float[] speedValues = new float[]{0.5f,0.6f,0.7f,0.8f,0.9f,1.0f,1.5f,2.0f,3.0f,4.0f,6.0f,8.0f,10.0f};
+    CharSequence[] labels = new CharSequence[]{"0.5x","0.6x","0.7x","0.8x","0.9x","1x (Normal)","1.5x","2x","3x","4x","6x","8x","10x"};
         java.util.ArrayList<com.fadcam.ui.picker.OptionItem> items = new java.util.ArrayList<>();
         for(int i=0;i<speedValues.length;i++){
             String title = Math.abs(speedValues[i]-2.0f)<0.001f? getString(R.string.quick_speed_option_default): String.valueOf(labels[i]);
@@ -195,6 +310,48 @@ public class VideoPlayerSettingsFragment extends Fragment {
         // -------------- Fix Ended for this method(showQuickSpeedPicker)-----------
     }
 
+    private void showSeekAmountPicker(){
+        final String RK = "rk_vps_seek_amount";
+        java.util.ArrayList<com.fadcam.ui.picker.OptionItem> items = new java.util.ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem("s_5", "5s", null, null, null, null, null, null, "replay_10", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("s_10", "10s", null, null, null, null, null, null, "replay_10", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("s_15", "15s", null, null, null, null, null, null, "replay_10", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("s_30", "30s", null, null, null, null, null, null, "replay_10", null, null, null));
+        items.add(new com.fadcam.ui.picker.OptionItem("s_custom", getString(R.string.seek_amount_custom), null, null, null, null, null, null, "edit", null, null, null));
+        int cur = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).getPlayerSeekSeconds();
+        String sel = "s_"+cur; if(cur!=5 && cur!=10 && cur!=15 && cur!=30) sel = "s_custom";
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet = com.fadcam.ui.picker.PickerBottomSheetFragment.newInstance(getString(R.string.seek_amount_title), items, sel, RK, getString(R.string.seek_amount_helper));
+        getParentFragmentManager().setFragmentResultListener(RK, this, (k,b)->{
+            String s = b.getString(com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID);
+            if(s==null) return;
+            if("s_custom".equals(s)){
+                final String RK_NUM = "rk_vps_seek_amount_custom";
+                com.fadcam.ui.picker.NumberInputBottomSheetFragment num = com.fadcam.ui.picker.NumberInputBottomSheetFragment.newInstance(
+                    getString(R.string.seek_amount_custom_title), 1, 300, 10, getString(R.string.universal_enter_number), 5, 60,
+                    getString(R.string.seek_amount_custom_low_hint), getString(R.string.seek_amount_custom_high_hint), RK_NUM);
+                if(num.getArguments()!=null){ num.getArguments().putString(com.fadcam.ui.picker.NumberInputBottomSheetFragment.ARG_DESCRIPTION, getString(R.string.seek_amount_helper)); }
+                getParentFragmentManager().setFragmentResultListener(RK_NUM, this, (rkN, nb)->{
+                    int val = nb.getInt(com.fadcam.ui.picker.NumberInputBottomSheetFragment.RESULT_NUMBER, 0);
+                    if(val>0){ com.fadcam.SharedPreferencesManager.getInstance(requireContext()).setPlayerSeekSeconds(val);
+                        TextView subSeek2 = getView()!=null? getView().findViewById(R.id.sub_seek_amount): null;
+                        if(subSeek2!=null) subSeek2.setText(getString(R.string.seek_amount_subtitle, val));
+                    }
+                });
+                // Dismiss parent picker then show numeric input slightly later to avoid cross-sheet visual overlap
+                try{ sheet.dismissAllowingStateLoss(); } catch(Exception ignored){}
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> { try{ num.show(getParentFragmentManager(), "vps_seek_amount_custom_sheet"); } catch(Exception ignored){} }, 180);
+                return;
+            }
+            if(s.startsWith("s_")){
+                try{ int v = Integer.parseInt(s.substring(2)); com.fadcam.SharedPreferencesManager.getInstance(requireContext()).setPlayerSeekSeconds(v);
+                    TextView subSeek3 = getView()!=null? getView().findViewById(R.id.sub_seek_amount): null;
+                    if(subSeek3!=null) subSeek3.setText(getString(R.string.seek_amount_subtitle, v));
+                }catch(NumberFormatException ignored){}
+            }
+        });
+        sheet.show(getParentFragmentManager(), "vps_seek_amount_sheet");
+    }
+
     private String formatSpeed(float v){
         try { java.text.DecimalFormat df = new java.text.DecimalFormat("#.#"); return df.format(v)+"x"; } catch (Exception e){ return v+"x"; }
     }
@@ -210,5 +367,33 @@ public class VideoPlayerSettingsFragment extends Fragment {
     if (Math.abs(v - 8.0f) < 0.001f) return "8x";
     if (Math.abs(v - 10.0f) < 0.001f) return "10x";
     return formatSpeed(v);
+    }
+
+    private void showAudioWaveformSwitchSheet() {
+        final String RK = "rk_vps_audio_waveform_switch";
+        boolean enabled = com.fadcam.SharedPreferencesManager.getInstance(requireContext()).isAudioWaveformEnabled();
+        
+        getParentFragmentManager().setFragmentResultListener(RK, this, (key, bundle) -> {
+            if(bundle.containsKey(com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SWITCH_STATE)){
+                boolean state = bundle.getBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SWITCH_STATE);
+                com.fadcam.SharedPreferencesManager.getInstance(requireContext()).setAudioWaveformEnabled(state);
+                
+                View root = getView();
+                if (root != null) {
+                    TextView sub = root.findViewById(R.id.sub_audio_waveform);
+                    if(sub != null) {
+                        sub.setText(state ? getString(R.string.universal_enable) : getString(R.string.universal_disable));
+                    }
+                }
+            }
+        });
+
+        java.util.ArrayList<com.fadcam.ui.picker.OptionItem> items = new java.util.ArrayList<>(); // No options needed, switch only
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet = com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceWithSwitch(
+            getString(R.string.audio_waveform_title), items, "", RK, 
+            getString(R.string.waveform_helper_text),
+            getString(R.string.waveform_switch_label), enabled
+        );
+        sheet.show(getParentFragmentManager(), "vps_audio_waveform_switch_sheet");
     }
 }

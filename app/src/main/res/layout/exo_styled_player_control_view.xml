@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<merge xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Layout for ExoPlayer styled controls with video player features -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
 
     <!-- Dim overlay removed: keep transparent so the video is not dimmed when controls show -->
     <View android:id="@id/exo_controls_background"
@@ -22,6 +25,7 @@
         android:paddingTop="8dp"
         android:paddingBottom="8dp"
         android:background="@drawable/player_control_background_rounded"
+        android:clipToOutline="true"
         android:layoutDirection="ltr">
 
         <LinearLayout
@@ -29,10 +33,23 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <View android:id="@id/exo_progress_placeholder"
+            <!-- Progress bar with waveform overlay -->
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="26dp"
-                android:layout_marginBottom="4dp"/>
+                android:layout_marginBottom="4dp">
+                
+                <View android:id="@id/exo_progress_placeholder"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+                
+                <com.fadcam.ui.custom.AudioWaveformView
+                    android:id="@+id/audio_waveform"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:alpha="0.6" />
+                    
+            </FrameLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -69,15 +86,14 @@
                     <ImageButton android:id="@id/exo_repeat_toggle" style="@style/ExoStyledControls.Button.Bottom.RepeatToggle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:visibility="gone"/>
                     <ImageButton android:id="@id/exo_subtitle" style="@style/ExoStyledControls.Button.Bottom.CC" android:layout_width="wrap_content" android:layout_height="wrap_content" android:visibility="gone"/>
 
+                    <!-- Use a clear settings/tune glyph for playback settings -->
                     <ImageButton android:id="@id/exo_settings"
                         style="@style/ExoStyledControls.Button.Bottom.Settings"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:src="@drawable/ic_settings_24"
+                        android:src="@drawable/ic_bitrate"
                         app:tint="@android:color/white"
                         android:contentDescription="@string/settings_title"/>
-
-
 
                     <ImageButton android:id="@id/exo_overflow_show"
                         style="@style/ExoStyledControls.Button.Bottom.OverflowShow"
@@ -85,8 +101,6 @@
                         android:layout_height="wrap_content"
                         android:visibility="gone"/>
                 </LinearLayout>
-
-
 
             </LinearLayout>
         </LinearLayout>
@@ -128,7 +142,7 @@
             android:contentDescription="Rewind 5 seconds"
             tools:ignore="ContentDescription" />
 
-        <!-- Play/Pause Button using standard background -->
+        <!-- Play/Pause Button with animated icon -->
         <ImageButton
             android:id="@id/exo_play_pause"
             android:layout_width="52dp"
@@ -150,11 +164,11 @@
             android:layout_marginStart="12dp"
             android:padding="12dp"
             android:scaleType="fitXY"
-            android:src="@drawable/ic_ffwd_15s_24"
+            android:src="@drawable/ic_fast_forward_24"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Forward 15 seconds"
+            android:contentDescription="Fast forward 5 seconds"
             tools:ignore="ContentDescription" />
 
     </LinearLayout>
 
-</merge>
+</FrameLayout>

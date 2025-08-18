@@ -43,6 +43,7 @@ import android.text.Html;
 import android.text.Spanned;
 import android.text.format.Formatter;
 import android.text.style.ForegroundColorSpan;
+import android.util.Size;
 import android.view.LayoutInflater;
 import android.view.Surface;
 import android.view.TextureView;
@@ -139,7 +140,18 @@ public class HomeFragment extends BaseFragment {
     private boolean isTypingIn = true;
     private String currentTip = "";
 
-    private TextView tvStorageInfo;
+    private TextView tvCameraTitle;
+    private TextView tvCameraSubtitle;
+    private TextView tvEstimateTitle;
+    private TextView tvEstimateSubtitle;
+    private TextView tvSpaceTitle;
+    private TextView tvSpaceSubtitle;
+    // inline total will be rendered in tvSpaceTitle using spans
+    private TextView tvElapsedTitle;
+    private TextView tvElapsedSubtitle;
+    private TextView tvRemainingTitle;
+    private TextView tvRemainingSubtitle;
+    private ImageView btnHamburgerMenu;
     private TextView tvPreviewPlaceholder;
     private MaterialButton buttonStartStop;
     private MaterialButton buttonPauseResume;
@@ -153,7 +165,6 @@ public class HomeFragment extends BaseFragment {
     private TextView tvClock, tvDateEnglish, tvDateArabic;
 
     //FragmentActivity tipres = requireActivity();
-    private TextView tvTip;
     private String[] tips;
 
     private int currentTipIndex = 0;
@@ -201,8 +212,12 @@ public class HomeFragment extends BaseFragment {
 
     // --- Fields Needed for Stats Update ---
     private SharedPreferencesManager sharedPreferencesManager;
+    // Listener for realtime preference updates (camera/resolution/fps)
+    private SharedPreferences.OnSharedPreferenceChangeListener prefsListener;
     private ExecutorService executorService;
     private BroadcastReceiver recordingCompleteReceiver;
+    // Cache last-known available bytes for custom storage (SD card / SAF) when we cannot probe it directly
+    private long lastKnownCustomAvailableBytes = -1;
     // ----- Fix Start for this class (HomeFragment) -----
     // private boolean isStatsReceiverRegistered = false; // This seemed to be for the general recordingCompleteReceiver
     private boolean isSegmentCompleteStatsReceiverRegistered = false;
@@ -500,6 +515,26 @@ public class HomeFragment extends BaseFragment {
         // Initialize ExecutorService if null or shutdown
         if (executorService == null || executorService.isShutdown()) {
             executorService = Executors.newSingleThreadExecutor();
+        }
+
+        // Register SharedPreferences listener for realtime updates to storage widget
+        if (sharedPreferencesManager != null && prefsListener == null) {
+            prefsListener = (sharedPreferences, key) -> {
+                if (key == null) return;
+                switch (key) {
+                    case Constants.PREF_CAMERA_SELECTION:
+                    case Constants.PREF_VIDEO_RESOLUTION_WIDTH:
+                    case Constants.PREF_VIDEO_RESOLUTION_HEIGHT:
+                    case Constants.PREF_VIDEO_FRAME_RATE:
+                    case Constants.PREF_VIDEO_FRAME_RATE_FRONT:
+                    case Constants.PREF_VIDEO_FRAME_RATE_BACK:
+                        refreshPrefsAndUpdateStorage();
+                        break;
+                    default:
+                        break;
+                }
+            };
+            sharedPreferencesManager.sharedPreferences.registerOnSharedPreferenceChangeListener(prefsListener);
         }
 
         // ----- Fix Start: Set default camera resource availability -----
@@ -967,6 +1002,14 @@ public class HomeFragment extends BaseFragment {
         // ----- Fix Start for this method(onStop)-----
         // Call the centralized unregister method
         unregisterBroadcastReceivers(); 
+
+        // Unregister SharedPreferences listener if present
+        if (sharedPreferencesManager != null && prefsListener != null) {
+            try {
+                sharedPreferencesManager.sharedPreferences.unregisterOnSharedPreferenceChangeListener(prefsListener);
+            } catch (Exception ignored) {}
+            prefsListener = null;
+        }
 
         // The following lines for sending surface update on stop if recording
         // should remain, as they are not related to receiver unregistration.
@@ -1733,7 +1776,6 @@ public class HomeFragment extends BaseFragment {
         CardView cardPreview = view.findViewById(R.id.cardPreview);
         CardView cardStats = view.findViewById(R.id.cardStats);
         CardView cardStorage = view.findViewById(R.id.cardStorage);
-        CardView cardTips = view.findViewById(R.id.cardTips);
         // Clock card is intentionally NOT included here as it has its own color logic
 
         String themeName = sharedPreferencesManager.sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
@@ -1752,11 +1794,10 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(redSurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(redSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(redSurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, redHeading, redTextSecondary);
             setTextColorsRecursive(cardStats, redHeading, redTextSecondary);
-            setTextColorsRecursive(cardStorage, redHeading, redTextSecondary);
-            setTextColorsRecursive(cardTips, redHeading, redTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, redHeading, redTextSecondary);
         } else if ("Premium Gold".equals(themeName)) {
             int goldSurface = ContextCompat.getColor(requireContext(), R.color.gold_theme_surface_dark);
             int goldHeading = ContextCompat.getColor(requireContext(), R.color.gold_theme_heading);
@@ -1764,11 +1805,10 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(goldSurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(goldSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(goldSurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, goldHeading, goldTextSecondary);
             setTextColorsRecursive(cardStats, goldHeading, goldTextSecondary);
-            setTextColorsRecursive(cardStorage, goldHeading, goldTextSecondary);
-            setTextColorsRecursive(cardTips, goldHeading, goldTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, goldHeading, goldTextSecondary);
         } else if ("Silent Forest".equals(themeName)) {
             // Silent Forest theme (green/teal)
             int forestSurface = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_surface_dark);
@@ -1777,11 +1817,10 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(forestSurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(forestSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(forestSurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, forestHeading, forestTextSecondary);
             setTextColorsRecursive(cardStats, forestHeading, forestTextSecondary);
-            setTextColorsRecursive(cardStorage, forestHeading, forestTextSecondary);
-            setTextColorsRecursive(cardTips, Color.WHITE, Color.LTGRAY);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, forestHeading, forestTextSecondary);
         } else if ("Shadow Alloy".equals(themeName)) {
             // Shadow Alloy theme (silver/metallic)
             int alloySurface = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_surface_dark);
@@ -1790,11 +1829,10 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(alloySurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(alloySurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(alloySurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, alloyHeading, alloyTextSecondary);
             setTextColorsRecursive(cardStats, alloyHeading, alloyTextSecondary);
-            setTextColorsRecursive(cardStorage, alloyHeading, alloyTextSecondary);
-            setTextColorsRecursive(cardTips, alloyHeading, alloyTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, alloyHeading, alloyTextSecondary);
         } else if ("Pookie Pink".equals(themeName)) {
             // Pookie Pink theme (pink)
             int pinkSurface = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_surface_dark);
@@ -1803,11 +1841,10 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(pinkSurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(pinkSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(pinkSurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, pinkHeading, pinkTextSecondary);
             setTextColorsRecursive(cardStats, pinkHeading, pinkTextSecondary);
-            setTextColorsRecursive(cardStorage, pinkHeading, pinkTextSecondary);
-            setTextColorsRecursive(cardTips, pinkHeading, pinkTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, pinkHeading, pinkTextSecondary);
         } else if ("Snow Veil".equals(themeName)) {
             // Snow Veil theme (white/light)
             // ----- Fix Start: Use darker gray for preview area in Snow Veil theme -----
@@ -1818,11 +1855,10 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(snowSurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(snowSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(snowSurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, snowHeading, snowTextSecondary);
             setTextColorsRecursive(cardStats, snowHeading, snowTextSecondary);
-            setTextColorsRecursive(cardStorage, snowHeading, snowTextSecondary);
-            setTextColorsRecursive(cardTips, snowHeading, snowTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, snowHeading, snowTextSecondary);
             
             // Apply additional contrast improvements for the Snow Veil theme
             applySnowVeilThemeToUI(view);
@@ -1833,11 +1869,10 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(amoledSurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(amoledSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(amoledSurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, amoledHeading, amoledTextSecondary);
             setTextColorsRecursive(cardStats, amoledHeading, amoledTextSecondary);
-            setTextColorsRecursive(cardStorage, amoledHeading, amoledTextSecondary);
-            setTextColorsRecursive(cardTips, amoledHeading, amoledTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, amoledHeading, amoledTextSecondary);
         } else if ("Midnight Dusk".equals(themeName)) {
             int darkSurface = ContextCompat.getColor(requireContext(), R.color.dark_purple_bar);
             int darkHeading = ContextCompat.getColor(requireContext(), R.color.colorHeading);
@@ -1845,21 +1880,19 @@ public class HomeFragment extends BaseFragment {
             if (cardPreview != null) cardPreview.setCardBackgroundColor(darkSurface);
             if (cardStats != null) cardStats.setCardBackgroundColor(darkSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(darkSurface);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, darkHeading, darkTextSecondary);
             setTextColorsRecursive(cardStats, darkHeading, darkTextSecondary);
-            setTextColorsRecursive(cardStorage, darkHeading, darkTextSecondary);
-            setTextColorsRecursive(cardTips, darkHeading, darkTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, darkHeading, darkTextSecondary);
         } else {
             // Fallback for other themes: use dialog color for cards
             if (cardPreview != null) cardPreview.setCardBackgroundColor(colorDialog);
             if (cardStats != null) cardStats.setCardBackgroundColor(colorDialog);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(colorDialog);
-            if (cardTips != null) cardTips.setCardBackgroundColor(colorTransparent);
             setTextColorsRecursive(cardPreview, colorTextPrimary, colorTextSecondary);
             setTextColorsRecursive(cardStats, colorTextPrimary, colorTextSecondary);
-            setTextColorsRecursive(cardStorage, colorTextPrimary, colorTextSecondary);
-            setTextColorsRecursive(cardTips, colorTextPrimary, colorTextSecondary);
+            // Skip storage widget to preserve semantic colors
+            // setTextColorsRecursive(cardStorage, colorTextPrimary, colorTextSecondary);
         }
         // ----- Fix End: Apply dynamic theme colors to preview area cards (force override for AMOLED and Red, use *_surface_dark) -----
 
@@ -1923,7 +1956,6 @@ public class HomeFragment extends BaseFragment {
         resetTimers();
         copyFontToInternalStorage();
         updateStorageInfo();
-        updateTip();
         // Initial stats update
         Log.d(TAG, "onViewCreated: Triggering initial stats update.");
         updateStats();
@@ -1933,7 +1965,6 @@ public class HomeFragment extends BaseFragment {
         updateClock();
 
         // updateTip(); // Duplicate call? Check if startTipsAnimation is sufficient
-        startTipsAnimation();
         setupButtonListeners();
         setupLongPressListener();
         updatePreviewVisibility(); // CRUCIAL: Update visibility based on the loaded state
@@ -2537,9 +2568,66 @@ public class HomeFragment extends BaseFragment {
 
     private void updateStorageInfo() {
         Log.d(TAG, "updateStorageInfo: Updating storage information");
+        // Default to internal external storage stats
         StatFs stat = new StatFs(Environment.getExternalStorageDirectory().getPath());
         long bytesAvailable = stat.getAvailableBytes();
         long bytesTotal = stat.getTotalBytes();
+
+        // If user selected custom storage (SD card / SAF), try to use that instead of internal storage
+        String storageMode = sharedPreferencesManager.getStorageMode();
+        String customUriString = sharedPreferencesManager.getCustomStorageUri();
+        boolean usingCustomStorage = SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode) && customUriString != null;
+        // By default assume custom is on primary (internal) storage; we'll detect removable volumes via docId heuristics
+        boolean customIsOnPrimary = true;
+        if (usingCustomStorage) {
+            try {
+                android.net.Uri treeUri = android.net.Uri.parse(customUriString);
+                // Heuristics: if the tree document id indicates a non-primary volume (like a UUID), treat it as removable
+                try {
+                    String docId = android.provider.DocumentsContract.getTreeDocumentId(treeUri);
+                    if (docId != null) {
+                        if (docId.startsWith("primary:")) {
+                            customIsOnPrimary = true;
+                        } else if (docId.startsWith("raw:")) {
+                            String rawPath = docId.substring("raw:".length());
+                            if (rawPath.startsWith(Environment.getExternalStorageDirectory().getAbsolutePath())) {
+                                customIsOnPrimary = true;
+                            } else {
+                                customIsOnPrimary = false;
+                            }
+                        } else if (docId.contains(":")) {
+                            String volumeId = docId.split(":", 2)[0];
+                            customIsOnPrimary = "primary".equalsIgnoreCase(volumeId);
+                        }
+                    }
+                } catch (Exception ignore) {
+                    // best-effort only
+                }
+
+                // Try to resolve a usable path via DocumentFile and StatFs on persisted URI if possible
+                if (hasSafPermission(treeUri)) {
+                    java.io.File probe = Utils.getFileFromSafUriIfPossible(requireContext(), treeUri);
+                    if (probe != null && probe.exists()) {
+                        StatFs customStat = new StatFs(probe.getAbsolutePath());
+                        bytesAvailable = customStat.getAvailableBytes();
+                        bytesTotal = customStat.getTotalBytes();
+                        lastKnownCustomAvailableBytes = bytesAvailable;
+                    } else if (lastKnownCustomAvailableBytes > 0) {
+                        // Fall back to last known custom value if we cannot probe right now
+                        bytesAvailable = lastKnownCustomAvailableBytes;
+                    } else {
+                        // If we cannot probe custom storage, avoid subtracting estimated bytes from internal storage
+                        // by setting a flag (handled below) so the UI doesn't falsely decrease internal available space.
+                        Log.d(TAG, "updateStorageInfo: Using custom storage but unable to probe its stats; will avoid updating internal available.");
+                        // leave bytesAvailable as internal; we'll skip subtract later if custom is removable
+                    }
+                } else {
+                    Log.w(TAG, "updateStorageInfo: No SAF permission for custom storage URI: " + customUriString);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "updateStorageInfo: Error while probing custom storage stats", e);
+            }
+        }
 
         double gbAvailable = bytesAvailable / (1024.0 * 1024.0 * 1024.0);
         double gbTotal = bytesTotal / (1024.0 * 1024.0 * 1024.0);
@@ -2579,7 +2667,15 @@ public class HomeFragment extends BaseFragment {
         }
 
         // Update available space based on estimated bytes used
-        bytesAvailable -= estimatedBytesUsed;
+        // If using custom storage but we couldn't probe it (and lastKnownCustomAvailableBytes <= 0),
+        // avoid subtracting estimatedBytesUsed from internal storage because recording is happening elsewhere.
+        // If custom storage is used and it is on a removable volume (not primary), and we cannot probe it,
+        // skip subtracting estimated bytes from internal storage.
+        if (!(usingCustomStorage && !customIsOnPrimary && (lastKnownCustomAvailableBytes <= 0 && (customUriString != null)))) {
+            bytesAvailable -= estimatedBytesUsed;
+        } else {
+            Log.d(TAG, "updateStorageInfo: Skipping subtracting estimated bytes from internal storage because recording target is removable custom storage and unknown.");
+        }
         // Ensure we never show negative available space
         bytesAvailable = Math.max(0, bytesAvailable);
         gbAvailable = Math.max(0, bytesAvailable / (1024.0 * 1024.0 * 1024.0));
@@ -2606,44 +2702,124 @@ public class HomeFragment extends BaseFragment {
         Log.d(TAG, "updateStorageInfo: Formatted elapsed time = " + elapsedMinutes + ":" + 
               String.format(Locale.US, "%02d", elapsedSeconds));
 
-        String storageInfo = String.format(Locale.getDefault(),
-                getString(R.string.mainpage_storage_indicator),
-                gbAvailable, gbTotal,
-                getRecordingTimeEstimate(bytesAvailable, (10 * 1024 * 1024) / 2), // 50% of 10 Mbps
-                getRecordingTimeEstimate(bytesAvailable, (5 * 1024 * 1024) / 2),  // 50% of 5 Mbps
-                getRecordingTimeEstimate(bytesAvailable, (1024 * 1024) / 2),      // 50% of 1 Mbps
-                elapsedMinutes, elapsedSeconds,
-                formatRemainingTime(days, hours, minutes, seconds)
-        );
+    // Compute estimate only for selected resolution to keep the widget concise
+    android.util.Size selectedRes = sharedPreferencesManager.getCameraResolution();
+    int selectedFps = sharedPreferencesManager.getVideoFrameRate();
+    long selectedBitrate = Utils.estimateBitrate(selectedRes, selectedFps);
+    String selectedEstimate = getRecordingTimeEstimate(bytesAvailable, selectedBitrate);
 
-        Spanned formattedText = Html.fromHtml(storageInfo, Html.FROM_HTML_MODE_LEGACY);
+    // Camera indicator (Front/Back)
+    String cameraLabel = "";
+    try {
+        com.fadcam.CameraType camType = sharedPreferencesManager.getCameraSelection();
+        if (camType == com.fadcam.CameraType.FRONT) cameraLabel = getString(R.string.mainpage_camera_front);
+        else cameraLabel = getString(R.string.mainpage_camera_back);
+    } catch (Exception ignored) { cameraLabel = ""; }
 
-        // Update UI on the main thread
-        if (getActivity() != null) {
-            getActivity().runOnUiThread(() -> {
-                if (tvStorageInfo != null) {
-                    tvStorageInfo.setText(formattedText);
-                    Log.d(TAG, "updateStorageInfo: UI updated with elapsed=" + elapsedMinutes + "m " + elapsedSeconds + "s");
+    // Prepare individual components for the new row-based design (make final for lambda)
+    final String finalCameraLabel = cameraLabel;
+    final String qualityText = getResolutionDisplayName(selectedRes);
+    final String fpsText = String.format(Locale.getDefault(), "%dfps", selectedFps);
+    final String cameraSubtitle = qualityText + " • " + fpsText;
+    final String availableSpace = String.format(Locale.getDefault(), "%.2f GB", gbAvailable);
+    final String finalSelectedEstimate = selectedEstimate;
+    final String elapsedTimeText = String.format(Locale.getDefault(), "%02d:%02d", elapsedMinutes, elapsedSeconds);
+    final String remainingTimeText = formatRemainingTime(days, hours, minutes, seconds);
+
+    // Update UI on the main thread
+    if (getActivity() != null) {
+        final double finalGbTotal = gbTotal;
+        getActivity().runOnUiThread(() -> {
+            // Camera row
+            if (tvCameraTitle != null) tvCameraTitle.setText(finalCameraLabel);
+            if (tvCameraSubtitle != null) tvCameraSubtitle.setText(cameraSubtitle);
+            
+            // Estimate row
+            if (tvEstimateTitle != null) tvEstimateTitle.setText(finalSelectedEstimate);
+            if (tvEstimateSubtitle != null) tvEstimateSubtitle.setText("Estimated time");
+            
+            // Space row: render "available / total" in the same TextView with a dimmer smaller total
+            if (tvSpaceTitle != null) {
+                try {
+                    String avail = availableSpace;
+                    String totalStr = String.format(Locale.getDefault(), "%.2f GB", finalGbTotal);
+                    String combined = avail + " / " + totalStr;
+                    android.text.SpannableString ss = new android.text.SpannableString(combined);
+                    // make the total part dimmer and smaller
+                    // include the slash as part of the dimmed smaller segment for a cleaner inline look
+                    int slashIndex = combined.indexOf("/");
+                    int start = (slashIndex >= 0) ? slashIndex : (combined.indexOf("/ ") + 2);
+                    int end = combined.length();
+                    if (start >= 0 && end > start) {
+                        ss.setSpan(new android.text.style.ForegroundColorSpan(android.graphics.Color.parseColor("#9E9E9E")), start, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        ss.setSpan(new android.text.style.RelativeSizeSpan(0.85f), start, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    }
+                    tvSpaceTitle.setText(ss);
+                } catch (Exception e) {
+                    tvSpaceTitle.setText(availableSpace);
                 }
-            });
-        }
+            }
+            if (tvSpaceSubtitle != null) tvSpaceSubtitle.setText("Available space");
+            
+            // Elapsed row
+            if (tvElapsedTitle != null) tvElapsedTitle.setText(elapsedTimeText);
+            if (tvElapsedSubtitle != null) tvElapsedSubtitle.setText("Elapsed time");
+            
+            // Remaining row
+            if (tvRemainingTitle != null) tvRemainingTitle.setText(remainingTimeText);
+            if (tvRemainingSubtitle != null) tvRemainingSubtitle.setText("Remaining time");
+            
+            Log.d(TAG, "updateStorageInfo: UI updated with elapsed=" + elapsedMinutes + "m " + elapsedSeconds + "s");
+        });
+    }
     }
 
     private String formatRemainingTime(long days, long hours, long minutes, long seconds) {
         StringBuilder remainingTime = new StringBuilder();
         if (days > 0) {
-            remainingTime.append(String.format(Locale.getDefault(), "<font color='#E43C3C'>%d</font><font color='#CCCCCC'>days</font> ", days));
+            remainingTime.append(String.format(Locale.getDefault(), "%d days ", days));
         }
         if (hours > 0) {
-            remainingTime.append(String.format(Locale.getDefault(), "<font color='#E43C3C'>%d</font><font color='#CCCCCC'>h</font> ", hours));
+            remainingTime.append(String.format(Locale.getDefault(), "%dh ", hours));
         }
         if (minutes > 0) {
-            remainingTime.append(String.format(Locale.getDefault(), "<font color='#E43C3C'>%d</font><font color='#CCCCCC'>m</font> ", minutes));
+            remainingTime.append(String.format(Locale.getDefault(), "%dm ", minutes));
         }
         if (seconds > 0 || remainingTime.length() == 0) {
-            remainingTime.append(String.format(Locale.getDefault(), "<font color='#E43C3C'>%d</font><font color='#CCCCCC'>s</font>", seconds));
+            remainingTime.append(String.format(Locale.getDefault(), "%ds", seconds));
         }
-        return remainingTime.toString();
+        return remainingTime.toString().trim();
+    }
+
+    /**
+     * Converts a resolution Size to a friendly display name (e.g., "FHD", "4K", "HD")
+     */
+    private String getResolutionDisplayName(Size resolution) {
+        if (resolution == null) {
+            return "Unknown";
+        }
+
+        String resKey = resolution.getWidth() + "x" + resolution.getHeight();
+        String[] resolutionKeys = getResources().getStringArray(R.array.video_resolutions_keys);
+        String[] resolutionValues = getResources().getStringArray(R.array.video_resolutions_values);
+
+        // Look for exact match in our resolution mapping
+        for (int i = 0; i < resolutionKeys.length && i < resolutionValues.length; i++) {
+            if (resolutionKeys[i].equals(resKey)) {
+                return resolutionValues[i];
+            }
+        }
+
+        // If no exact match found, return a friendly approximation
+        int width = resolution.getWidth();
+        int height = resolution.getHeight();
+
+        if (width >= 7680 && height >= 4320) return "8K";
+        else if (width >= 3840 && height >= 2160) return "4K";
+        else if (width >= 2560 && height >= 1440) return "2K";
+        else if (width >= 1920 && height >= 1080) return "FHD";
+        else if (width >= 1280 && height >= 720) return "HD";
+        else return "SD";
     }
 
     private String getRecordingTimeEstimate(long availableBytes, long bitrate) {
@@ -2668,6 +2844,47 @@ public class HomeFragment extends BaseFragment {
         long recordingMinutes = (recordingSeconds % 3600) / 60;
         
         return String.format(Locale.getDefault(), "%d h %d min", recordingHours, recordingMinutes);
+    }
+
+    /**
+     * Re-read relevant shared preferences and refresh the storage widget and related UI.
+     * Called from the SharedPreferences listener to ensure changes (camera/resolution/fps)
+     * are reflected immediately on the Home screen.
+     */
+    private void refreshPrefsAndUpdateStorage() {
+        Log.d(TAG, "refreshPrefsAndUpdateStorage: preference change detected, refreshing UI");
+
+        // Ensure fragment is attached before attempting UI updates
+        if (!isAdded() || getActivity() == null) {
+            Log.w(TAG, "refreshPrefsAndUpdateStorage: fragment not added or activity null, skipping refresh");
+            return;
+        }
+
+        // Ensure SharedPreferencesManager is available
+        try {
+            if (sharedPreferencesManager == null) {
+                sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "refreshPrefsAndUpdateStorage: failed to obtain SharedPreferencesManager", e);
+        }
+
+        // Update UI on the main thread
+        getActivity().runOnUiThread(() -> {
+            try {
+                // Re-evaluate storage widget values and update UI
+                updateStorageInfo();
+
+                // Update camera indicator & preview visibility which may depend on camera selection
+                try { showCurrentCameraSelection(); } catch (Exception ignored) {}
+                try { updatePreviewVisibility(); } catch (Exception ignored) {}
+
+                // Also trigger stats recalculation in background (file counts / sizes)
+                try { updateStats(); } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Log.e(TAG, "refreshPrefsAndUpdateStorage: error updating UI", e);
+            }
+        });
     }
 
     //    update storage and stats in real time while recording is started
@@ -2712,40 +2929,6 @@ public class HomeFragment extends BaseFragment {
             handlerClock.removeCallbacks(updateInfoRunnable);
             updateInfoRunnable = null;
         }
-    }
-
-    private void startTipsAnimation() {
-        if (tips.length > 0) {
-            animateTip(tips[currentTipIndex], tvTip, 100); // Adjust delay as needed
-        }
-    }
-
-    private void updateTip() {
-        currentTip = tips[currentTipIndex];
-        typingIndex = 0;
-        isTypingIn = true;
-        // animateTip(); this line is giving errors so i commented it
-    }
-
-    private void animateTip(String fullText, TextView textView, int delay) {
-        final Handler handler = new Handler(Looper.getMainLooper());
-        final int[] index = {0};
-
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                if (index[0] <= fullText.length()) {
-                    textView.setText(fullText.substring(0, index[0]));
-                    index[0]++;
-                    handler.postDelayed(this, 40); // add delay in typing the tips
-                } else {
-                    currentTipIndex = (currentTipIndex + 1) % tips.length;
-                    handler.postDelayed(() -> animateTip(tips[currentTipIndex], textView, delay), 5000); // Wait 2 seconds before next tip
-                }
-            }
-        };
-
-        handler.post(runnable);
     }
 
     // --- BroadcastReceiver Implementation ---
@@ -3519,7 +3702,27 @@ public class HomeFragment extends BaseFragment {
     // ----- Fix Start for this class (HomeFragment) -----
     private void initializeViews(View view) {
         Log.d(TAG, "initializeViews: Finding UI elements.");
-        tvStorageInfo = view.findViewById(R.id.tvStorageInfo);
+        tvCameraTitle = view.findViewById(R.id.tvCameraTitle);
+        tvCameraSubtitle = view.findViewById(R.id.tvCameraSubtitle);
+        tvEstimateTitle = view.findViewById(R.id.tvEstimateTitle);
+        tvEstimateSubtitle = view.findViewById(R.id.tvEstimateSubtitle);
+        tvSpaceTitle = view.findViewById(R.id.tvSpaceTitle);
+        tvSpaceSubtitle = view.findViewById(R.id.tvSpaceSubtitle);
+    // ...existing code...
+        tvElapsedTitle = view.findViewById(R.id.tvElapsedTitle);
+        tvElapsedSubtitle = view.findViewById(R.id.tvElapsedSubtitle);
+        tvRemainingTitle = view.findViewById(R.id.tvRemainingTitle);
+        tvRemainingSubtitle = view.findViewById(R.id.tvRemainingSubtitle);
+        btnHamburgerMenu = view.findViewById(R.id.btnHamburgerMenu);
+        
+        // Set up hamburger menu click handler
+        if (btnHamburgerMenu != null) {
+            btnHamburgerMenu.setOnClickListener(v -> {
+                HomeSidebarFragment sidebar = HomeSidebarFragment.newInstance();
+                sidebar.show(getParentFragmentManager(), "HomeSidebar");
+            });
+        }
+        
         tvPreviewPlaceholder = view.findViewById(R.id.tvPreviewPlaceholder);
         buttonStartStop = view.findViewById(R.id.buttonStartStop);
         buttonPauseResume = view.findViewById(R.id.buttonPauseResume);
@@ -3538,9 +3741,6 @@ public class HomeFragment extends BaseFragment {
         tvClock = view.findViewById(R.id.tvClock);
         tvDateEnglish = view.findViewById(R.id.tvDateEnglish);
         tvDateArabic = view.findViewById(R.id.tvDateArabic);
-
-        // Tip view
-        tvTip = view.findViewById(R.id.tvTip);
 
         // Stats view
         tvStats = view.findViewById(R.id.tvStats); // Assuming R.id.tvStats for video count/size
@@ -3977,7 +4177,6 @@ public class HomeFragment extends BaseFragment {
         CardView cardStats = rootView.findViewById(R.id.cardStats);
         CardView cardStorage = rootView.findViewById(R.id.cardStorage);
         CardView cardClock = rootView.findViewById(R.id.cardClock);
-        CardView cardTips = rootView.findViewById(R.id.cardTips);
         
         // Stats card text - this card shows videos space info below the clock
         if (cardStats != null) {
@@ -4035,11 +4234,6 @@ public class HomeFragment extends BaseFragment {
             forceForceMakeAllTextBlack(cardStorage);
         }
         
-        // Tips card text
-        if (cardTips != null) {
-            forceForceMakeAllTextBlack(cardTips);
-        }
-        
         // Direct access to known TextViews for clock
         if (tvClock != null) {
             tvClock.setTextColor(Color.BLACK);
@@ -4053,43 +4247,18 @@ public class HomeFragment extends BaseFragment {
             tvDateArabic.setTextColor(Color.BLACK);
         }
         
-        // Direct access to storage info TextView
-        if (tvStorageInfo != null) {
-            tvStorageInfo.setTextColor(Color.BLACK);
-            
-            // This TextView likely contains HTML/styled text that needs special handling
-            CharSequence text = tvStorageInfo.getText();
-            if (text instanceof Spanned) {
-                // Try to extract any spans and convert them
-                Spanned spanned = (Spanned) text;
-                Object[] spans = spanned.getSpans(0, spanned.length(), Object.class);
-                
-                // Create a new SpannableString to modify
-                SpannableString newText = new SpannableString(text);
-                
-                // Copy over all spans except ForegroundColorSpan (we'll add our own)
-                for (Object span : spans) {
-                    if (!(span instanceof ForegroundColorSpan)) {
-                        newText.setSpan(span, 
-                            spanned.getSpanStart(span),
-                            spanned.getSpanEnd(span),
-                            spanned.getSpanFlags(span));
-                    }
-                }
-                
-                // Add black color spans for the entire text
-                newText.setSpan(new ForegroundColorSpan(Color.BLACK), 
-                    0, newText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                
-                // Set the new text
-                tvStorageInfo.setText(newText);
-            }
-        }
+        // Update colors for storage widget TextViews
+        if (tvCameraTitle != null) tvCameraTitle.setTextColor(Color.BLACK);
+        if (tvCameraSubtitle != null) tvCameraSubtitle.setTextColor(Color.BLACK);
+        if (tvEstimateTitle != null) tvEstimateTitle.setTextColor(Color.BLACK);
+        if (tvEstimateSubtitle != null) tvEstimateSubtitle.setTextColor(Color.BLACK);
+        if (tvSpaceTitle != null) tvSpaceTitle.setTextColor(Color.BLACK);
+        if (tvSpaceSubtitle != null) tvSpaceSubtitle.setTextColor(Color.BLACK);
+        if (tvElapsedTitle != null) tvElapsedTitle.setTextColor(Color.BLACK);
+        if (tvElapsedSubtitle != null) tvElapsedSubtitle.setTextColor(Color.BLACK);
+        if (tvRemainingTitle != null) tvRemainingTitle.setTextColor(Color.BLACK);
+        if (tvRemainingSubtitle != null) tvRemainingSubtitle.setTextColor(Color.BLACK);
         
-        // Direct access to tips TextView
-        if (tvTip != null) {
-            tvTip.setTextColor(Color.BLACK);
-        }
     }
     
     /**

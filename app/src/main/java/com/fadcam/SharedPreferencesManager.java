@@ -391,6 +391,24 @@ public class SharedPreferencesManager {
     public void setPlayerKeepScreenOn(boolean keepOn) {
         sharedPreferences.edit().putBoolean(Constants.PREF_PLAYER_KEEP_SCREEN_ON, keepOn).apply();
     }
+    // --- Player seek seconds preference ---
+    private static final String PREF_KEY_PLAYER_SEEK_SECONDS = Constants.PREF_PLAYER_SEEK_SECONDS;
+
+    /**
+     * Returns the saved seek seconds used by rewind/forward buttons and double-tap.
+     * Defaults to Constants.DEFAULT_PLAYER_SEEK_SECONDS.
+     */
+    public int getPlayerSeekSeconds() {
+        return sharedPreferences.getInt(PREF_KEY_PLAYER_SEEK_SECONDS, Constants.DEFAULT_PLAYER_SEEK_SECONDS);
+    }
+
+    /**
+     * Sets the seek seconds preference.
+     */
+    public void setPlayerSeekSeconds(int seconds) {
+        if (seconds < 1) seconds = Constants.DEFAULT_PLAYER_SEEK_SECONDS;
+        sharedPreferences.edit().putInt(PREF_KEY_PLAYER_SEEK_SECONDS, seconds).apply();
+    }
     // -------------- Fix Ended for this class (SharedPreferencesManager_keep_screen_awake)-----------
     
     // -------------- Fix Start for this class (SharedPreferencesManager_background_playback)-----------
@@ -402,6 +420,76 @@ public class SharedPreferencesManager {
     /** Enable/disable background playback. */
     public void setBackgroundPlaybackEnabled(boolean enabled) {
         sharedPreferences.edit().putBoolean(Constants.PREF_PLAYER_BACKGROUND_PLAYBACK, enabled).apply();
+    }
+    // -------------- Background playback auto-stop timer (in seconds) --------------
+    /** Returns the auto-stop time in seconds. 0 = disabled. Default: 0. */
+    public int getBackgroundPlaybackTimerSeconds() {
+        return sharedPreferences.getInt(Constants.PREF_PLAYER_BACKGROUND_TIMER_SECONDS, 0);
+    }
+
+    /** Sets the auto-stop time in seconds. 0 disables the timer. */
+    public void setBackgroundPlaybackTimerSeconds(int seconds) {
+        sharedPreferences.edit().putInt(Constants.PREF_PLAYER_BACKGROUND_TIMER_SECONDS, seconds).apply();
+    }
+    
+    /** Convenience get/put for long values. */
+    public long getLong(String key, long defValue) {
+        return sharedPreferences.getLong(key, defValue);
+    }
+
+    public void putLong(String key, long value) {
+        sharedPreferences.edit().putLong(key, value).apply();
+    }
+    // --- Resume position helpers ---
+    private static final String PREF_KEY_VIDEO_POS_PREFIX = "video_pos_"; // appended with encoded URI
+    private static final String PREF_KEY_VIDEO_POS_FILENAME_PREFIX = "video_pos_fn_"; // appended with filename
+
+    /**
+     * Get saved playback position (ms) for a given video URI string. Returns 0 if none saved.
+     */
+    public long getSavedPlaybackPositionMs(String uriString) {
+        if (uriString == null) return 0L;
+        String key = PREF_KEY_VIDEO_POS_PREFIX + uriString;
+        return sharedPreferences.getLong(key, 0L);
+    }
+
+    /**
+     * Save playback position (ms) for a given video URI string.
+     */
+    public void setSavedPlaybackPositionMs(String uriString, long posMs) {
+        if (uriString == null) return;
+        String key = PREF_KEY_VIDEO_POS_PREFIX + uriString;
+        sharedPreferences.edit().putLong(key, posMs).apply();
+    }
+
+    /**
+     * Save playback position (ms) for a given video filename (fallback key).
+     */
+    public void setSavedPlaybackPositionMsByFilename(String filename, long posMs) {
+        if (filename == null) return;
+        String key = PREF_KEY_VIDEO_POS_FILENAME_PREFIX + filename;
+        sharedPreferences.edit().putLong(key, posMs).apply();
+    }
+
+    /**
+     * Get saved playback position (ms) by filename fallback. Returns 0 if none saved.
+     */
+    public long getSavedPlaybackPositionMsByFilename(String filename) {
+        if (filename == null) return 0L;
+        String key = PREF_KEY_VIDEO_POS_FILENAME_PREFIX + filename;
+        return sharedPreferences.getLong(key, 0L);
+    }
+
+    /**
+     * Helper: check URI-keyed position first, then filename-keyed fallback.
+     * @param uriString full URI string (may be null)
+     * @param filename filename (may be null)
+     * @return saved position in ms or 0
+     */
+    public long getSavedPlaybackPositionMsWithFilenameFallback(String uriString, String filename) {
+        long v = getSavedPlaybackPositionMs(uriString);
+        if (v > 0) return v;
+        return getSavedPlaybackPositionMsByFilename(filename);
     }
     // -------------- Fix Ended for this class (SharedPreferencesManager_background_playback)-----------
     // --- End Camera / Video settings ---
@@ -443,6 +531,28 @@ public class SharedPreferencesManager {
 
     public void setQuickSpeed(float speed) {
         sharedPreferences.edit().putFloat(Constants.PREF_QUICK_SPEED, speed).apply();
+    }
+
+    // --- Audio waveform visualization preference ---
+    public boolean isAudioWaveformEnabled() {
+        return sharedPreferences.getBoolean("pref_audio_waveform_enabled", true); // Default enabled
+    }
+
+    public void setAudioWaveformEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean("pref_audio_waveform_enabled", enabled).apply();
+    }
+
+    // ----- Hide thumbnails in Records preference -----
+    private static final String PREF_KEY_HIDE_THUMBNAILS = "pref_hide_thumbnails";
+
+    /** Returns whether thumbnails should be hidden in Records list. Default: false. */
+    public boolean isHideThumbnailsEnabled() {
+        return sharedPreferences.getBoolean(PREF_KEY_HIDE_THUMBNAILS, false);
+    }
+
+    /** Sets whether thumbnails should be hidden in Records list. */
+    public void setHideThumbnailsEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(PREF_KEY_HIDE_THUMBNAILS, enabled).apply();
     }
 
     public boolean isLocalisationEnabled() {
