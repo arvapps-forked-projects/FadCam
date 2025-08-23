@@ -235,7 +235,7 @@ public class PickerBottomSheetFragment extends BottomSheetDialogFragment {
         if(useGradientBg){
             View root = view.findViewById(R.id.picker_root);
             if(root!=null){
-                root.setBackgroundResource(R.drawable.picker_bottom_sheet_gradient_bg);
+                root.setBackgroundResource(R.drawable.picker_bottom_sheet_gradient_bg_dynamic);
             }
         }
         View divider = view.findViewById(R.id.picker_title_divider);
@@ -413,7 +413,8 @@ public class PickerBottomSheetFragment extends BottomSheetDialogFragment {
         TextView switchLabel = root.findViewById(R.id.picker_switch_label);
         if(switchRow!=null && swc!=null && switchLabel!=null){
             switchRow.setVisibility(View.VISIBLE);
-            if(switchDivider!=null) switchDivider.setVisibility(View.VISIBLE);
+            // Only show divider if there are items below the switch (not for switch-only bottom sheets)
+            if(switchDivider!=null && !items.isEmpty()) switchDivider.setVisibility(View.VISIBLE);
             switchLabel.setText(switchTitle);
             swc.setChecked(switchState);
             switchRef = swc;
