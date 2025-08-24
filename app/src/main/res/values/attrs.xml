@@ -12,4 +12,9 @@
     <attr name="pickerGradientStart" format="color" />
     <attr name="pickerGradientMid" format="color" />
     <attr name="pickerGradientEnd" format="color" />
+    <!-- Picker text color attributes -->
+    <attr name="pickerTextPrimary" format="color" />
+    <attr name="pickerTextSecondary" format="color" />
+    <!-- Section header color attribute -->
+    <attr name="sectionHeaderColor" format="color" />
 </resources> 

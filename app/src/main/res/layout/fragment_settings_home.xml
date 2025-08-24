@@ -57,7 +57,7 @@
             android:layout_marginTop="4dp"
             android:layout_marginBottom="8dp"
             android:text="@string/button_settings_readme"
-            android:textColor="@android:color/darker_gray"
+            android:textColor="?attr/sectionHeaderColor"
             android:textStyle="bold" />
 
         <!-- README Group Card -->
@@ -87,14 +87,14 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/view_source_code"
+                        android:text="@string/note_from_developer_title"
                         android:textColor="?attr/colorHeading"
                         android:textStyle="bold"
                         android:textSize="15sp"/>
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/readme_github_subtitle"
+                        android:text="@string/note_from_developer_subtitle"
                         android:textColor="@android:color/darker_gray"
                         android:textSize="12sp"/>
                 </LinearLayout>
@@ -115,7 +115,7 @@
             android:layout_marginTop="4dp"
             android:layout_marginBottom="8dp"
             android:text="@string/general"
-            android:textColor="@android:color/darker_gray"
+            android:textColor="?attr/sectionHeaderColor"
             android:textStyle="bold" />
 
         <!-- General Group Card -->
@@ -477,7 +477,7 @@
             android:layout_marginTop="32dp"
             android:layout_marginBottom="8dp"
             android:text="@string/settings_section_app"
-            android:textColor="@android:color/darker_gray"
+            android:textColor="?attr/sectionHeaderColor"
             android:textStyle="bold" />
 
         <!-- About Group Card -->

@@ -530,18 +530,35 @@ public class RecordsFragment extends BaseFragment implements
                         }
 
                         if (Constants.ACTION_STORAGE_LOCATION_CHANGED.equals(intent.getAction())) {
-                            Log.i(TAG, "Received ACTION_STORAGE_LOCATION_CHANGED. Refreshing list.");
+                            Log.i(TAG, "Received ACTION_STORAGE_LOCATION_CHANGED broadcast. Refreshing records list.");
+                            // Clear caches to ensure fresh data from new storage location
+                            com.fadcam.utils.VideoSessionCache.invalidateOnNextAccess(sharedPreferencesManager);
+                            if (recordsAdapter != null) {
+                                recordsAdapter.clearCaches();
+                            }
                             // If storage location changed, we should definitely reload the list.
+                            loadRecordsList();
+                        } else if (Constants.ACTION_FILES_RESTORED.equals(intent.getAction())) {
+                            Log.i(TAG, "Received ACTION_FILES_RESTORED broadcast. Refreshing records list.");
+                            // Clear caches to ensure fresh data
+                            com.fadcam.utils.VideoSessionCache.invalidateOnNextAccess(sharedPreferencesManager);
+                            if (recordsAdapter != null) {
+                                recordsAdapter.clearCaches();
+                            }
+                            // Files were restored from trash, refresh the list to show them
                             loadRecordsList();
                         }
                     }
                 };
             }
-            IntentFilter filter = new IntentFilter(Constants.ACTION_STORAGE_LOCATION_CHANGED);
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Constants.ACTION_STORAGE_LOCATION_CHANGED);
+            filter.addAction(Constants.ACTION_FILES_RESTORED);
             ContextCompat.registerReceiver(requireContext(), storageLocationChangedReceiver, filter,
                     ContextCompat.RECEIVER_NOT_EXPORTED);
             isStorageReceiverRegistered = true;
-            Log.d(TAG, "ACTION_STORAGE_LOCATION_CHANGED receiver registered.");
+            Log.d(TAG, "Storage and file restore broadcast receiver registered for actions: " + 
+                  Constants.ACTION_STORAGE_LOCATION_CHANGED + ", " + Constants.ACTION_FILES_RESTORED);
         }
     }
 
@@ -551,7 +568,7 @@ public class RecordsFragment extends BaseFragment implements
             try {
                 requireContext().unregisterReceiver(storageLocationChangedReceiver);
                 isStorageReceiverRegistered = false;
-                Log.d(TAG, "ACTION_STORAGE_LOCATION_CHANGED receiver unregistered.");
+                Log.d(TAG, "Storage and file restore broadcast receiver unregistered.");
             } catch (IllegalArgumentException e) {
                 Log.w(TAG, "Attempted to unregister storage receiver but it wasn't registered?");
                 isStorageReceiverRegistered = false;
@@ -2559,6 +2576,12 @@ public class RecordsFragment extends BaseFragment implements
      */
     public void refreshList() {
         if (isAdded()) {
+            // Clear caches to ensure fresh data
+            com.fadcam.utils.VideoSessionCache.invalidateOnNextAccess(sharedPreferencesManager);
+            if (recordsAdapter != null) {
+                recordsAdapter.clearCaches();
+            }
+            Log.i(TAG, "refreshList: Clearing caches and reloading records list.");
             loadRecordsList();
         }
     }

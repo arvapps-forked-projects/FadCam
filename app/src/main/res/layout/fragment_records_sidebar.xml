@@ -10,7 +10,7 @@
     android:paddingBottom="16dp"
     android:paddingStart="16dp"
     android:paddingEnd="16dp"
-    android:background="@drawable/sidesheet_wrapper_bg">
+    android:background="@drawable/sidesheet_wrapper_bg_dynamic">
 
     <!-- Header with title only -->
     <LinearLayout
@@ -23,9 +23,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/records_options_title"
-            android:textColor="@color/danger_red"
+            android:textColor="?attr/pickerTextPrimary"
             android:textStyle="bold"
-            android:textSize="18sp"/>
+            android:textSize="18sp"
+            android:textAlignment="viewStart"/>
     </LinearLayout>
 
     <!-- Divider below header -->
@@ -83,20 +84,22 @@
                     android:text="@string/records_sort_order_title"
                     android:textColor="?attr/colorHeading"
                     android:textStyle="bold"
-                    android:textSize="15sp"/>
+                    android:textSize="15sp"
+                    android:textAlignment="viewStart"/>
                 <TextView
                     android:id="@+id/row_sort_subtitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@android:color/darker_gray"
                     android:textSize="12sp"
-                    android:text="@string/sort_latest_first"/>
+                    android:text="@string/sort_latest_first"
+                    android:textAlignment="viewStart"/>
             </LinearLayout>
             <ImageView
                 android:id="@+id/row_sort_chevron"
                 android:layout_width="14dp"
                 android:layout_height="14dp"
-                android:src="@drawable/exo_ic_chevron_right"
+                android:src="@drawable/ic_arrow_right"
                 android:tint="@android:color/darker_gray"/>
         </LinearLayout>
 
@@ -136,20 +139,22 @@
                     android:text="@string/records_view_mode_title"
                     android:textColor="?attr/colorHeading"
                     android:textStyle="bold"
-                    android:textSize="15sp"/>
+                    android:textSize="15sp"
+                    android:textAlignment="viewStart"/>
                 <TextView
                     android:id="@+id/row_view_mode_subtitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@android:color/darker_gray"
                     android:textSize="12sp"
-                    android:text="@string/view_mode_grid"/>
+                    android:text="@string/view_mode_grid"
+                    android:textAlignment="viewStart"/>
             </LinearLayout>
             <ImageView
                 android:id="@+id/row_view_mode_chevron"
                 android:layout_width="14dp"
                 android:layout_height="14dp"
-                android:src="@drawable/exo_ic_chevron_right"
+                android:src="@drawable/ic_arrow_right"
                 android:tint="@android:color/darker_gray"/>
         </LinearLayout>
     </LinearLayout>
