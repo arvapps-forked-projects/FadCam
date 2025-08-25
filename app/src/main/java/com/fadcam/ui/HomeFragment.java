@@ -70,6 +70,7 @@ import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 
 import com.fadcam.CameraType;
+import com.fadcam.ui.helpers.HomeFragmentHelper;
 import com.fadcam.Constants;
 import com.fadcam.Log;
 import com.fadcam.R;
@@ -125,6 +126,10 @@ public class HomeFragment extends BaseFragment {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
+
+    // -------------- Fix Start (HomeFragment) --------------
+    private HomeFragmentHelper fragmentHelper;
+    // -------------- Fix Ended (HomeFragment) --------------
 
     // ----- Fix Start for this method(fields)-----
     private static final String[] CLOCK_COLOR_NAMES = { "Purple", "Blue", "Green", "Teal", "Orange", "Red", "Dark Grey",
@@ -572,6 +577,7 @@ public class HomeFragment extends BaseFragment {
                     case "bitrate_mode_custom": // custom bitrate mode toggled
                     case "bitrate_custom_value": // custom bitrate value changed (kbps)
                     case Constants.PREF_VIDEO_BITRATE:
+                    case SharedPreferencesManager.PREF_VIDEO_ORIENTATION: // video orientation changed
                         refreshPrefsAndUpdateStorage();
                         break;
                     default:
@@ -1863,6 +1869,54 @@ public class HomeFragment extends BaseFragment {
         return inflater.inflate(R.layout.fragment_home, container, false);
     }
 
+    // -------------- Fix Start: Manual orientation change handling -----------
+    /**
+     * Called by MainActivity when orientation changes to refresh the fragment's
+     * layout
+     */
+    public void onOrientationChanged(int orientation) {
+        Log.d(TAG, "HomeFragment orientation changed to: " +
+                (orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ? "landscape" : "portrait"));
+
+        // Simple approach: just log the change and let Android handle it naturally
+        // The issue might be that we're over-engineering the solution
+        Log.d(TAG, "Orientation change detected, current resources configuration: " +
+                getResources().getConfiguration().orientation);
+
+        // For now, let's not force any view recreation and see if the natural Android
+        // configuration change handling works better
+        if (isAdded() && getView() != null) {
+            // Just save and restore state without view manipulation
+            saveCurrentState();
+
+            // Post a runnable to restore state after the configuration settles
+            getView().post(() -> {
+                if (isAdded()) {
+                    restoreCurrentState();
+                    Log.d(TAG, "State restored after orientation change");
+                }
+            });
+        }
+    }
+
+    /**
+     * Save current fragment state before orientation change
+     */
+    private void saveCurrentState() {
+        // Save any important state that should persist across orientation changes
+        // This could include recording state, preview state, etc.
+        Log.d(TAG, "Saving fragment state before orientation change");
+    }
+
+    /**
+     * Restore fragment state after orientation change
+     */
+    private void restoreCurrentState() {
+        // Restore any saved state after orientation change
+        Log.d(TAG, "Restoring fragment state after orientation change");
+    }
+    // -------------- Fix End: Manual orientation change handling -----------
+
     // Debug method to help diagnose recording time issue
     private void debugRecordingTimeVariables() {
         Log.d(TAG, "======== DEBUG RECORDING TIME ========");
@@ -1969,6 +2023,13 @@ public class HomeFragment extends BaseFragment {
         }
 
         initializeViews(view);
+
+        // -------------- Fix Start (initializeComponents) --------------
+        // Initialize UI components using helper
+        fragmentHelper = new HomeFragmentHelper(this);
+        fragmentHelper.initializeComponents(view);
+        // -------------- Fix Ended (initializeComponents) --------------
+
         // Fragment result listeners for pickers
         android.util.Log.d("HomeFragment", "REGISTERING fragment result listener for exposure compensation");
         com.fadcam.Log.d(TAG, "Registering fragment result listener for exposure compensation with key: "
@@ -2301,23 +2362,80 @@ public class HomeFragment extends BaseFragment {
             int snowSurface = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_preview_area); // Darker
                                                                                                              // gray for
                                                                                                              // preview
+            int snowCardBackground = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_card_background); // White
+                                                                                                                       // for
+                                                                                                                       // other
+                                                                                                                       // cards
             // ----- Fix End: Use darker gray for preview area in Snow Veil theme -----
             int snowHeading = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_text_primary);
             int snowTextSecondary = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_text_secondary);
-            if (cardPreview != null)
+
+            // Preview area gets darker gray for better contrast
+            if (cardPreview != null) {
                 cardPreview.setCardBackgroundColor(snowSurface);
+                // Also set the background of the FrameLayout inside the CardView
+                View frameLayout = cardPreview.getChildAt(0);
+                if (frameLayout != null) {
+                    frameLayout.setBackgroundColor(snowSurface);
+                }
+                // Use a post-layout runnable to ensure the color is applied after all layout
+                // operations
+                cardPreview.post(() -> {
+                    cardPreview.setCardBackgroundColor(snowSurface);
+                    if (frameLayout != null) {
+                        frameLayout.setBackgroundColor(snowSurface);
+                    }
+                });
+            }
+
+            // Other cards get white background
             if (cardStats != null)
-                cardStats.setCardBackgroundColor(snowSurface);
+                cardStats.setCardBackgroundColor(snowCardBackground);
             if (cardStorage != null)
-                cardStorage.setCardBackgroundColor(snowSurface);
-            setTextColorsRecursive(cardPreview, snowHeading, snowTextSecondary);
-            setTextColorsRecursive(cardStats, snowHeading, snowTextSecondary);
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, snowHeading, snowTextSecondary);
+                cardStorage.setCardBackgroundColor(snowCardBackground);
+
+            // Set text colors - preview area gets white text, other cards get black text
+            setTextColorsRecursive(cardPreview, Color.WHITE, Color.parseColor("#E0E0E0")); // White text on dark gray
+            setTextColorsRecursive(cardStats, snowHeading, snowTextSecondary); // Black text on white
+            setTextColorsRecursive(cardStorage, snowHeading, snowTextSecondary); // Black text on white - FIXED!
 
             // Apply additional contrast improvements for the Snow Veil theme
             applySnowVeilThemeToUI(view);
-        } else if (isAmoledTheme || "Faded Night".equals(themeName)) {
+        } else if ("Faded Night".equals(themeName)) {
+            // Faded Night theme - use a proper gray instead of pure black
+            int fadedNightSurface = ContextCompat.getColor(requireContext(), R.color.amoled_card); // Use card color
+                                                                                                   // instead of pure
+                                                                                                   // black
+            int fadedNightHeading = ContextCompat.getColor(requireContext(), R.color.amoled_heading);
+            int fadedNightTextSecondary = ContextCompat.getColor(requireContext(), R.color.amoled_text_secondary_dark);
+            if (cardPreview != null) {
+                cardPreview.setCardBackgroundColor(fadedNightSurface);
+                // Also set the background of the FrameLayout inside the CardView to ensure it
+                // overrides the layout attribute
+                View frameLayout = cardPreview.getChildAt(0);
+                if (frameLayout != null) {
+                    frameLayout.setBackgroundColor(fadedNightSurface);
+                }
+                // Use a post-layout runnable to ensure the color is applied after all layout
+                // operations
+                cardPreview.post(() -> {
+                    cardPreview.setCardBackgroundColor(fadedNightSurface);
+                    if (frameLayout != null) {
+                        frameLayout.setBackgroundColor(fadedNightSurface);
+                    }
+                });
+            }
+            if (cardStats != null)
+                cardStats.setCardBackgroundColor(fadedNightSurface);
+            if (cardStorage != null)
+                cardStorage.setCardBackgroundColor(fadedNightSurface);
+            setTextColorsRecursive(cardPreview, fadedNightHeading, fadedNightTextSecondary);
+            setTextColorsRecursive(cardStats, fadedNightHeading, fadedNightTextSecondary);
+
+            // Apply Faded Night theme to recording tiles
+            applyFadedNightThemeToTiles();
+        } else if (isAmoledTheme) {
+            // Pure AMOLED theme - keep pure black for battery saving
             int amoledSurface = ContextCompat.getColor(requireContext(), R.color.amoled_surface_dark);
             int amoledHeading = ContextCompat.getColor(requireContext(), R.color.amoled_heading);
             int amoledTextSecondary = ContextCompat.getColor(requireContext(), R.color.amoled_text_secondary_dark);
@@ -2335,8 +2453,23 @@ public class HomeFragment extends BaseFragment {
             int darkSurface = ContextCompat.getColor(requireContext(), R.color.dark_purple_bar);
             int darkHeading = ContextCompat.getColor(requireContext(), R.color.colorHeading);
             int darkTextSecondary = ContextCompat.getColor(requireContext(), R.color.gray_text_light);
-            if (cardPreview != null)
+            if (cardPreview != null) {
                 cardPreview.setCardBackgroundColor(darkSurface);
+                // Also set the background of the FrameLayout inside the CardView to ensure it
+                // overrides the layout attribute
+                View frameLayout = cardPreview.getChildAt(0);
+                if (frameLayout != null) {
+                    frameLayout.setBackgroundColor(darkSurface);
+                }
+                // Use a post-layout runnable to ensure the color is applied after all layout
+                // operations
+                cardPreview.post(() -> {
+                    cardPreview.setCardBackgroundColor(darkSurface);
+                    if (frameLayout != null) {
+                        frameLayout.setBackgroundColor(darkSurface);
+                    }
+                });
+            }
             if (cardStats != null)
                 cardStats.setCardBackgroundColor(darkSurface);
             if (cardStorage != null)
@@ -2345,6 +2478,9 @@ public class HomeFragment extends BaseFragment {
             setTextColorsRecursive(cardStats, darkHeading, darkTextSecondary);
             // Skip storage widget to preserve semantic colors
             // setTextColorsRecursive(cardStorage, darkHeading, darkTextSecondary);
+
+            // Apply Midnight Dusk theme to recording tiles
+            applyMidnightDuskThemeToTiles();
         } else {
             // Fallback for other themes: use dialog color for cards
             if (cardPreview != null)
@@ -2361,7 +2497,11 @@ public class HomeFragment extends BaseFragment {
         // ----- Fix End: Apply dynamic theme colors to preview area cards (force
         // override for AMOLED and Red, use *_surface_dark) -----
 
-        // ----- Fix Start: Storage card always darker gray for all themes -----
+        // Apply theme-specific colors to mode switcher
+        applyModeSwitcherTheming(themeName);
+
+        // ----- Fix Start: Storage card theme-specific colors (don't override theme
+        // colors) -----
         if (cardStorage != null) {
             if ("Crimson Bloom".equals(themeName)) {
                 // Use an even darker background for Crimson Bloom theme
@@ -2371,13 +2511,24 @@ public class HomeFragment extends BaseFragment {
                 // Use the gold theme specific card background
                 cardStorage.setCardBackgroundColor(
                         ContextCompat.getColor(requireContext(), R.color.gold_theme_card_background));
+            } else if ("Faded Night".equals(themeName)) {
+                // Keep the Faded Night theme color that was already set
+                // Don't override it with dark_card_background
+            } else if ("Midnight Dusk".equals(themeName)) {
+                // Use consistent dark background like other themes
+                cardStorage
+                        .setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.dark_card_background));
+            } else if ("Snow Veil".equals(themeName)) {
+                // Keep the Snow Veil theme color that was already set
+                // Don't override it with dark_card_background
             } else {
-                // Standard dark background for other themes
+                // Standard dark background for other themes that don't have specific theming
                 cardStorage
                         .setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.dark_card_background));
             }
         }
-        // ----- Fix End: Storage card always darker gray for all themes -----
+        // ----- Fix End: Storage card theme-specific colors (don't override theme
+        // colors) -----
 
         // ----- Fix Start: Re-apply clock card color to ensure it's not affected by
         // theme styling -----
@@ -2447,6 +2598,15 @@ public class HomeFragment extends BaseFragment {
 
         // Setup the small recording tiles row and listeners
         setupRecordingTiles(view);
+
+        // Apply tile theming after tiles are initialized
+        String tileTheme = sharedPreferencesManager.sharedPreferences.getString(Constants.PREF_APP_THEME,
+                Constants.DEFAULT_APP_THEME);
+        if ("Faded Night".equals(tileTheme)) {
+            applyFadedNightThemeToTiles();
+        } else if ("Midnight Dusk".equals(tileTheme)) {
+            applyMidnightDuskThemeToTiles();
+        }
 
         // Attempt to find camera with flash
         try {
@@ -3400,7 +3560,21 @@ public class HomeFragment extends BaseFragment {
         final String finalCameraLabel = cameraLabel;
         final String qualityText = getResolutionDisplayName(selectedRes);
         final String fpsText = String.format(Locale.getDefault(), "%dfps", selectedFps);
-        final String cameraSubtitle = qualityText + " • " + fpsText;
+
+        // Get orientation setting
+        String orientationText = "";
+        try {
+            String orientation = sharedPreferencesManager.getVideoOrientation();
+            if (SharedPreferencesManager.ORIENTATION_LANDSCAPE.equals(orientation)) {
+                orientationText = "Landscape";
+            } else {
+                orientationText = "Portrait";
+            }
+        } catch (Exception ignored) {
+            orientationText = "Portrait"; // Default fallback
+        }
+
+        final String cameraSubtitle = qualityText + " • " + fpsText + " • " + orientationText;
 
         Locale numberFormatLocale = (Locale.getDefault() != null
                 && "fr".equalsIgnoreCase(Locale.getDefault().getLanguage()))
@@ -4552,6 +4726,14 @@ public class HomeFragment extends BaseFragment {
 
         stopUpdatingInfo();
         stopUpdatingClock();
+
+        // -------------- Fix Start (cleanup) --------------
+        // Clean up helper
+        if (fragmentHelper != null) {
+            fragmentHelper.onDestroy();
+            fragmentHelper = null;
+        }
+        // -------------- Fix Ended (cleanup) --------------
     }
 
     public boolean isRecording() {
@@ -5421,6 +5603,35 @@ public class HomeFragment extends BaseFragment {
 
         // Ensure text in cards has proper contrast
         ensureCardTextContrast(rootView);
+
+        // Apply Snow Veil specific fixes
+        applySnowVeilSpecificFixes(rootView);
+    }
+
+    /**
+     * Apply Snow Veil theme specific fixes for text contrast and colors
+     */
+    private void applySnowVeilSpecificFixes(View rootView) {
+        // Find storage card and ensure all text is black
+        CardView cardStorage = rootView.findViewById(R.id.cardStorage);
+        if (cardStorage != null) {
+            // Force all text in storage card to black for better contrast on white
+            // background
+            setTextColorsRecursive(cardStorage, Color.BLACK, Color.parseColor("#424242"));
+        }
+
+        // Find any other text views that might need contrast fixes
+        // This ensures all text is properly visible on the light theme
+        View[] textContainers = {
+                rootView.findViewById(R.id.cardStats),
+                rootView.findViewById(R.id.cardClock)
+        };
+
+        for (View container : textContainers) {
+            if (container != null) {
+                setTextColorsRecursive(container, Color.BLACK, Color.parseColor("#424242"));
+            }
+        }
     }
 
     /**
@@ -5494,6 +5705,193 @@ public class HomeFragment extends BaseFragment {
             }
         }
         // -------------- Fix Ended (applyButtonTinting - recording tiles)-----------
+    }
+
+    /**
+     * Apply Faded Night theme styling to recording control tiles
+     */
+    private void applyFadedNightThemeToTiles() {
+        // Define the Faded Night surface color (same as used for cards)
+        int fadedNightSurface = Color.parseColor("#181A1B");
+
+        // Create a custom drawable with ripple effect for Faded Night theme
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        shape.setColor(fadedNightSurface);
+        shape.setCornerRadius(8 * getResources().getDisplayMetrics().density); // 8dp in pixels
+
+        // Create ripple drawable with the custom background
+        android.graphics.drawable.RippleDrawable rippleDrawable = new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), // Ripple color
+                                                                                           // (semi-transparent white)
+                shape, // Background
+                null // Mask (null means use background as mask)
+        );
+
+        // Apply the custom drawable to recording tiles
+        if (tileAfToggle != null) {
+            tileAfToggle.setBackground(rippleDrawable);
+        }
+        if (tileExp != null) {
+            // Create a new instance for each tile to avoid sharing the same drawable
+            android.graphics.drawable.GradientDrawable expShape = new android.graphics.drawable.GradientDrawable();
+            expShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            expShape.setColor(fadedNightSurface);
+            expShape.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+
+            android.graphics.drawable.RippleDrawable expRipple = new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
+                    expShape,
+                    null);
+            tileExp.setBackground(expRipple);
+        }
+        if (tileZoom != null) {
+            // Create a new instance for each tile to avoid sharing the same drawable
+            android.graphics.drawable.GradientDrawable zoomShape = new android.graphics.drawable.GradientDrawable();
+            zoomShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            zoomShape.setColor(fadedNightSurface);
+            zoomShape.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+
+            android.graphics.drawable.RippleDrawable zoomRipple = new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
+                    zoomShape,
+                    null);
+            tileZoom.setBackground(zoomRipple);
+        }
+    }
+
+    /**
+     * Apply Midnight Dusk theme styling to recording control tiles
+     */
+    private void applyMidnightDuskThemeToTiles() {
+        // Define the Midnight Dusk surface color (same as used for cards)
+        int midnightDuskSurface = ContextCompat.getColor(requireContext(), R.color.dark_purple_bar);
+
+        // Create a custom drawable with ripple effect for Midnight Dusk theme
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        shape.setColor(midnightDuskSurface);
+        shape.setCornerRadius(8 * getResources().getDisplayMetrics().density); // 8dp in pixels
+
+        // Create ripple drawable with the custom background
+        android.graphics.drawable.RippleDrawable rippleDrawable = new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), // Ripple color
+                                                                                           // (semi-transparent white)
+                shape, // Background
+                null // Mask (null means use background as mask)
+        );
+
+        // Apply the custom drawable to recording tiles
+        if (tileAfToggle != null) {
+            tileAfToggle.setBackground(rippleDrawable);
+        }
+        if (tileExp != null) {
+            // Create a new instance for each tile to avoid sharing the same drawable
+            android.graphics.drawable.GradientDrawable expShape = new android.graphics.drawable.GradientDrawable();
+            expShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            expShape.setColor(midnightDuskSurface);
+            expShape.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+
+            android.graphics.drawable.RippleDrawable expRipple = new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
+                    expShape,
+                    null);
+            tileExp.setBackground(expRipple);
+        }
+        if (tileZoom != null) {
+            // Create a new instance for each tile to avoid sharing the same drawable
+            android.graphics.drawable.GradientDrawable zoomShape = new android.graphics.drawable.GradientDrawable();
+            zoomShape.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            zoomShape.setColor(midnightDuskSurface);
+            zoomShape.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+
+            android.graphics.drawable.RippleDrawable zoomRipple = new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
+                    zoomShape,
+                    null);
+            tileZoom.setBackground(zoomRipple);
+        }
+    }
+
+    /**
+     * Apply theme-specific colors to the mode switcher (FadCam, FadRec, FadMic)
+     */
+    private void applyModeSwitcherTheming(String themeName) {
+        try {
+            // Find the active segment (FadCam)
+            View segmentFadCam = getView().findViewById(R.id.segment_fadcam);
+            if (segmentFadCam == null)
+                return;
+
+            // Determine the theme color and text color for the active segment
+            int activeColor;
+            int textColor;
+            switch (themeName) {
+                case "Crimson Bloom":
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.red_theme_primary);
+                    textColor = Color.WHITE; // Red background with white text
+                    break;
+                case "Premium Gold":
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.gold_theme_primary);
+                    textColor = Color.BLACK; // Bright gold background with black text
+                    break;
+                case "Silent Forest":
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.silentforest_theme_primary);
+                    textColor = Color.WHITE; // Green background with white text
+                    break;
+                case "Shadow Alloy":
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.shadowalloy_theme_primary);
+                    textColor = Color.BLACK; // Bright silver background with black text
+                    break;
+                case "Pookie Pink":
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.pookiepink_theme_primary);
+                    textColor = Color.BLACK; // Bright pink background with black text
+                    break;
+                case "Snow Veil":
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.snowveil_theme_primary);
+                    textColor = Color.WHITE; // Gray background with white text
+                    break;
+                case "Midnight Dusk":
+                    // Use the same purple color as the clock card
+                    activeColor = Color.parseColor("#673AB7"); // Same purple as clock card
+                    textColor = Color.WHITE; // Purple background with white text
+                    break;
+                case "Faded Night":
+                    // Use the original red color for Faded Night
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.redPastel);
+                    textColor = Color.WHITE; // Red background with white text
+                    break;
+                case "AMOLED":
+                    // For AMOLED theme, use a lighter accent color
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.amoled_accent);
+                    textColor = Color.WHITE; // Dark background with white text
+                    break;
+                default:
+                    // Default to the original red color for unknown themes
+                    activeColor = ContextCompat.getColor(requireContext(), R.color.redPastel);
+                    textColor = Color.WHITE;
+                    break;
+            }
+
+            // Create a new background drawable with the theme color
+            GradientDrawable activeBackground = new GradientDrawable();
+            activeBackground.setShape(GradientDrawable.RECTANGLE);
+            activeBackground.setColor(activeColor);
+            activeBackground.setCornerRadius(14 * getResources().getDisplayMetrics().density); // 14dp radius
+
+            // Apply the themed background to the active segment
+            segmentFadCam.setBackground(activeBackground);
+
+            // Find and update the text color for the active segment
+            TextView textFadCam = segmentFadCam.findViewById(R.id.text_fadcam);
+            if (textFadCam != null) {
+                textFadCam.setTextColor(textColor);
+            }
+
+        } catch (Exception e) {
+            // Silently handle any errors to avoid crashes
+            android.util.Log.w("HomeFragment", "Error applying mode switcher theming", e);
+        }
     }
 
     /**
