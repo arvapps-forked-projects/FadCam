@@ -108,6 +108,22 @@
     <string name="video_menu_rename">Rename</string>
     <string name="video_menu_info">Info</string>
     <string name="video_menu_copy_filename">Copy Filename</string>
+    
+    <!-- Video Info Strings -->
+    <string name="video_info_file_name">File Name</string>
+    <string name="video_info_file_size">File Size</string>
+    <string name="video_info_file_path">File Path</string>
+    <string name="video_info_last_modified">Last Modified</string>
+    <string name="video_info_duration">Duration</string>
+    <string name="video_info_resolution">Resolution</string>
+    <string name="video_info_fps">Frame Rate</string>
+    <string name="video_info_codec">Codec</string>
+    <string name="video_info_bitrate">Bitrate</string>
+    <string name="video_info_geotag">Location</string>
+    <string name="video_info_copy_clipboard">Copy to Clipboard</string>
+    <string name="video_info_copy_subtitle">Copy video information</string>
+    <string name="video_info_unknown">Unknown</string>
+    <string name="video_info_no_location">No location data</string>
     <string name="video_menu_mark_viewed">Mark as Viewed</string>
     <string name="video_menu_mark_unviewed">Mark as Unviewed</string>
     <string name="video_menu_upload_youtube">Upload to YouTube</string>
@@ -487,6 +503,8 @@
     <string name="shortcuts_customize_action_reset">Reset to default</string>
     <string name="shortcuts_customize_sheet_desc">Set a custom name and icon for this shortcut.</string>
     <string name="shortcuts_rename_helper">Tip: Leave empty to use the default name.</string>
+    <string name="shortcuts_rename_action_title">Rename</string>
+    <string name="shortcuts_rename_action_subtitle">Click to rename</string>
     <string name="shortcut_purpose_start">This shortcut starts recording with the back camera.</string>
     <string name="shortcut_purpose_stop">This shortcut stops the current recording.</string>
     <string name="shortcut_purpose_torch">This shortcut toggles the torch.</string>
@@ -670,9 +688,9 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="trash_fragment_title_text">Recently Deleted</string>
     
     <!-- Fix Start: Cloak Recents strings -->
-    <string name="setting_cloak_recents_title">Cloak in Recents</string>
+    <string name="setting_cloak_recents_title">Block Screenshots &amp; Hide in Recents</string>
     <string name="setting_cloak_recents_switch">Hide preview</string>
-    <string name="setting_cloak_recents_helper">When enabled, the app preview shown in the Android app overview is hidden. This helps protect your privacy.\n(Default: Enabled)</string>
+    <string name="setting_cloak_recents_helper">Hides app preview in recent apps and blocks screenshots within the app. This prevents sensitive content from being captured or visible in the app switcher.\n(Default: Disabled)</string>
     <string name="setting_enabled_msg">Enabled</string>
     <string name="setting_disabled_msg">Disabled</string>
     <!-- Fix End: Cloak Recents strings -->
@@ -1077,4 +1095,10 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="restore_error_message">Failed to restore some items</string>
     <string name="restore_cancelled">Restore cancelled</string>
     <string name="restore_confirm_button">Restore</string>
+    
+    <!-- Tips Navigation Strings -->
+    <string name="close">Close</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="done">Done</string>
 </resources>

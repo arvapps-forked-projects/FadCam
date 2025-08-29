@@ -1,28 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/home_sidebar_root"
     android:layout_width="320dp"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@drawable/home_sidesheet_gradient_bg_dynamic"
+    android:clipToOutline="true"
+    android:outlineProvider="background"
+    android:fillViewport="true"
+    android:scrollbars="vertical">
+
+<LinearLayout
+    android:id="@+id/home_sidebar_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
     android:paddingTop="16dp"
     android:paddingBottom="16dp"
     android:paddingStart="16dp"
-    android:paddingEnd="16dp"
-    android:clipToOutline="true"
-    android:outlineProvider="background">
+    android:paddingEnd="16dp">
 
-        <!-- Header with title only -->
+        <!-- Header with close button and title -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="start|center_vertical">
+            android:gravity="center_vertical"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp">
+
+            <ImageView
+                android:id="@+id/home_sidebar_close_btn"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="12dp"
+                android:src="@drawable/ic_close"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="?attr/pickerTextSecondary"
+                android:clickable="true"
+                android:focusable="true" />
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:text="@string/home_options_title"
                 android:textColor="?attr/pickerTextPrimary"
                 android:textStyle="bold"
@@ -37,7 +59,7 @@
             android:layout_marginTop="8dp"
             android:layout_marginStart="14dp"
             android:layout_marginEnd="12dp"
-            app:dividerColor="#262626"/>
+            app:dividerColor="#404040"/>
 
         <!-- Group: Help -->
         <TextView
@@ -63,13 +85,7 @@
             <!-- Tips row -->
             <LinearLayout
                 android:id="@+id/row_tips"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingStart="14dp"
-                android:paddingEnd="12dp"
-                android:background="@drawable/settings_home_row_bg">
+                style="@style/SettingsGroupRow">
 
                 <!-- Tips icon using Material Icons ligature -->
                 <TextView
@@ -96,8 +112,6 @@
                         android:textColor="?attr/colorHeading"
                         android:textSize="15sp"
                         android:textStyle="bold"
-                        android:ellipsize="end"
-                        android:maxLines="1"
                         android:textAlignment="viewStart" />
 
                     <TextView
@@ -106,8 +120,6 @@
                         android:text="@string/tips_subtitle"
                         android:textColor="@android:color/darker_gray"
                         android:textSize="12sp"
-                        android:ellipsize="end"
-                        android:maxLines="1"
                         android:textAlignment="viewStart" />
 
                 </LinearLayout>
@@ -125,3 +137,5 @@
         </LinearLayout>
 
 </LinearLayout>
+
+</ScrollView>

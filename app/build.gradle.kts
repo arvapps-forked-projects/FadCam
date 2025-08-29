@@ -22,10 +22,16 @@ android {
     defaultConfig {
         applicationId = "com.fadcam"
         minSdk = 28
-        targetSdk = 34
-        versionCode = 19
-        versionName = "2.0.0-beta4"
+        targetSdk = 35
+        versionCode = 24
+        versionName = "2.0.0-beta7"
         vectorDrawables.useSupportLibrary = true
+        
+        // Fix 16KB native library alignment for Android 15
+        // Generate full native debug symbols so they can be uploaded to Play Console
+        ndk {
+            debugSymbolLevel = "FULL"
+        }
     }
 
     signingConfigs {
@@ -76,6 +82,8 @@ android {
     packaging {
         jniLibs {
             excludes += listOf("**/x86/**", "**/x86_64/**", "**/mips/**", "**/mips64/**")
+            // Enable 16KB page size alignment for Android 15 compatibility
+            useLegacyPackaging = false
         }
         resources {
             excludes += listOf(
