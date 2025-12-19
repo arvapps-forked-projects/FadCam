@@ -87,6 +87,24 @@ public class HomeSidebarFragment extends DialogFragment {
             closeButton.setOnClickListener(v -> dismiss());
         }
 
+        // What's New row
+        View whatsNewRow = view.findViewById(R.id.row_whats_new);
+        if (whatsNewRow != null) {
+            // Show badge if feature not yet seen
+            TextView whatsNewBadge = view.findViewById(R.id.badge_whats_new);
+            if (whatsNewBadge != null) {
+                boolean showBadge = com.fadcam.ui.utils.NewFeatureManager.shouldShowBadge(requireContext(), "whats_new");
+                whatsNewBadge.setVisibility(showBadge ? View.VISIBLE : View.GONE);
+            }
+            
+            whatsNewRow.setOnClickListener(v -> {
+                openWhatsNew();
+                // Mark badge as seen when clicked
+                com.fadcam.ui.utils.NewFeatureManager.markFeatureAsSeen(requireContext(), "whats_new");
+                dismiss();
+            });
+        }
+
         // Tips row
         View tipsRow = view.findViewById(R.id.row_tips);
         if (tipsRow != null) {
@@ -206,6 +224,12 @@ public class HomeSidebarFragment extends DialogFragment {
                 guard++;
             }
         }
+    }
+
+    private void openWhatsNew() {
+        // Open WhatsNewActivity
+        android.content.Intent intent = new android.content.Intent(requireContext(), com.fadcam.ui.WhatsNewActivity.class);
+        startActivity(intent);
     }
 
     private void openTipsPicker() {

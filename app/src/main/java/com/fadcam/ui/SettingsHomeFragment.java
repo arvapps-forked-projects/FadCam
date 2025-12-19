@@ -14,6 +14,8 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.fadcam.R;
+import com.fadcam.ui.utils.NewFeatureManager;
+import android.widget.TextView;
 
 /**
  * SettingsHomeFragment
@@ -26,20 +28,19 @@ public class SettingsHomeFragment extends Fragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View root = inflater.inflate(R.layout.fragment_settings_home, container, false);
-        // -------------- Fix Start for this method(onCreateView)-----------
     // Removed redundant Location & Privacy group (location embedding moved into Video settings)
     int[] ids = new int[]{
         R.id.group_appearance,
-        R.id.group_video,
+        R.id.group_video_quick,
         R.id.group_video_player_settings,
-        R.id.group_audio,
+        R.id.group_audio_quick,
         R.id.group_storage,
         R.id.group_notifications,
         R.id.group_security,
         R.id.group_widgets,
         R.id.group_about,
         R.id.group_review,
-        R.id.group_watermark,
+        R.id.group_watermark_quick,
         R.id.group_readme
     };
     String[] labels = new String[]{
@@ -62,7 +63,7 @@ public class SettingsHomeFragment extends Fragment {
                 if(row != null){
                     row.setOnClickListener(v -> openSubFragment(new AppearanceSettingsFragment()));
                 }
-            } else if(ids[i] == R.id.group_video){
+            } else if(ids[i] == R.id.group_video_quick){
                 LinearLayout row = root.findViewById(ids[i]);
                 if(row != null){
                     row.setOnClickListener(v -> openSubFragment(new VideoSettingsFragment()));
@@ -73,7 +74,7 @@ public class SettingsHomeFragment extends Fragment {
             // Open dedicated screen; inside that screen rows still open bottom pickers
             row.setOnClickListener(v -> openSubFragment(new VideoPlayerSettingsFragment()));
                 }
-            } else if(ids[i] == R.id.group_audio){
+            } else if(ids[i] == R.id.group_audio_quick){
                 LinearLayout row = root.findViewById(ids[i]);
                 if(row != null){
                     row.setOnClickListener(v -> openSubFragment(new AudioSettingsFragment()));
@@ -98,10 +99,17 @@ public class SettingsHomeFragment extends Fragment {
                 if(row != null){
                     row.setOnClickListener(v -> openSubFragment(new NotificationSettingsFragment()));
                 }
-            } else if(ids[i] == R.id.group_watermark){
+            } else if(ids[i] == R.id.group_watermark_quick){
                 LinearLayout row = root.findViewById(ids[i]);
                 if(row != null){
-                    row.setOnClickListener(v -> openSubFragment(new WatermarkSettingsFragment()));
+                    row.setOnClickListener(v -> {
+                        // Mark watermark badge as seen when clicking the row
+                        NewFeatureManager.markFeatureAsSeen(requireContext(), "watermark");
+                        // Hide the badge immediately for instant feedback
+                        manageBadgeVisibility(root);
+                        // Open watermark settings
+                        openSubFragment(new WatermarkSettingsFragment());
+                    });
                 }
             } else if(ids[i] == R.id.group_about){
                 LinearLayout row = root.findViewById(ids[i]);
@@ -124,8 +132,25 @@ public class SettingsHomeFragment extends Fragment {
         }
     wireAppInlineRows(root);
     refreshAppInlineValues(root);
-        // -------------- Fix Ended for this method(onCreateView)-----------
+    
+    // Show/hide watermark NEW badge based on whether user has seen it
+    manageBadgeVisibility(root);
         return root;
+    }
+    
+    /**
+     * Show or hide the watermark NEW badge based on whether the feature has been seen.
+     */
+    private void manageBadgeVisibility(View root) {
+        try {
+            TextView watermarkBadge = root.findViewById(R.id.watermark_new_badge);
+            if (watermarkBadge != null) {
+                boolean shouldShow = NewFeatureManager.shouldShowBadge(requireContext(), "watermark");
+                watermarkBadge.setVisibility(shouldShow ? View.VISIBLE : View.GONE);
+            }
+        } catch (Exception e) {
+            // Silently fail if badge view not found
+        }
     }
 
     /**
@@ -133,7 +158,6 @@ public class SettingsHomeFragment extends Fragment {
      * Contains two rows: Playback Speed and Quick Speed. Helper explains the difference.
      */
     private void showVideoPlayerSettingsSheet(){
-        // -------------- Fix Start for this method(showVideoPlayerSettingsSheet)-----------
         java.util.ArrayList<com.fadcam.ui.picker.OptionItem> items = new java.util.ArrayList<>();
         // We don't compute dynamic subtitles here; keep concise labels.
         items.add(new com.fadcam.ui.picker.OptionItem("row_playback_speed", getString(R.string.playback_speed_label), null, null, null, null, null, null, "speed", null, null, null));
@@ -187,11 +211,9 @@ public class SettingsHomeFragment extends Fragment {
             }
         });
         sheet.show(getParentFragmentManager(), "video_player_settings_sheet_settings_tab");
-        // -------------- Fix Ended for this method(showVideoPlayerSettingsSheet)-----------
     }
 
     private void showPlaybackSpeedPickerFromSettings(){
-        // -------------- Fix Start for this method(showPlaybackSpeedPickerFromSettings)-----------
         // Mirror the player's list for consistency
     final String RK = "rk_pick_playback_speed_settings";
     float[] speedValues = new float[]{0.25f,0.5f,0.6f,0.7f,0.8f,0.9f,1.0f,1.5f,2.0f,3.0f,4.0f,6.0f,8.0f,10.0f};
@@ -218,11 +240,9 @@ public class SettingsHomeFragment extends Fragment {
             }
         });
         sheet.show(getParentFragmentManager(), "playback_speed_picker_settings_tab");
-        // -------------- Fix Ended for this method(showPlaybackSpeedPickerFromSettings)-----------
     }
 
     private void showQuickSpeedPickerFromSettings(){
-        // -------------- Fix Start for this method(showQuickSpeedPickerFromSettings)-----------
         final String RK = "rk_pick_quick_speed_settings";
     float[] speedValues = new float[]{0.25f,0.5f,0.6f,0.7f,0.8f,0.9f,1.0f,1.5f,2.0f,3.0f,4.0f,6.0f,8.0f,10.0f};
     CharSequence[] labels = new CharSequence[]{"0.25x","0.5x","0.6x","0.7x","0.8x","0.9x","1x (Normal)","1.5x","2x","3x","4x","6x","8x","10x"};
@@ -245,22 +265,17 @@ public class SettingsHomeFragment extends Fragment {
             }
         });
         sheet.show(getParentFragmentManager(), "quick_speed_picker_settings_tab");
-        // -------------- Fix Ended for this method(showQuickSpeedPickerFromSettings)-----------
     }
 
     private void setupNav(View root, int id, String label){
-        // -------------- Fix Start for this method(setupNav)-----------
         LinearLayout row = root.findViewById(id);
         if (row != null) {
             row.setOnClickListener(v -> Toast.makeText(requireContext(), label, Toast.LENGTH_SHORT).show());
         }
-        // -------------- Fix Ended for this method(setupNav)-----------
     }
 
     private void openSubFragment(Fragment fragment){
-    // -------------- Fix Start for this method(openSubFragment)-----------
     OverlayNavUtil.show(requireActivity(), fragment, fragment.getClass().getSimpleName());
-    // -------------- Fix Ended for this method(openSubFragment)-----------
     }
 
     // Removed legacy widgets bottom sheet (replaced by full Shortcuts & Widgets screen)
@@ -293,14 +308,11 @@ public class SettingsHomeFragment extends Fragment {
     }
 
     private void openReadmeDialog(){
-        // -------------- Fix Start for this method(openReadmeDialog unified sheet)-----------
         ReadmeBottomSheetFragment sheet = ReadmeBottomSheetFragment.newInstance();
         sheet.show(getParentFragmentManager(), "readme_sheet");
-        // -------------- Fix Ended for this method(openReadmeDialog unified sheet)-----------
     }
 
     private void launchReview(){
-        // -------------- Fix Start for this method(launchReview webview form)-----------
         try {
             android.content.Intent i = new android.content.Intent(requireContext(), WebViewActivity.class);
             i.putExtra("url", "https://forms.gle/DvUoc1v9kB2bkFiS6");
@@ -308,7 +320,6 @@ public class SettingsHomeFragment extends Fragment {
         } catch (Exception e){
             android.widget.Toast.makeText(requireContext(), "Unable to open review form", android.widget.Toast.LENGTH_SHORT).show();
         }
-        // -------------- Fix Ended for this method(launchReview webview form)-----------
     }
 
     private void showOnboardingSwitchSheet(){
@@ -374,6 +385,11 @@ public class SettingsHomeFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        // Refresh badge visibility when returning to this fragment
+        View root = getView();
+        if (root != null) {
+            manageBadgeVisibility(root);
+        }
         // Future: update dynamic subtitles (e.g., current theme, language) when preferences change.
     }
 }

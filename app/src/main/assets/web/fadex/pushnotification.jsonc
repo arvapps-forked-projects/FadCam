@@ -1,0 +1,39 @@
+/*
+ * Fadex Push Notification Configuration
+ * 
+ * STRUCTURE:
+ * - Each notification is a key-value pair where the key is a unique ID
+ * - version: increment when you update a notification (forces client refresh)
+ * - draft: set to true to hide from clients (preview/test before publishing)
+ * - expiry: days until notification auto-deletes (0 = delete immediately + remove from cache, default 30)
+ * - priority: "info" (green), "warning" (yellow), "critical" (red)
+ * 
+ * CONTROL FLOW:
+ * 1. Set draft: false to publish to clients
+ * 2. Increment version when you update (forces refresh in all browsers)
+ * 3. Set expiry in days (30 = keep for 30 days, 0 = delete immediately and remove from client cache)
+ * 4. Set draft: true to hide a notification from clients while keeping the entry
+ */
+
+{
+  "notifications": {
+    "intro": {
+      "version": 1,
+      "title": "Welcome to FadCam Remote",
+      "subtitle": "Control your device from a feature rich web dashboard",
+      "description": "Welcome to FadCam Remote Dashboard!\n\nUse the sidebar to control your device:\n• Toggle recording on/off\n• Adjust camera settings\n• Monitor stream quality\n• View real-time status\n• Change system preferences\n\nYou can manage everything directly from this interface. Enjoy seamless remote control!\n\nIf you love FadCam and want to support development, consider becoming a patron: https://patreon.com/Fadedx",
+      "priority": "info",
+      "draft": false,
+      "expiry": -1
+    },
+    "main": {
+      "version": 4,
+      "title": "FadCam Updates",
+      "subtitle": "Stay tuned for notifications",
+      "description": "Check back soon for latest updates and announcements!",
+      "priority": "info",
+      "draft": true,
+      "expiry": 30
+    }
+  }
+}

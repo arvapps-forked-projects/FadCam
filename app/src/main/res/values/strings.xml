@@ -2,17 +2,17 @@
     <string name="app_name" translatable="false">FadCam</string>
     <string name="app_icon_description">Choose an icon and name for your app. This will change how it appears on your home screen.</string>
     <string name="check_for_updates">Check for Updates</string>
-        <string name="accessibility_thumbnail_progress">%1$d%% watched</string>
+    <string name="accessibility_thumbnail_progress">%1$d%% watched</string>
     <string name="fadsec_info">FadCam is part of the FadSec Lab suite. For more information, click on \'view source code\' below.</string>
 
 
     <string name="app_description">
-    <![CDATA[
+        <![CDATA[
     FadCam is an ad-free, open-source video recording app that prioritizes privacy by not tracking or collecting any data. It is available exclusively on GitHub and through the official links mentioned in the README.
     <br/><br/>
     FadCam has been featured in popular YouTube channels like <font color="#cfbafd">HowToMen</font> and <font color="#cfbafd">Xtream Droid</font>, as well as discussed in <font color="#cfbafd">GrapheneOS</font> and 55+ other notable spots.
     ]]>
-</string>
+    </string>
 
 
     <string name="view_source_code">View Source Code</string>
@@ -27,24 +27,24 @@
     <string name="privacy_information">Privacy Information</string>
     <string name="copyright_info"> 2024-2025 https://fadcam.faded.dev\nLicensed under GPL-3.0</string>
     <string-array name="video_resolutions_keys">
-        <item>7680x4320</item> <!-- 8K -->
-        <item>3840x2160</item> <!-- 4K -->
-        <item>2560x1440</item> <!-- 2K -->
-        <item>1920x1080</item> <!-- FHD -->
-        <item>1280x720</item> <!-- HD -->
-        <item>640x480</item> <!-- SD -->
-        <item>720x480</item> <!-- SD -->
-        <item>480x360</item> <!-- SD -->
+        <item>7680x4320</item>        <!-- 8K -->
+        <item>3840x2160</item>        <!-- 4K -->
+        <item>2560x1440</item>        <!-- 2K -->
+        <item>1920x1080</item>        <!-- FHD -->
+        <item>1280x720</item>        <!-- HD -->
+        <item>640x480</item>        <!-- SD -->
+        <item>720x480</item>        <!-- SD -->
+        <item>480x360</item>        <!-- SD -->
     </string-array>
     <string-array name="video_resolutions_values">
-        <item>8K</item>  <!-- 8K -->
-        <item>4K</item>  <!-- 4K -->
-        <item>2K</item>  <!-- 2K -->
-        <item>FHD</item> <!-- Full HD -->
-        <item>HD</item>  <!-- High Definition -->
-        <item>SD</item>  <!-- Standard Definition -->
-        <item>SD</item>  <!-- Standard Definition -->
-        <item>SD</item>  <!-- Standard Definition -->
+        <item>8K</item>        <!-- 8K -->
+        <item>4K</item>        <!-- 4K -->
+        <item>2K</item>        <!-- 2K -->
+        <item>FHD</item>        <!-- Full HD -->
+        <item>HD</item>        <!-- High Definition -->
+        <item>SD</item>        <!-- Standard Definition -->
+        <item>SD</item>        <!-- Standard Definition -->
+        <item>SD</item>        <!-- Standard Definition -->
     </string-array>
     <integer-array name="video_framerate_array">
         <item name="24">24</item>
@@ -52,7 +52,7 @@
         <item name="60">60</item>
         <item name="90">90</item>
     </integer-array>
-    <string name="mainpage_storage_indicator">\n    <![CDATA[
+    <string name="mainpage_storage_indicator" formatted="false">\n                                            <![CDATA[
     <font color=\'#FFFFFF\' style=\'font-size:16sp;\'><b>Available:</b></font><br>
     <font color=\'#CCCCCC\' style=\'font-size:14sp;\'>%.2f GB / %.2f GB</font><br><br>
     <font color=\'#FFFFFF\' style=\'font-size:16sp;\'><b>Record time (est.):</b></font><br>
@@ -75,7 +75,7 @@
         <item>10/11 | Your preferences are saved and applied seamlessly.</item>
         <item>11/11 | Need help? Join our Discord via the About section.</item>
     </string-array>
-    <string name="mainpage_video_info">\n    <![CDATA[
+    <string name="mainpage_video_info" formatted="false">\n                                            <![CDATA[
     <font color=\'#FFFFFF\' style=\'font-size:12sp;\'><b>Videos: </b></font>
     <font color=\'#D3D3D3\' style=\'font-size:11sp;\'>%d</font><br>
     <font color=\'#FFFFFF\' style=\'font-size:12sp;\'><b>Used:</font>
@@ -85,6 +85,46 @@
     <string name="button_pause">Pause</string>
     <string name="button_stop">Stop</string>
     <string name="button_resume">Resume</string>
+
+    <!-- FadRec Screen Recording Strings -->
+    <string name="fadrec_start_screen_recording">Start Screen Recording</string>
+    <string name="fadrec_stop_screen_recording">Stop Screen Recording</string>
+    <string name="fadrec_pause_screen_recording">Pause Screen Recording</string>
+    <string name="fadrec_resume_screen_recording">Resume Screen Recording</string>
+    <string name="fadrec_screen_recording_started">Screen recording started</string>
+    <string name="fadrec_screen_recording_stopped">Screen recording stopped</string>
+    <string name="fadrec_screen_recording_paused">Screen recording paused</string>
+    <string name="fadrec_screen_recording_resumed">Screen recording resumed</string>
+    <string name="fadrec_notification_title">Screen Recording</string>
+    <string name="fadrec_notification_recording">Recording screen…</string>
+    <string name="fadrec_notification_paused">Recording paused</string>
+    <string name="floating_controls_title">Menu</string>
+    <string name="floating_controls_permission_needed">Overlay permission required</string>
+    <string name="floating_controls_permission_title">Overlay Permission Required</string>
+    <string name="floating_controls_permission_message">The floating quick menu appears as an overlay on top of other apps, providing instant access to recording controls from anywhere.\n\nTo enable this feature, you need to grant \"Display over other apps\" permission in the next screen.</string>
+    <string name="floating_controls_permission_grant">Grant Permission</string>
+    <string name="floating_menu_title">Quick Menu</string>
+    <string name="floating_menu_start">Start Recording</string>
+    <string name="floating_menu_start_short">Start</string>
+    <string name="floating_menu_pause">Pause</string>
+    <string name="floating_menu_resume">Resume</string>
+    <string name="floating_menu_stop">Stop Recording</string>
+    <string name="floating_menu_stop_short">Stop</string>
+    <string name="annotation_notification_hide_menu">Hide menu</string>
+    <string name="annotation_notification_show_menu">Show menu</string>
+    <string name="floating_menu_annotations">Annotations</string>
+    <string name="recording_controls">Recording Controls</string>
+    <string name="annotations">Annotations</string>
+    <string name="annotation_tools">Annotation Tools</string>
+    <string name="enable_annotations">Enable Annotations</string>
+    <string name="snap_guides">Snap Guides</string>
+    <string name="add_text">Add Text</string>
+    <string name="add_shape">Add Shape</string>
+    <string name="fadrec_ready_to_record">Ready to capture screen</string>
+    <string name="fadrec_ready_to_record_subtitle">Tap to begin</string>
+    <string name="fadrec_permission_denied">Screen recording permission denied</string>
+    <string name="fadrec_mode_title">FadRec • Screen Recording</string>
+
     <string name="video_recording_started">Recording started</string>
     <string name="video_recording_stopped">Recording stopped</string>
     <string name="video_recording_paused">Recording paused</string>
@@ -96,6 +136,8 @@
     <string name="mainpage_recording_to_sd">Recording to SD card</string>
     <string name="tips_title">Tips</string>
     <string name="tips_subtitle">Helpful usage tips</string>
+    <string name="whats_new_title">What\'s New</string>
+    <string name="whats_new_subtitle">See latest features and updates</string>
     <string name="home_menu">Home Menu</string>
     <string name="home_sidebar_title">Home</string>
     <string name="home_options_title">Home Options</string>
@@ -112,14 +154,14 @@
     <string name="video_menu_save_move">Move to Gallery</string>
     <string name="video_menu_save_move_desc">Move file to Downloads/FadCam (saves storage space)</string>
     <string name="video_menu_save_longpress_helper">Long press "Save to Gallery" to choose between copy or move</string>
-    
+
     <!-- File Operation Completion Messages -->
     <string name="file_operation_copied_to_gallery">%1$s copied to Gallery</string>
     <string name="file_operation_moved_to_gallery">%1$s moved to Gallery</string>
     <string name="file_operation_deleted">%1$s deleted</string>
     <string name="file_operation_restored">%1$s restored</string>
     <string name="file_operation_processed">%1$s processed</string>
-    
+
     <!-- Background Operation Progress Messages -->
     <string name="background_delete_progress">Deleting %1$s in background…</string>
     <string name="background_restore_progress">Restoring %1$s in background…</string>
@@ -213,52 +255,46 @@
         <item>Does FadCam collect any user data?</item>
         <item>Are there any ads in FadCam?</item>
         <item>Why does FadCam request location access?</item>
-        <item>Does FadCam connect to the internet?</item>
+        <item>Why the internet permission is required?</item>
         <item>Is any data stored on external servers?</item>
         <item>What happens to my videos after recording?</item>
         <item>Does FadCam share my data with third parties?</item>
-        <item> </item>
-        <item> </item>
+        <item></item>
+        <item></item>
         <item>General</item>
-        <item>Why does watermarking take so long?</item>
-        <item>Why is there a \'temp\' video?</item>
-        <item>How can I change the video quality?</item>
         <item>Can I disable the preview?</item>
         <item>How do I embed my location in the watermark?</item>
         <item>Are my preferences saved?</item>
         <item>Can I schedule recordings?</item>
         <item>How do I update the app?</item>
-        <item> </item>
+        <item></item>
     </string-array>
     <string-array name="answers_array" tools:ignore="InconsistentArrays">
-        <item>FadCam does not condone or support any unethical or illegal use of this software. Misuse, such as unauthorized surveillance or invasion of privacy, is strictly against our guidelines. The authors are not responsible for any misuse of the application.
+        <item>FadCam does not condone or support any unethical or illegal use of this software. Misuse, such as unauthorized surveillance or invasion of privacy, is strictly against our guidelines. The author is not responsible for any misuse of the application.
         </item>
         <item>No, FadCam does not collect any user data.</item>
         <item>No, FadCam is completely ad-free.</item>
         <item>For adding location info to your watermarks.</item>
-        <item>No, FadCam does not connect to the internet.</item>
+        <item>For auto update checking.</item>
         <item>No, all data is stored on your device.</item>
         <item>Your videos are saved locally on your device.</item>
-        <item>No, FadCam does not share or collect any data.</item>
-        <item> </item>
-        <item> </item>
-        <item> </item>
-        <item>The watermark is embedded in each frame of the video. The longer the video, the more time it will take.</item>
-        <item>The \'temp\' video is your original recording. It\'s auto-deleted after watermarking. If watermarking fails, the \'temp\' file stays as a backup.</item>
-        <item>Change video quality in settings: HD, SD, or FHD.</item>
+        <item>No, FadCam does not share or collect any data, not even crash logs.</item>
+        <item></item>
+        <item></item>
+        <item></item>
+
         <item>Long-press the preview area to disable it.</item>
         <item>Enable location in settings for location data in the watermark. It will embed the precise longitude and latitude.</item>
         <item>Yes, preferences and all settings are saved and applied seamlessly.</item>
         <item>This feature is coming soon.</item>
         <item>Check the official GitHub repo for updates.</item>
-        <item> </item>
+        <item></item>
     </string-array>
     <string name="dialog_welcome_title">Welcome to FadCam!</string>
     <string name="note_from_developer_title">Note from Developer</string>
     <string name="note_from_developer_subtitle">README, links &amp; updates</string>
     <string name="note_under_dev">Important: This app is currently under development. New features are being added regularly.</string>
-    <string name="rencent_updates_title">Recent Updates:</string>
-    <string name="upcoming_features_title">Upcoming Features:</string>
+    <string name="full_changelog_info">For full changelog, head to the Home tab and open the hamburger menu, then select \"What\'s New\".</string>
     <string name="stay_updated_title">Stay Updated:</string>
     <string name="button_readme_github">GitHub Repository</string>
     <string name="community_title">Join our Community:</string>
@@ -269,8 +305,6 @@
     <string name="array_watermark_timeonly">Timestamp</string>
     <string name="array_watermark_nomark">No Watermark</string>
     <string name="watermark_preview_funny">For Real? :( \n    ＞﹏＜</string>
-    <string name="recent_features" translatable="false">• Audio toggle, bitrate &amp; input source options\n• Video bitrate, orientation, FPS (60/90), and splitting\n• Wide-angle detection &amp; swipe-to-refresh\n• Thumbnails show index, duration, and size\n• Sorting by date/size + bottom sheet redesign\n• "Video Info" option in 3-dot menu\n• Time-ago labels, "New"/"Temp" badges, empty state UI\n• Trash bin with playback, restore &amp; auto-delete\n• "Select All" in Trash\n• Onboarding slides for new users\n• Video geotagging (location in metadata)\n• Improved animations\n• Fixed back button crash/blank screen\n• AMOLED black &amp; 7+ more themes &amp; 15+ new icons</string>
-    <string name="upcoming_features" translatable="false">• Auto-scheduled recordings\n• Auto-uploading to Google Drive\n• Custom app icons\n• In-app video editor (FaditorX - coming soon)\n• Remote tab with cross-device controls\n• Livestreaming of Video Recording\n• And many more exciting features!</string>
     <string name="toast_video_not_found">Error: Video not found</string>
     <string name="quick_speed_title">Quick Speed</string>
     <string name="quick_speed_option_default">2x (Default)</string>
@@ -289,6 +323,21 @@
     <string name="toast_rename_success">Video renamed successfully</string>
     <string name="toast_rename_bad_video">Invalid position or video list is null</string>
     <string name="toast_rename_with_copy">Renamed to %1$s (duplicate name)</string>
+    <string name="rename_layer_title">Rename Layer</string>
+    <string name="rename_layer_message">Enter new name for the layer</string>
+    <string name="rename_page_title">Rename Page</string>
+    <string name="rename_page_message">Enter new name for the page</string>
+    <string name="rename_dialog_hint">New name</string>
+    <string name="rename_dialog_positive">Rename</string>
+    <string name="rename_dialog_negative">Cancel</string>
+    <string name="rename_dialog_error_empty">Name cannot be empty</string>
+    <string name="rename_dialog_toast_success">✏️ Renamed to: %1$s</string>
+    <string name="project_meta_format">%1$s • %2$s</string>
+    <string name="project_meta_unknown_size">Size unknown</string>
+    <string name="project_meta_unknown_date">Date unknown</string>
+    <string name="project_description_placeholder">No description added</string>
+    <string name="project_list_empty_title">(No saved projects yet)</string>
+    <string name="project_list_empty_description">Create a new project to get started</string>
     <string name="dialog_del_title">Delete Forever?</string>
     <string name="dialog_del_notice">Are you sure you want to delete this video?</string>
     <!-- Preferences Backup -->
@@ -384,6 +433,10 @@
     <string name="helper_theme_option">Select a theme. Applies instantly.</string>
     <string name="helper_language_option">Choose the app language.</string>
     <string name="watermark_disabled_message" translatable="false">Watermark disabled (no watermark will appear in recordings).</string>
+    <string name="watermark_custom_text_title">Custom Watermark Text</string>
+    <string name="watermark_custom_text_hint">Enter custom text</string>
+    <string name="watermark_custom_text_empty">Not set</string>
+    <string name="helper_watermark_custom_text">Add a custom line of text that will appear below the timestamp and location (if enabled) in your watermark.\n\nExamples: ABC-1234 (dashcam), Camera #3, Conference Hall A</string>
     <string name="helper_app_icon_option" translatable="false">Select an alternative launcher icon.</string>
     <!-- End watermark unified strings -->
     <string name="torch_shortcut_short_label">Torch</string>
@@ -550,7 +603,7 @@
     <string name="settings_option_theme">Choose Theme</string>
     <string name="settings_theme_changed">Theme changed. Applying changes...</string>
     <string name="note_theme">Choose your preferred app theme</string>
-<!-- Below are the start and stop shortcut texts for the shortcuts that appears when we long press on app icon   -->
+    <!-- Below are the start and stop shortcut texts for the shortcuts that appears when we long press on app icon   -->
     <string name="start_recording">Start</string>
     <string name="stop_recording">Stop</string>
     <string name="warning_temp_file_detail">
@@ -634,8 +687,8 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="setting_video_orientation_summary">Choose the orientation for your videos. Portrait is best for social media; Landscape is best for YouTube, presentations, etc.</string>
     <string name="video_orientation_portrait">Portrait (default)</string>
     <string name="video_orientation_landscape">Landscape</string>
-<!-- Video Bitrate Settings -->
-    <string name="setting_video_bitrate_title">Video Bitrate</string>
+    <!-- Video Bitrate Settings -->
+    <string name="setting_video_bitrate_title">Recording Quality &amp; Performance</string>
     <string name="button_video_bitrate_settings">Set Bitrate</string>
     <string name="bitrate_mode_default">Default</string>
     <string name="bitrate_mode_custom">Custom</string>
@@ -859,7 +912,7 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="version_format">v%s</string>
 
     <string name="edit_with_faditorx">Edit with FaditorX</string>
-    <string name="remote_coming_soon_badge">Coming Soon</string>
+    <string name="remote_coming_soon_badge">NEW</string>
 
     <!-- Update Bottom Sheet Strings -->
     <string name="update_sarcastic_heading">📦 Oh look, another update...</string>
@@ -912,6 +965,7 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
 
     <!-- Settings Home section headers and rows -->
     <string name="general">General</string>
+    <string name="recording_quick_access">Recording Quick Access</string>
     <string name="settings_section_app">App</string>
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_notifications_subtitle">Recording &amp; preset</string>
@@ -926,7 +980,6 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="storage_location_custom">Custom Location (SD Card/Other, Gallery Visible)</string>
     <string name="storage_location_choose_folder">Choose Folder</string>
     <string name="storage_location_note">Note: Using custom locations makes videos accessible by other apps (e.g., Gallery). Internal storage keeps them private to FadCam.</string>
-    <!-- Added: Storage picker sheet options & helpers -->
     <string name="storage_sheet_title">Storage Location</string>
     <string name="storage_option_use_internal">Use Internal Storage</string>
     <string name="storage_option_switch_internal">Switch to Internal Storage</string>
@@ -1127,4 +1180,146 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <string name="previous">Previous</string>
     <string name="next">Next</string>
     <string name="done">Done</string>
+
+    <!-- Project Management Strings -->
+    <string name="project_name_label">Project Name</string>
+    <string name="project_name_hint">e.g., Tutorial Video, Game Recording</string>
+    <string name="project_desc_label">Description (Optional)</string>
+    <string name="project_desc_hint">What is this project about?</string>
+    <string name="untitled_project">Untitled Project</string>
+    <string name="tap_to_add_description">Tap to add description</string>
+    <string name="manage_projects">Manage Projects</string>
+    <string name="name_your_project">Name Your Project</string>
+    <string name="project_naming_message">Give your project a memorable name and description to organize your recordings</string>
+    <string name="fadrec_projects">FadRec Projects</string>
+    <string name="delete_project">Delete Project</string>
+    <string name="delete_all">Delete All</string>
+    <string name="new_project">New Project</string>
+    <string name="delete">Delete</string>
+
+    <!-- FadCam Pro Strings -->
+    <string name="fadcam_pro_title">FadCam Pro</string>
+    <string name="fadcam_pro_subtitle">Premium features for complete discretion</string>
+    <string name="fadcam_pro_get_button">Get FadCam Pro</string>
+    <string name="fadcam_pro_free">Free</string>
+    <string name="fadcam_pro_column_label">Pro</string>
+    <string name="fadcam_pro_proplus_label">Pro+</string>
+    <string name="fadcam_pro_lab_label">Lab</string>
+    <string name="fadcam_pro_plus_label">Pro</string>
+    <string name="fadcam_pro_early_bird">🎉 Free until December 23, 2025! After that, get lifetime access for just $15.</string>
+    <string name="fadcam_pro_paid_offer">After December 23, 2025, get Lifetime Access for $15 — one-time payment, forever updates.</string>
+    <string name="fadcam_pro_benefit_early_access">Early access: Get the latest version before public release</string>
+    <string name="fadcam_pro_benefit_lifetime_updates">Lifetime updates: Always receive new features, improvements, and bug fixes</string>
+    <string name="fadcam_pro_benefit_support">Instant support: Direct help through tickets via Discord</string>
+    <string name="fadcam_pro_coming_soon">Pro+ and Lab features coming soon with custom icon uploads, custom app names, and FadDrive cloud sync.</string>
+    <string name="fadcam_pro_support_message">FadCam will always remain free, with no ads and no tracking. I handle the entire project on my own, and it takes ongoing time and work. Upgrading to Pro (currently free) helps support development, and in return I’m able to offer additional value through the Pro features on top of the full free version. Thank you for supporting the project :)</string>
+    <string name="fadcam_pro_separate_apk">Standalone app • Works alongside FadCam</string>
+    <string name="fadcam_pro_feature_everything_icon">Everything</string>
+    <string name="fadcam_pro_feature_everything">Everything</string>
+    <string name="fadcam_pro_feature_custom_icon">Custom App Icon</string>
+    <string name="fadcam_pro_feature_notification_icon">Notification Discreet Icon</string>
+    <string name="fadcam_pro_feature_user_icon">User Uploaded Icon</string>
+    <string name="fadcam_pro_feature_app_name">Custom App Name</string>
+    <string name="fadcam_pro_feature_faddrive">FadDrive Cloud Sync</string>
+    <string name="fadcam_pro_header_button">Pro</string>
+
+    <!-- Video Player Info Bottom Sheet -->
+    <string name="player_info_title">About the Video Player</string>
+    <string name="player_info_content"><![CDATA[
+<b>Fragmented MP4 Format</b><br/><br/>
+FadCam uses a fragmented MP4 format for recordings. This means videos are saved in small segments instead of one complete file. The benefit is that if something goes wrong during recording, you only lose the last few seconds instead of the entire video.<br/><br/>
+If the last few seconds of your video appear frozen or stale, don\'t worry — it\'s not a bug! When you stop recording, the current fragment may still complete its cycle (~3 seconds), which can leave a brief stale frame at the end.<br/><br/>
+<b>Player Limitations</b><br/><br/>
+The built-in video player has some Android system limitations. You may notice the progress bar or waveform appearing slightly snappy — this is normal behavior and not a bug.<br/><br/>
+For the smoothest playback experience, you can use an external player like VLC. That said, the integrated player works well for everyday use!
+    ]]></string>
+
+    <!-- Codec Compatibility Strings -->
+    <string name="codec_hevc_incompatible_title">H.265 Codec Not Supported for Live Streaming</string>
+    <string name="codec_hevc_incompatible_message">📡 Live streaming via HLS requires H.264 codec.\n\nH.265 is not compatible with browser players.\n\nWould you like to switch to H.264 and start recording?</string>
+    <string name="codec_switch_and_record">Switch to H.264 &amp; Record</string>
+    <string name="codec_switch_cancelled">Codec switch cancelled</string>
+    <string name="codec_switched_to_h264">✓ Codec switched to H.264. Starting recording...</string>
+    <string name="codec_go_to_settings">Go to Settings</string>
+    
+    <!-- Live Streaming Tab Strings -->
+    <string name="stream_title">Remote</string>
+    <string name="stream_server_room">Server Room</string>
+    <string name="stream_server_status">Server Status</string>
+    <string name="stream_active">Active</string>
+    <string name="stream_inactive">Server inactive :(</string>
+    <string name="stream_idle">Idle - Start recording to stream</string>
+    <string name="stream_start_server">Start Server</string>
+    <string name="stream_url_label">Stream URL</string>
+    <string name="stream_copy_url">Copy URL</string>
+    <string name="stream_url_copied">Stream URL copied to clipboard</string>
+    
+    <!-- Recording Mode -->
+    <string name="stream_recording_mode">Recording Mode</string>
+    <string name="stream_select_mode">Select Mode</string>
+    <string name="stream_and_save">Stream &amp; Save</string>
+    <string name="stream_only">Stream Only</string>
+    <string name="stream_save_videos">Saved to device storage with Stream_ prefix</string>
+    <string name="stream_no_save">Segments auto-deleted after streaming</string>
+    
+    <!-- Server Info -->
+    <string name="stream_server_health">Server Health</string>
+    <string name="stream_uptime">Uptime: %1$s</string>
+    <string name="stream_connections">Clients: %1$d</string>
+    <string name="stream_client_ips">Client IPs:</string>
+    <string name="stream_no_clients">No clients connected</string>
+    <string name="stream_fragments">Buffered: %1$d segments</string>
+    <string name="stream_battery">Battery: %1$d%%</string>
+    <string name="stream_recording_mode_label">Mode: %1$s</string>
+    
+    <!-- Server Endpoints -->
+    <string name="stream_endpoints">Server Endpoints</string>
+    <string name="stream_server_url">Server URL</string>
+    <string name="stream_view_all_endpoints">View All Endpoints</string>
+    <string name="stream_endpoint_root">Server Root (Web Player)</string>
+    <string name="stream_endpoint_hls">HLS Stream URL</string>
+    <string name="stream_endpoint_live">Live Stream (M3U8)</string>
+    <string name="stream_endpoint_status">Status API (JSON)</string>
+    <string name="stream_endpoint_init">Init Segment (MP4)</string>
+    <string name="stream_endpoint_torch">Torch Toggle (POST)</string>
+    
+    <!-- Specs -->
+    <string name="stream_specs">Stream Specs</string>
+    <string name="stream_quality_preset">Stream Quality Preset</string>
+    <string name="stream_fps_resolution">FPS: %1$d • Resolution: %2$dx%3$d</string>
+    <string name="stream_bitrate">Bitrate: %1$s</string>
+    <string name="stream_codec">Codec: H.264</string>
+    
+    <!-- Instructions -->
+    <string name="stream_instructions">How to Use</string>
+    <string name="stream_instr_1">1. Turn on Start Server toggle</string>
+    <string name="stream_instr_2">2. Copy HLS Stream URL from Server Endpoints</string>
+    <string name="stream_instr_3">3. Open VLC or any HLS player on same WiFi</string>
+    <string name="stream_instr_4">4. Paste URL in media player to watch live</string>
+    <string name="stream_network_info">Same WiFi network required for streaming</string>
+    
+    <!-- Remote Security -->
+    <string name="remote_security_title">Remote Security</string>
+    <string name="remote_security_enable">Enable Authentication</string>
+    <string name="remote_security_enable_desc">Require password to access remote web interface</string>
+    <string name="remote_security_password">Set Password</string>
+    <string name="remote_security_password_desc">Change your remote access password</string>
+    <string name="remote_security_password_hint">Enter new password</string>
+    <string name="remote_security_auto_lock">Auto-Lock Timeout</string>
+    <string name="remote_security_auto_lock_desc">Automatically lock after inactivity</string>
+    <string name="remote_security_logout_all">Logout All Sessions</string>
+    <string name="remote_security_logout_all_desc">Revoke all active remote sessions</string>
+    <string name="remote_security_password_required">Password must be 4-32 characters</string>
+    <string name="remote_security_password_set">Password updated successfully</string>
+    <string name="remote_security_password_empty">Please enter a password</string>
+    <string name="remote_security_sessions_cleared">All sessions logged out</string>
+    <string name="remote_security_no_active_sessions">No active sessions</string>
+    <string name="remote_security_enable_first">Enable authentication first</string>
+    
+    <!-- Stream Notes -->
+    <string name="stream_notes_title">Notes</string>
+    <string name="stream_notes_wifi">• Clients must be on the same WiFi network to access the stream</string>
+    <string name="stream_notes_quality">• Stream quality (LOW/MEDIUM/HIGH/ULTRA) controls FPS cap and bitrate to prevent network issues</string>
+    <string name="stream_notes_resolution">• Stream orientation and resolution are taken from your normal recording settings (Video Settings → Resolution &amp; Orientation). Adjust those if you want to change stream dimensions</string>
+    
 </resources>

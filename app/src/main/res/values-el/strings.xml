@@ -45,7 +45,7 @@
         <item name="60">60</item>
         <item name="90">90</item>
     </integer-array>
-    <string name="mainpage_storage_indicator">
+    <string name="mainpage_storage_indicator" formatted="false">
     <![CDATA[
     <font color=\'#FFFFFF\' style=\'font-size:16sp;\'><b>Διαθέσιμος:</b></font><br>
     <font color=\'#CCCCCC\' style=\'font-size:14sp;\'>%.2f GB / %.2f GB</font><br><br>
@@ -70,7 +70,7 @@
         <item>10/11 | Οι προτιμήσεις σας αποθηκεύονται και εφαρμόζονται απρόσκοπτα.</item>
         <item>11/11 | Χρειάζεστε βοήθεια; Εγγραφείτε στο Discord μας μέσω της ενότητας Σχετικά.</item>
     </string-array>
-    <string name="mainpage_video_info">
+    <string name="mainpage_video_info" formatted="false">
     <![CDATA[
     <font color=\'#FFFFFF\' style=\'font-size:12sp;\'><b>Βίντεο: </b></font>
     <font color=\'#FFFFFF\' style=\'font-size:12sp;\'><b>Χρήση:</b></font>
@@ -153,7 +153,6 @@
         <item> </item>
         <item>Γενικά</item>
         <item>Γιατί η προσθήκη υδατογραφήματος παίρνει τόσο χρόνο;</item>
-        <item>Γιατί υπάρχει ένα \'temp\' βίντεο;</item>
         <item>Πώς μπορώ να αλλάξω την ποιότητα βίντεο;</item>
         <item>Μπορώ να απενεργοποιήσω την προεπισκόπηση;</item>
         <item>Πώς μπορώ να ενσωματώσω την τοποθεσία μου στο υδατογράφημα;</item>
@@ -176,7 +175,6 @@
         <item> </item>
         <item> </item>
         <item>Το υδατογράφημα ενσωματώνεται σε κάθε καρέ του βίντεο. Όσο μεγαλύτερο είναι το βίντεο, τόσο περισσότερο χρόνο θα χρειαστεί.</item>
-        <item>Το \'temp\' βίντεο είναι η αρχική σας εγγραφή. Διαγράφεται αυτόματα μετά την προσθήκη υδατογραφήματος. Εάν αποτύχει η προσθήκη υδατογραφήματος, το αρχείο \'temp\' παραμένει ως αντίγραφο ασφαλείας.</item>
         <item>Αλλάξτε την ποιότητα βίντεο στις ρυθμίσεις: HD, SD, ή FHD.</item>
         <item>Πατήστε παρατεταμένα την περιοχή προεπισκόπησης για να την απενεργοποιήσετε.</item>
         <item>Ενεργοποιήστε την τοποθεσία στις ρυθμίσεις για δεδομένα τοποθεσίας στο υδατογράφημα. Θα ενσωματώσει το ακριβές γεωγραφικό μήκος και πλάτος.</item>
@@ -187,8 +185,7 @@
     </string-array>
     <string name="dialog_welcome_title">Καλώς ήρθατε στο FadCam!</string>
     <string name="note_under_dev">Σημαντικό: Αυτή η εφαρμογή βρίσκεται υπό ανάπτυξη. Προστίθενται τακτικά νέες λειτουργίες.</string>
-    <string name="rencent_updates_title">Πρόσφατες Ενημερώσεις:</string>
-    <string name="upcoming_features_title">Προσεχείς Λειτουργίες:</string>
+    <!-- removed: rencent_updates_title and upcoming_features_title (centralized changelog) -->
     <string name="stay_updated_title">Μείνετε Ενημερωμένοι:</string>
     <string name="button_readme_github">Αποθετήριο GitHub</string>
     <string name="community_title">Εγγραφείτε στην Κοινότητά μας:</string>
@@ -198,8 +195,6 @@
     <string name="array_watermark_time_fadcam">Ώρα με Fadcam</string>
     <string name="array_watermark_timeonly">Σφραγίδα Ώρας</string>
     <string name="array_watermark_nomark">Χωρίς Υδατογράφημα</string>
-    <string name="recent_features" translatable="false">• Audio toggle, bitrate &amp; input source options\n• Video bitrate, orientation, FPS (60/90), and splitting\n• Wide-angle detection &amp; swipe-to-refresh\n• Thumbnails show index, duration, and size\n• Sorting by date/size + bottom sheet redesign\n• "Video Info" option in 3-dot menu\n• Time-ago labels, "New"/"Temp" badges, empty state UI\n• Trash bin with playback, restore &amp; auto-delete\n• "Select All" in Trash\n• Onboarding slides for new users\n• Video geotagging (location in metadata)\n• Improved animations\n• Fixed back button crash/blank screen\n• AMOLED black &amp; 7+ more themes &amp; 15+ new icons</string>
-    <string name="upcoming_features" translatable="false">• Auto-scheduled recordings\n• Auto-uploading to Google Drive\n• Custom app icons\n• In-app video editor (FaditorX - coming soon)\n• Remote tab with cross-device controls\n• Livestreaming of Video Recording\n• And many more exciting features!</string>
     <string name="toast_video_not_found">Σφάλμα: Το βίντεο δεν βρέθηκε</string>
     <string name="toast_video_saved">Το βίντεο αποθηκεύτηκε στον φάκελο FadCam στις Λήψεις</string>
     <string name="toast_video_save_fail">Αποτυχία αποθήκευσης βίντεο</string>
@@ -619,4 +614,5 @@
     <string name="fix_video_saf_success">Το βίντεο επιδιορθώθηκε! Αποθηκεύτηκε ως: %1$s.</string>
     <string name="fix_video_saf_export">Εξάγετε ή μοιραστείτε το επιδιορθωμένο αρχείο από την αποθήκευση της εφαρμογής αν χρειάζεται.</string>
 
+    <string name="full_changelog_info">Για το πλήρες αρχείο αλλαγών, μεταβείτε στην καρτέλα Αρχική, ανοίξτε το μενού και επιλέξτε «Τι νέο υπάρχει».</string>
 </resources>

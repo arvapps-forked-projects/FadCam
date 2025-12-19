@@ -26,6 +26,9 @@ import com.fadcam.R;
 import com.fadcam.SharedPreferencesManager;
 import com.fadcam.Constants;
 
+import org.json.JSONObject;
+import com.fadcam.ui.utils.NewFeatureManager;
+
 /**
  * WatermarkSettingsFragment
  * Unified design migration: bottom sheet picker + live preview replacing spinner.
@@ -37,6 +40,7 @@ public class WatermarkSettingsFragment extends Fragment {
     private SharedPreferencesManager prefs;
     private TextView valueLocationWatermark;
     private TextView valueWatermarkStyle;
+    private TextView valueCustomText;
     private TextView previewText;
     private LocationHelper locationHelper;
     private ActivityResultLauncher<String> permissionLauncher;
@@ -52,15 +56,33 @@ public class WatermarkSettingsFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        // -------------- Fix Start for this method(onViewCreated)-----------
+        
+        // Mark main watermark feature as seen (dismisses NEW badge on Quick Access)
+        NewFeatureManager.markFeatureAsSeen(requireContext(), "watermark");
+        
         prefs = SharedPreferencesManager.getInstance(requireContext());
     valueLocationWatermark = view.findViewById(R.id.value_location_watermark);
     valueWatermarkStyle = view.findViewById(R.id.value_watermark_style);
+    valueCustomText = view.findViewById(R.id.value_custom_text);
     previewText = view.findViewById(R.id.text_watermark_preview);
     View rowStyle = view.findViewById(R.id.row_watermark_option);
     if(rowStyle!=null){ rowStyle.setOnClickListener(v -> showWatermarkStyleBottomSheet()); }
     locationRow = view.findViewById(R.id.row_location_watermark);
     if(locationRow!=null){ locationRow.setOnClickListener(v -> { if(locationRow.isEnabled()) showLocationWatermarkSheet(); }); }
+    View rowCustomText = view.findViewById(R.id.row_custom_text);
+    if(rowCustomText!=null){ 
+        rowCustomText.setOnClickListener(v -> {
+            // Mark custom text badge as seen when clicking this specific row
+            NewFeatureManager.markFeatureAsSeen(requireContext(), "watermark_custom_text");
+            // Hide badge immediately
+            TextView badgeCustomText = view.findViewById(R.id.badge_custom_text);
+            if (badgeCustomText != null) {
+                badgeCustomText.setVisibility(View.GONE);
+            }
+            // Show the bottom sheet
+            showCustomTextBottomSheet();
+        });
+    }
         View back = view.findViewById(R.id.back_button);
         if (back != null) {
             back.setOnClickListener(v -> OverlayNavUtil.dismiss(requireActivity()));
@@ -72,21 +94,27 @@ public class WatermarkSettingsFragment extends Fragment {
                 onPermissionDeniedPostRequest();
             }
         });
+        
+    // Manage badge visibility for custom text row
+    TextView badgeCustomText = view.findViewById(R.id.badge_custom_text);
+    if (badgeCustomText != null) {
+        boolean shouldShowCustomTextBadge = NewFeatureManager.shouldShowBadge(requireContext(), "watermark_custom_text");
+        badgeCustomText.setVisibility(shouldShowCustomTextBadge ? View.VISIBLE : View.GONE);
+    }
+        
     refreshLocationValue();
     refreshWatermarkStyleValue();
+    refreshCustomTextValue();
     updateLocationRowState();
     updatePreview();
-        // -------------- Fix Ended for this method(onViewCreated)-----------
     }
 
     // Removed duplicate manual back handling; centralized via OverlayNavUtil
 
     private void refreshLocationValue() {
-        // -------------- Fix Start for this method(refreshLocationValue)-----------
         if (valueLocationWatermark != null) {
             valueLocationWatermark.setText(prefs.isLocalisationEnabled() ? "Enabled" : "Disabled");
         }
-        // -------------- Fix Ended for this method(refreshLocationValue)-----------
     }
 
     private void toggleLocationDirect(boolean target){
@@ -135,7 +163,6 @@ public class WatermarkSettingsFragment extends Fragment {
     }
 
     private void showPermissionDialog(Runnable proceed) {
-        // -------------- Fix Start for this method(showPermissionDialog)-----------
         new AlertDialog.Builder(requireContext(), com.google.android.material.R.style.MaterialAlertDialog_Material3)
                 .setTitle(R.string.location_permission_title)
                 .setMessage(R.string.location_permission_description)
@@ -145,7 +172,6 @@ public class WatermarkSettingsFragment extends Fragment {
                 })
                 .setNegativeButton(R.string.universal_cancel, (d, w) -> { })
                 .show();
-        // -------------- Fix Ended for this method(showPermissionDialog)-----------
     }
 
     private void onPermissionGrantedPostRequest() {
@@ -207,7 +233,6 @@ public class WatermarkSettingsFragment extends Fragment {
         else valueWatermarkStyle.setText(getString(R.string.watermark_style_none_label));
     }
 
-    // -------------- Fix Start for this method(updateLocationRowState)-----------
     private void updateLocationRowState(){
         if(locationRow==null) return;
         boolean watermarkNone = "no_watermark".equals(prefs.getWatermarkOption());
@@ -223,7 +248,6 @@ public class WatermarkSettingsFragment extends Fragment {
             locationRow.setAlpha(1f);
         }
     }
-    // -------------- Fix Ended for this method(updateLocationRowState)-----------
 
     private void updatePreview(){
         if(previewText==null) return;
@@ -250,8 +274,62 @@ public class WatermarkSettingsFragment extends Fragment {
             // Anonymized dummy coordinates (x placeholders prevent revealing real location structure)
             baseLine += "\nLat: 24.x6xx  Lon: 67.x0xx";
         }
+        // Add custom text on line 2 (or line 3 if location enabled)
+        String customText = prefs.getWatermarkCustomText();
+        if(customText != null && !customText.isEmpty()){
+            baseLine += "\n" + customText;
+        }
         previewText.setText(baseLine);
         previewText.setVisibility(View.VISIBLE);
+    }
+
+    private void refreshCustomTextValue(){
+        if(valueCustomText==null) return;
+        String customText = prefs.getWatermarkCustomText();
+        if(customText == null || customText.isEmpty()){
+            valueCustomText.setText(getString(R.string.watermark_custom_text_empty));
+        } else {
+            valueCustomText.setText(customText);
+        }
+    }
+
+    private void showCustomTextBottomSheet(){
+        String currentText = prefs.getWatermarkCustomText();
+        
+        InputActionBottomSheetFragment sheet = InputActionBottomSheetFragment.newInput(
+            getString(R.string.watermark_custom_text_title),
+            currentText != null ? currentText : "",
+            getString(R.string.watermark_custom_text_hint),
+            getString(R.string.shortcuts_rename_action_title),
+            getString(R.string.helper_watermark_custom_text),
+            R.drawable.ic_draw_edit,
+            getString(R.string.helper_watermark_custom_text)
+        );
+
+        sheet.setCallbacks(new InputActionBottomSheetFragment.Callbacks() {
+            @Override
+            public void onImportConfirmed(JSONObject json) {
+                // Not used for custom text input
+            }
+            
+            @Override
+            public void onResetConfirmed() {
+                // Not used for custom text input
+            }
+            
+            @Override
+            public void onInputConfirmed(String input) {
+                if(input != null){
+                    prefs.setWatermarkCustomText(input.trim());
+                    refreshCustomTextValue();
+                    updatePreview();
+                    Log.d(TAG, "Custom watermark text set: " + input);
+                }
+                sheet.dismiss();
+            }
+        });
+        
+        sheet.show(getParentFragmentManager(), "custom_text_sheet");
     }
 
     private String formatNow(){

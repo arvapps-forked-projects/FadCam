@@ -24,6 +24,11 @@ public class SharedPreferencesManager {
     public static final String PREF_AUTO_UPDATE_CHECK = "auto_update_check_enabled";
     // --- END UPDATE CHECK CONSTANTS ---
     
+    // --- BATTERY WARNING CONSTANTS ---
+    public static final String PREF_BATTERY_WARNING_THRESHOLD = "battery_warning_threshold";
+    public static final int DEFAULT_BATTERY_WARNING_THRESHOLD = 20;
+    // --- END BATTERY WARNING CONSTANTS ---
+    
     public static final String PREF_OPENED_VIDEO_URIS = "opened_video_uris"; // Defined in Constants now
 
     private static SharedPreferencesManager instance;
@@ -75,16 +80,13 @@ public class SharedPreferencesManager {
     private static final String PREF_KEY_VIDEO_ORIENTATION =
         "video_orientation";
 
-    // ----- Fix Start for this class (SharedPreferencesManager_trash_auto_delete)
     // -----
     private static final String PREF_KEY_TRASH_AUTO_DELETE_MINUTES =
         "trash_auto_delete_minutes";
     public static final int DEFAULT_TRASH_AUTO_DELETE_MINUTES = 30 * 24 * 60; // 30 days in minutes
     public static final int TRASH_AUTO_DELETE_NEVER = -1; // This constant can remain as is, representing manual delete
-    // ----- Fix Ended for this class (SharedPreferencesManager_trash_auto_delete)
     // -----
 
-    // ----- Fix Start for this class (SharedPreferencesManager_clock_color) -----
     private static final String PREF_KEY_CLOCK_CARD_COLOR = "clock_card_color";
 
     // This will be set dynamically based on theme
@@ -174,9 +176,33 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // ----- Fix Ended for this class (SharedPreferencesManager_clock_color) -----
 
-    // ----- Fix Start for this class (SharedPreferencesManager_playback_muted) -----
+    // ----- Battery Warning Threshold Methods -----
+    /**
+     * Get the battery warning threshold percentage.
+     * Default: 20%
+     */
+    public int getBatteryWarningThreshold() {
+        return sharedPreferences.getInt(
+            PREF_BATTERY_WARNING_THRESHOLD,
+            DEFAULT_BATTERY_WARNING_THRESHOLD
+        );
+    }
+
+    /**
+     * Set the battery warning threshold percentage.
+     */
+    public void setBatteryWarningThreshold(int percentage) {
+        if (percentage < 5 || percentage > 100) {
+            percentage = DEFAULT_BATTERY_WARNING_THRESHOLD;
+        }
+        sharedPreferences
+            .edit()
+            .putInt(PREF_BATTERY_WARNING_THRESHOLD, percentage)
+            .apply();
+    }
+    // ----- End Battery Warning Threshold Methods -----
+
     /** Returns whether playback should start muted by default. Default: false (unmuted). */
     public boolean isPlaybackMuted() {
         return sharedPreferences.getBoolean(
@@ -193,31 +219,25 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // ----- Fix Ended for this class (SharedPreferencesManager_playback_muted) -----
 
-    // ----- Fix Start for this class (SharedPreferencesManager_video_splitting)
     // -----
     public static final String PREF_VIDEO_SPLITTING_ENABLED =
         "video_splitting_enabled";
     public static final boolean DEFAULT_VIDEO_SPLITTING_ENABLED = false;
     public static final String PREF_VIDEO_SPLIT_SIZE_MB = "video_split_size_mb";
     public static final int DEFAULT_VIDEO_SPLIT_SIZE_MB = 2048; // 2GB
-    // ----- Fix Ended for this class (SharedPreferencesManager_video_splitting)
     // -----
 
-    // ----- Fix Start for this class (SharedPreferencesManager_audio_input_source)
     // -----
     private static final String PREF_KEY_AUDIO_INPUT_SOURCE =
         "audio_input_source";
     public static final String AUDIO_INPUT_SOURCE_PHONE = "phone_mic";
     public static final String AUDIO_INPUT_SOURCE_WIRED = "wired_mic";
-    // ----- Fix Ended for this class (SharedPreferencesManager_audio_input_source)
     // -----
 
     // App Lock preferences
     private static final String PREF_APP_LOCK_ENABLED = "applock_enabled";
 
-    // ----- Fix Start: AppLock session unlock state -----
     private static final String KEY_APPLOCK_SESSION_UNLOCKED =
         "applock_session_unlocked";
     private volatile boolean sessionUnlockedCache = false;
@@ -247,7 +267,6 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // ----- Fix End: AppLock session unlock state -----
 
     private SharedPreferencesManager(Context context) {
         // Use PREFS_NAME from Constants class
@@ -482,7 +501,6 @@ public class SharedPreferencesManager {
         return VideoCodec.valueOf(videoCodec);
     }
 
-    // -------------- Fix Start for this class (SharedPreferencesManager_keep_screen_awake)-----------
     /** Returns whether the video player should keep the screen on during playback. Default: true. */
     public boolean isPlayerKeepScreenOn() {
         return sharedPreferences.getBoolean(
@@ -496,6 +514,32 @@ public class SharedPreferencesManager {
         sharedPreferences
             .edit()
             .putBoolean(Constants.PREF_PLAYER_KEEP_SCREEN_ON, keepOn)
+            .apply();
+    }
+    
+    // --- Remote Streaming preferences ---
+    private static final String PREF_KEY_STREAMING_MODE = "pref_streaming_mode";
+    
+    /**
+     * Get the current streaming mode (STREAM_ONLY or STREAM_AND_SAVE).
+     * Defaults to STREAM_AND_SAVE.
+     */
+    public com.fadcam.streaming.RemoteStreamManager.StreamingMode getStreamingMode() {
+        String mode = sharedPreferences.getString(PREF_KEY_STREAMING_MODE, "STREAM_AND_SAVE");
+        try {
+            return com.fadcam.streaming.RemoteStreamManager.StreamingMode.valueOf(mode);
+        } catch (IllegalArgumentException e) {
+            return com.fadcam.streaming.RemoteStreamManager.StreamingMode.STREAM_AND_SAVE;
+        }
+    }
+    
+    /**
+     * Set the streaming mode (STREAM_ONLY or STREAM_AND_SAVE).
+     */
+    public void setStreamingMode(com.fadcam.streaming.RemoteStreamManager.StreamingMode mode) {
+        sharedPreferences
+            .edit()
+            .putString(PREF_KEY_STREAMING_MODE, mode.toString())
             .apply();
     }
 
@@ -553,9 +597,7 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // -------------- Fix Ended for this class (SharedPreferencesManager_keep_screen_awake)-----------
 
-    // -------------- Fix Start for this class (SharedPreferencesManager_background_playback)-----------
     /** Returns whether background playback is enabled. Default: false. */
     public boolean isBackgroundPlaybackEnabled() {
         return sharedPreferences.getBoolean(
@@ -657,7 +699,6 @@ public class SharedPreferencesManager {
         return getSavedPlaybackPositionMsByFilename(filename);
     }
 
-    // -------------- Fix Ended for this class (SharedPreferencesManager_background_playback)-----------
     // --- End Camera / Video settings ---
 
     // --- STORAGE METHODS ---
@@ -769,6 +810,24 @@ public class SharedPreferencesManager {
         );
     }
 
+    /**
+     * Get custom watermark text.
+     * @return Custom watermark text or empty string if not set
+     */
+    public String getWatermarkCustomText() {
+        return sharedPreferences.getString(Constants.PREF_WATERMARK_CUSTOM_TEXT, "");
+    }
+
+    /**
+     * Set custom watermark text.
+     * @param text Custom text to display on watermark (line 2)
+     */
+    public void setWatermarkCustomText(String text) {
+        sharedPreferences.edit()
+            .putString(Constants.PREF_WATERMARK_CUSTOM_TEXT, text != null ? text : "")
+            .apply();
+    }
+
     // Method to retrieve the preview state
     public Boolean isPreviewEnabled() {
         // Default to true if the preference doesn't exist yet
@@ -867,7 +926,6 @@ public class SharedPreferencesManager {
     public static final String PREF_IS_PREVIEW_ENABLED = "isPreviewEnabled"; // Check constant exists
     public static final boolean DEFAULT_PREVIEW_ENABLED = true; // Check default exists
 
-    // -------------- Fix Start for this section(Cloak Recents preference)-----------
     /** Preference key controlling whether the app should cloak its snapshot in the Android Recents screen. */
     public static final String PREF_CLOAK_RECENTS_ENABLED =
         "cloak_recents_enabled";
@@ -890,7 +948,6 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // -------------- Fix Ended for this section(Cloak Recents preference)-----------
 
     /**
      * Gets the preferred physical camera ID for the back camera.
@@ -994,7 +1051,6 @@ public class SharedPreferencesManager {
 
     // --- End Video Orientation ---
 
-    // ----- Fix Start for this class
     // (SharedPreferencesManager_trash_auto_delete_methods) -----
     public void setTrashAutoDeleteMinutes(int minutes) {
         sharedPreferences
@@ -1019,10 +1075,8 @@ public class SharedPreferencesManager {
         return minutes;
     }
 
-    // ----- Fix Ended for this class
     // (SharedPreferencesManager_trash_auto_delete_methods) -----
 
-    // ----- Fix Start for this class
     // (SharedPreferencesManager_video_splitting_methods) -----
     public boolean isVideoSplittingEnabled() {
         return sharedPreferences.getBoolean(
@@ -1052,10 +1106,8 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // ----- Fix Ended for this class
     // (SharedPreferencesManager_video_splitting_methods) -----
 
-    // ----- Fix Start for this class (SharedPreferencesManager_audio_input_source)
     // -----
     public void setAudioInputSource(String source) {
         sharedPreferences
@@ -1071,10 +1123,8 @@ public class SharedPreferencesManager {
         );
     }
 
-    // ----- Fix Ended for this class (SharedPreferencesManager_audio_input_source)
     // -----
 
-    // ----- Fix Start for method(onboarding) -----
     // Using the proper constant from Constants class
     public boolean isShowOnboarding() {
         // Return true if onboarding hasn't been completed
@@ -1096,9 +1146,7 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // ----- Fix End for method(onboarding) -----
 
-    // ----- Fix Start for this class(SharedPreferencesManager_location_methods)
     // -----
     /**
      * Sets whether location embedding is enabled
@@ -1124,10 +1172,8 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // ----- Fix Ended for this class(SharedPreferencesManager_location_methods)
     // -----
 
-    // ----- Fix Start for this class (SharedPreferencesManager_applock) -----
     /**
      * Checks if app lock is enabled
      *
@@ -1149,9 +1195,7 @@ public class SharedPreferencesManager {
             .apply();
     }
 
-    // ----- Fix Ended for this class (SharedPreferencesManager_applock) -----
 
-    // ----- Fix Start for this class
     // (SharedPreferencesManager_notification_customization) -----
     // Notification customization constants
     public static final String PREF_NOTIFICATION_PRESET = "notification_preset";
@@ -1387,10 +1431,8 @@ public class SharedPreferencesManager {
         }
     }
 
-    // ----- Fix Ended for this class
     // (SharedPreferencesManager_notification_customization) -----
 
-    // ----- Fix Start for this method(getVideoSplitSizeBytes)-----
     /**
      * Returns the video split size in bytes, based on the value in MB.
      *
@@ -1401,7 +1443,6 @@ public class SharedPreferencesManager {
         return mb > 0 ? mb * 1024L * 1024L : 0L;
     }
 
-    // ----- Fix Ended for this method(getVideoSplitSizeBytes)-----
 
     public static final String PREF_AUDIO_NOISE_SUPPRESSION =
         "audio_noise_suppression";
@@ -1437,7 +1478,6 @@ public class SharedPreferencesManager {
         }
     }
 
-    // -------------- Fix Start for this method(getCurrentAppIcon)-----------
     /**
      * Gets the currently selected app icon key.
      * This is used by the notification system to display the same icon as the launcher.
@@ -1451,9 +1491,7 @@ public class SharedPreferencesManager {
         );
     }
 
-    // -------------- Fix Ended for this method(getCurrentAppIcon)-----------
 
-    // -------------- Fix Start for this method(getCurrentAppIconResId)-----------
     /**
      * Returns the mipmap resource ID corresponding to the currently selected app icon.
      * Centralizes icon-key -> resource-ID mapping so callers (e.g., notifications) don't duplicate it.
@@ -1523,9 +1561,7 @@ public class SharedPreferencesManager {
         return com.fadcam.R.mipmap.ic_launcher;
     }
 
-    // -------------- Fix Ended for this method(getCurrentAppIconResId)-----------
 
-    // -------------- Fix Start for this method(getAppIconDisplayName)-----------
     /**
      * Returns a human-readable display name for the currently selected app icon.
      * Falls back to the default app name when unknown.
@@ -1591,7 +1627,6 @@ public class SharedPreferencesManager {
             return "";
         }
     }
-    // -------------- Fix Ended for this method(getAppIconDisplayName)-----------
     
     /**
      * Check if auto update checking is enabled
@@ -1602,4 +1637,249 @@ public class SharedPreferencesManager {
         SharedPreferences prefs = context.getSharedPreferences("MyPrefs", Context.MODE_PRIVATE);
         return prefs.getBoolean(PREF_AUTO_UPDATE_CHECK, true);
     }
+
+    // -------------- FadRec (Screen Recording) Preferences Start --------------
+
+    /**
+     * Gets the current screen recording audio source preference.
+     * @return Audio source string (mic or none)
+     */
+    public String getScreenRecordingAudioSource() {
+        return sharedPreferences.getString(
+            Constants.PREF_SCREEN_RECORDING_AUDIO_SOURCE,
+            Constants.AUDIO_SOURCE_MIC // Default to microphone
+        );
+    }
+
+    /**
+     * Sets the screen recording audio source preference.
+     * @param audioSource Audio source string (mic or none)
+     */
+    public void setScreenRecordingAudioSource(String audioSource) {
+        sharedPreferences
+            .edit()
+            .putString(Constants.PREF_SCREEN_RECORDING_AUDIO_SOURCE, audioSource)
+            .apply();
+    }
+
+    /**
+     * Checks if watermark is enabled for screen recordings.
+     * @return true if watermark is enabled
+     */
+    public boolean isScreenRecordingWatermarkEnabled() {
+        return sharedPreferences.getBoolean(
+            Constants.PREF_SCREEN_RECORDING_WATERMARK_ENABLED,
+            false // Default to disabled
+        );
+    }
+
+    /**
+     * Sets the watermark enabled state for screen recordings.
+     * @param enabled true to enable watermark
+     */
+    public void setScreenRecordingWatermarkEnabled(boolean enabled) {
+        sharedPreferences
+            .edit()
+            .putBoolean(Constants.PREF_SCREEN_RECORDING_WATERMARK_ENABLED, enabled)
+            .apply();
+    }
+
+    /**
+     * Checks if screen recording is currently in progress.
+     * @return true if screen recording is in progress
+     */
+    public boolean isScreenRecordingInProgress() {
+        return sharedPreferences.getBoolean(
+            Constants.PREF_IS_SCREEN_RECORDING_IN_PROGRESS,
+            false
+        );
+    }
+
+    /**
+     * Sets the screen recording in progress state.
+     * @param inProgress true if screen recording is in progress
+     */
+    public void setScreenRecordingInProgress(boolean inProgress) {
+        sharedPreferences
+            .edit()
+            .putBoolean(Constants.PREF_IS_SCREEN_RECORDING_IN_PROGRESS, inProgress)
+            .apply();
+    }
+
+    /**
+     * Gets the screen recording state.
+     * @return State string (NONE, IN_PROGRESS, PAUSED)
+     */
+    public String getScreenRecordingState() {
+        return sharedPreferences.getString(
+            Constants.PREF_SCREEN_RECORDING_STATE,
+            "NONE" // Default to NONE
+        );
+    }
+
+    /**
+     * Sets the screen recording state.
+     * @param state State string (NONE, IN_PROGRESS, PAUSED)
+     */
+    public void setScreenRecordingState(String state) {
+        sharedPreferences
+            .edit()
+            .putString(Constants.PREF_SCREEN_RECORDING_STATE, state)
+            .apply();
+        Log.d("SharedPrefs", "Screen recording state changed to: " + state);
+    }
+
+    /**
+     * Gets the current recording mode (FadCam or FadRec).
+     * @return Current mode string (MODE_FADCAM or MODE_FADREC)
+     */
+    public String getCurrentRecordingMode() {
+        return sharedPreferences.getString(
+            "current_recording_mode",
+            Constants.MODE_FADCAM // Default to FadCam
+        );
+    }
+
+    /**
+     * Sets the current recording mode.
+     * @param mode Mode string (MODE_FADCAM or MODE_FADREC)
+     */
+    public void setCurrentRecordingMode(String mode) {
+        sharedPreferences
+            .edit()
+            .putString("current_recording_mode", mode)
+            .apply();
+        Log.d("SharedPrefs", "Recording mode changed to: " + mode);
+    }
+
+    /**
+     * Gets whether floating controls (assistive touch) is enabled for FadRec.
+     * @return true if floating controls enabled, false otherwise
+     */
+    public boolean isFloatingControlsEnabled() {
+        return sharedPreferences.getBoolean(
+            Constants.PREF_FLOATING_CONTROLS_ENABLED,
+            false // Default: disabled
+        );
+    }
+
+    /**
+     * Sets whether floating controls (assistive touch) is enabled for FadRec.
+     * @param enabled true to enable, false to disable
+     */
+    public void setFloatingControlsEnabled(boolean enabled) {
+        sharedPreferences
+            .edit()
+            .putBoolean(Constants.PREF_FLOATING_CONTROLS_ENABLED, enabled)
+            .apply();
+        Log.d("SharedPrefs", "Floating controls enabled: " + enabled);
+    }
+
+    // -------------- FadRec (Screen Recording) Preferences End --------------
+
+    // -------------- Fadex Notification Preferences Start --------------
+    private static final String PREF_NOTIFICATION_HISTORY = "fadex_notification_history";
+    private static final long NOTIFICATION_CACHE_DURATION_MS = 30 * 24 * 60 * 60 * 1000L; // 30 days
+
+    /**
+     * Get all cached notifications from SharedPreferences
+     * Automatically cleans up notifications older than 30 days
+     *
+     * @return Notification history as JSON string array, or empty array if none exist
+     */
+    public String getNotificationHistory() {
+        try {
+            String cached = sharedPreferences.getString(PREF_NOTIFICATION_HISTORY, "[]");
+            // Parse and clean in JS, or optionally do cleanup here if needed
+            return cached;
+        } catch (Exception e) {
+            android.util.Log.e("SharedPrefs", "Error getting notification history", e);
+            return "[]";
+        }
+    }
+
+    /**
+     * Save notification history to SharedPreferences
+     * Called by JS bridge to persist notifications
+     *
+     * @param historyJson JSON array string of notifications
+     */
+    public void saveNotificationHistory(String historyJson) {
+        try {
+            sharedPreferences
+                .edit()
+                .putString(PREF_NOTIFICATION_HISTORY, historyJson)
+                .apply();
+            android.util.Log.d("SharedPrefs", "Notification history saved");
+        } catch (Exception e) {
+            android.util.Log.e("SharedPrefs", "Error saving notification history", e);
+        }
+    }
+
+    /**
+     * Clear all notifications
+     */
+    public void clearNotificationHistory() {
+        sharedPreferences
+            .edit()
+            .remove(PREF_NOTIFICATION_HISTORY)
+            .apply();
+        android.util.Log.d("SharedPrefs", "Notification history cleared");
+    }
+
+    /**
+     * Get unread notification count
+     * Simple count - actual filtering done by JS which has the history
+     *
+     * @return Last known unread count
+     */
+    public int getNotificationUnreadCount() {
+        return sharedPreferences.getInt("fadex_unread_count", 0);
+    }
+
+    /**
+     * Save unread notification count
+     * Updated by JS bridge when notifications are marked as read
+     *
+     * @param count Unread count
+     */
+    public void setNotificationUnreadCount(int count) {
+        sharedPreferences
+            .edit()
+            .putInt("fadex_unread_count", Math.max(0, count))
+            .apply();
+    }
+
+    // -------------- Fadex Notification Preferences End --------------
+
+    // -------------- Generic Boolean Preferences (for new features badges) ------
+
+    /**
+     * Generic method to get a boolean preference value by key.
+     * Used for storing arbitrary boolean preferences like feature badge status.
+     *
+     * @param key Preference key
+     * @param defaultValue Default value if key doesn't exist
+     * @return Boolean value
+     */
+    public boolean getBoolean(String key, boolean defaultValue) {
+        return sharedPreferences.getBoolean(key, defaultValue);
+    }
+
+    /**
+     * Generic method to set a boolean preference value by key.
+     * Used for storing arbitrary boolean preferences like feature badge status.
+     *
+     * @param key Preference key
+     * @param value Value to store
+     */
+    public void putBoolean(String key, boolean value) {
+        sharedPreferences
+            .edit()
+            .putBoolean(key, value)
+            .apply();
+    }
+
+    // -------------- Generic Boolean Preferences End ------
 }
+

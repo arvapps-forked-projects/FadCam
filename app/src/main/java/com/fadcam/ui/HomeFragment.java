@@ -69,6 +69,7 @@ import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.FragmentManager; // <<< ADD IMPORT FOR FragmentManager
 import androidx.fragment.app.FragmentTransaction; // <<< ADD IMPORT FOR FragmentTransaction
 import com.fadcam.CameraType;
+import com.fadcam.MainActivity;
 import com.fadcam.Constants;
 import com.fadcam.Log;
 import com.fadcam.R;
@@ -76,8 +77,10 @@ import com.fadcam.RecordingControlIntents;
 import com.fadcam.RecordingState;
 import com.fadcam.SharedPreferencesManager;
 import com.fadcam.Utils;
+import com.fadcam.VideoCodec;
 import com.fadcam.services.RecordingService;
 import com.fadcam.services.TorchService;
+import com.fadcam.streaming.RemoteStreamManager;
 import com.fadcam.ui.helpers.HomeFragmentHelper;
 import com.fadcam.utils.DebouncedRunnable;
 import com.fadcam.utils.DeviceHelper;
@@ -113,11 +116,8 @@ public class HomeFragment extends BaseFragment {
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
 
-    // -------------- Fix Start (HomeFragment) --------------
     private HomeFragmentHelper fragmentHelper;
-    // -------------- Fix Ended (HomeFragment) --------------
 
-    // ----- Fix Start for this method(fields)-----
     private static final String[] CLOCK_COLOR_NAMES = {
         "Purple",
         "Blue",
@@ -144,7 +144,12 @@ public class HomeFragment extends BaseFragment {
         "#FFD700",
         "#F06292",
     };
-    // ----- Fix Ended for this method(fields)-----
+    
+    // OPTIMIZATION: Clock color calculation caching (Phase 3)
+    private int lastClockBackgroundColor = -1;
+    private int cachedClockTextColor = Color.WHITE;
+    private long lastClockColorCalcTime = 0;
+    private static final long CLOCK_COLOR_CACHE_MS = 1000; // Recalculate every 1 second
 
     private long recordingStartTime;
     private long videoBitrate;
@@ -156,10 +161,8 @@ public class HomeFragment extends BaseFragment {
     private Runnable updateInfoRunnable;
     private Runnable updateClockRunnable; // Declare here
     
-    // -------------- Fix Start (debounced runnables for button clicks)-----------
     private DebouncedRunnable debouncedStartRecording;
     private DebouncedRunnable debouncedStopRecording;
-    // -------------- Fix Ended (debounced runnables for button clicks)-----------
 
     // Storage calculation executor for background processing
     private ExecutorService executorService;
@@ -179,15 +182,28 @@ public class HomeFragment extends BaseFragment {
     private TextView tvSpaceTitle;
     private TextView tvSpaceSubtitle;
     // inline total will be rendered in tvSpaceTitle using spans
-    private TextView tvElapsedTitle;
-    private TextView tvElapsedSubtitle;
-    private TextView tvRemainingTitle;
-    private TextView tvRemainingSubtitle;
+    
+    /**
+     * Changed from private to protected to allow FadRecHomeFragment to update timer displays.
+     */
+    protected TextView tvElapsedTitle;
+    protected TextView tvElapsedSubtitle;
+    protected TextView tvRemainingTitle;
+    protected TextView tvRemainingSubtitle;
+    
     private ImageView btnHamburgerMenu;
+    private View hamburgerBadgeDot;
     private TextView tvPreviewPlaceholder;
-    private MaterialButton buttonStartStop;
-    private MaterialButton buttonPauseResume;
-    private Button buttonCamSwitch;
+    private TextView tvPreviewHint; // Hint text for long press to enable preview
+    
+    /**
+     * Changed from private to protected to allow FadRecHomeFragment to access in overridden methods.
+     */
+    protected MaterialButton buttonStartStop;
+    protected MaterialButton buttonPauseResume;
+    protected Button buttonCamSwitch;
+    protected MaterialButton buttonTorchSwitch;
+    
     private boolean isPreviewEnabled = true;
 
     private View cardPreview;
@@ -223,7 +239,7 @@ public class HomeFragment extends BaseFragment {
     private static final int RECENT_MESSAGE_LIMIT = 3; // Adjust as needed
 
     private static final int REQUEST_PERMISSIONS = 1;
-    private android.os.PowerManager.WakeLock wakeLock;
+    // deleted WakeLock field
     // private static final String PREF_FIRST_LAUNCH = "first_launch";
 
     private RecordingState recordingState = RecordingState.NONE;
@@ -233,17 +249,13 @@ public class HomeFragment extends BaseFragment {
     private BroadcastReceiver broadcastOnRecordingPaused;
     private BroadcastReceiver broadcastOnRecordingStopped;
     private BroadcastReceiver broadcastOnRecordingStateCallback;
-    // ----- Fix Start for this class (HomeFragment) -----
     private BroadcastReceiver segmentCompleteStatsReceiver; // For segment completion to update stats
-    // ----- Fix Ended for this class (HomeFragment) -----
 
-    // ----- Fix Start for camera resource availability receiver -----
     private BroadcastReceiver cameraResourceAvailabilityReceiver;
     private boolean isCameraResourceAvailabilityReceiverRegistered = false;
     private boolean areCameraResourcesAvailable = true; // Default to true
-    // ----- Fix End for camera resource availability receiver -----
 
-    private MaterialButton buttonTorchSwitch;
+    // buttonTorchSwitch declaration moved to line 195 (changed to protected)
 
     private CameraManager cameraManager;
     private String cameraId;
@@ -251,9 +263,7 @@ public class HomeFragment extends BaseFragment {
 
     private BroadcastReceiver torchReceiver;
 
-    // ----- Fix Start for this method(fields)-----
     private Surface textureViewSurface; // To hold the Surface from TextureView
-    // ----- Fix Ended for this method(fields)-----
 
     // --- Fields Needed for Stats Update ---
     private SharedPreferencesManager sharedPreferencesManager;
@@ -263,12 +273,10 @@ public class HomeFragment extends BaseFragment {
     // Cache last-known available bytes for custom storage (SD card / SAF) when we
     // cannot probe it directly
     private long lastKnownCustomAvailableBytes = -1;
-    // ----- Fix Start for this class (HomeFragment) -----
     // private boolean isStatsReceiverRegistered = false; // This seemed to be for
     // the general recordingCompleteReceiver
     private boolean isSegmentCompleteStatsReceiverRegistered = false;
 
-    // ----- Fix Ended for this class (HomeFragment) -----
 
     // important
     private void requestEssentialPermissions() {
@@ -353,30 +361,7 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // Call this method when the recording starts to acquire wake lock
-    private void acquireWakeLock() {
-        android.os.PowerManager powerManager =
-            (android.os.PowerManager) requireActivity().getSystemService(
-                Context.POWER_SERVICE
-            ); // Full path and context adjusted
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "MyApp::RecordingLock"
-        );
-
-        if (!wakeLock.isHeld()) {
-            wakeLock.acquire();
-            Log.d(TAG, "WakeLock acquired.");
-        }
-    }
-
-    // Call this when the recording ends to release wake lock
-    private void releaseWakeLock() {
-        if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
-            Log.d(TAG, "WakeLock released.");
-        }
-    }
+    // deleted acquireWakeLock and releaseWakeLock methods
 
     private void initializeMessages() {
         messageQueue = new ArrayList<>(
@@ -453,7 +438,6 @@ public class HomeFragment extends BaseFragment {
             );
             rotateCenter.setDuration(80);
             final Drawable originalBackground = cardPreview.getBackground();
-            // ----- Fix Start: Use gray flash for AMOLED theme (avoid duplicate variable)
             // -----
             String themeName =
                 sharedPreferencesManager.sharedPreferences.getString(
@@ -473,7 +457,6 @@ public class HomeFragment extends BaseFragment {
                 Color.RED,
                 flashColor
             );
-            // ----- Fix End: Use gray flash for AMOLED theme (avoid duplicate variable)
             // -----
             colorAnim.setDuration(300);
             colorAnim.addUpdateListener(animator -> {
@@ -525,9 +508,9 @@ public class HomeFragment extends BaseFragment {
      * (card long-press, texture long-press via GestureDetector).
      */
     private void handlePreviewLongPress() {
-        // When not recording, show a random funny message
+        // Only handle preview toggle when recording - do nothing when idle
         if (!isRecordingOrPaused()) {
-            showRandomMessage();
+            // showRandomMessage(); // Removed: No funny messages, just show layered icons
             return;
         }
 
@@ -625,7 +608,6 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void updatePreviewVisibility() {
-        // ----- Fix Start for this method(updatePreviewVisibility)-----
         if (!isAdded() || textureView == null || tvPreviewPlaceholder == null) {
             Log.e(
                 TAG,
@@ -639,6 +621,7 @@ public class HomeFragment extends BaseFragment {
                 // Show preview
                 textureView.setVisibility(View.VISIBLE);
                 tvPreviewPlaceholder.setVisibility(View.GONE);
+                if (tvPreviewHint != null) tvPreviewHint.setVisibility(View.GONE);
                 Log.d(TAG, "Preview enabled and recording - showing preview");
 
                 // Ensure surface is sent to service
@@ -650,30 +633,38 @@ public class HomeFragment extends BaseFragment {
                     updateServiceWithCurrentSurface(textureViewSurface);
                 }
             } else {
-                // Hide preview
+                // Hide preview but show hint text (using layered icons with hint)
                 textureView.setVisibility(View.INVISIBLE);
-                tvPreviewPlaceholder.setVisibility(View.VISIBLE);
-                tvPreviewPlaceholder.setText("Long press to enable preview");
+                tvPreviewPlaceholder.setVisibility(View.GONE); // Keep hidden
+                if (tvPreviewHint != null) tvPreviewHint.setVisibility(View.VISIBLE); // Show hint
                 Log.d(
                     TAG,
-                    "Preview disabled but recording - showing placeholder"
+                    "Preview disabled but recording - showing hint text"
                 );
 
                 // Send null surface to service
                 updateServiceWithCurrentSurface(null);
             }
         } else {
-            // Not recording, show placeholder
+            // Not recording, keep placeholder and hint hidden (using layered icons only)
             textureView.setVisibility(View.INVISIBLE);
-            tvPreviewPlaceholder.setVisibility(View.VISIBLE);
-            tvPreviewPlaceholder.setText(getString(R.string.ui_preview_area));
-            Log.d(TAG, "Not recording - showing placeholder text");
+            tvPreviewPlaceholder.setVisibility(View.GONE); // Keep hidden
+            if (tvPreviewHint != null) tvPreviewHint.setVisibility(View.GONE); // Hide hint
+            Log.d(TAG, "Not recording - keeping placeholder hidden");
         }
-        // ----- Fix Ended for this method(updatePreviewVisibility)-----
     }
 
     private void resetTimers() {
+        // Avoid blindly resetting if we are in the middle of an existing recording.
+        if (isRecording() || isPaused()) {
+            Log.w(
+                TAG,
+                "resetTimers: Suppressed reset while recording. recordingStartTime=" + recordingStartTime
+            );
+            return;
+        }
         recordingStartTime = SystemClock.elapsedRealtime();
+        Log.d(TAG, "resetTimers: Set fresh recordingStartTime=" + recordingStartTime);
         updateStorageInfo();
     }
 
@@ -691,6 +682,10 @@ public class HomeFragment extends BaseFragment {
         sharedPreferencesManager = SharedPreferencesManager.getInstance(
             requireContext()
         );
+
+        // Note: No need to restore recordingStartTime here.
+        // Service is the single source of truth and will broadcast it via
+        // BROADCAST_ON_RECORDING_STATE_CALLBACK when we call fetchRecordingState() in onResume().
 
         // Check if it's the first launch
         // boolean isFirstLaunch = sharedPreferences.getBoolean(PREF_FIRST_LAUNCH,
@@ -751,10 +746,8 @@ public class HomeFragment extends BaseFragment {
             );
         }
 
-        // ----- Fix Start: Set default camera resource availability -----
         // Set camera resources as available by default when starting
         areCameraResourcesAvailable = true;
-        // ----- Fix End: Set default camera resource availability -----
 
         // Fetch initial state and update UI
         fetchRecordingState(); // Get current service state
@@ -768,7 +761,6 @@ public class HomeFragment extends BaseFragment {
         isPreviewEnabled = sharedPreferencesManager.isPreviewEnabled();
         updatePreviewVisibility();
 
-        // ----- Fix Start for this method(onStart) -----
         // Only register segment complete stats receiver if fragment is attached
         if (
             isAdded() &&
@@ -791,13 +783,10 @@ public class HomeFragment extends BaseFragment {
                 "Skipping segment stats receiver registration - fragment not in valid state"
             );
         }
-        // ----- Fix Ended for this method(onStart) -----
 
-        // ----- Fix Start: Remove duplicate registration since it's now in
         // registerBroadcastReceivers -----
         // Camera resource availability registration is now handled in
         // registerBroadcastReceivers()
-        // ----- Fix End: Remove duplicate registration -----
 
         // Ensure we have the latest state
         fetchRecordingState();
@@ -915,7 +904,7 @@ public class HomeFragment extends BaseFragment {
         // currentCameraTypeString.toLowerCase(), Toast.LENGTH_SHORT).show();
     }
 
-    private void fetchRecordingState() {
+    protected void fetchRecordingState() {
         Intent startIntent = new Intent(getActivity(), RecordingService.class);
         startIntent.setAction(Constants.BROADCAST_ON_RECORDING_STATE_REQUEST);
         requireActivity().startService(startIntent);
@@ -932,6 +921,9 @@ public class HomeFragment extends BaseFragment {
                 if (recordingStateIntent == null) {
                     recordingStateIntent = RecordingState.NONE;
                 }
+
+                // Note: Timer value is read directly from SharedPreferences by update methods
+                // No need to extract from broadcast - service writes to SharedPreferences
 
                 switch (recordingStateIntent) {
                     case NONE:
@@ -959,41 +951,9 @@ public class HomeFragment extends BaseFragment {
         broadcastOnRecordingStarted = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent i) {
-                // ----- Fix Start for this method(registerBroadcastOnRecordingStarted) -----
-                // Get the timestamp from the intent with current time as fallback
-                long startTimeFromService = i.getLongExtra(
-                    Constants.INTENT_EXTRA_RECORDING_START_TIME,
-                    SystemClock.elapsedRealtime()
-                );
-
-                // Validate the timestamp - ensure it's not ridicuously old or in the future
-                long currentTime = SystemClock.elapsedRealtime();
-
-                // Check if the time from service is within a reasonable range
-                // (not more than 5 seconds in the past or 1 second in the future)
-                if (
-                    startTimeFromService < currentTime - 5000 ||
-                    startTimeFromService > currentTime + 1000
-                ) {
-                    Log.w(
-                        TAG,
-                        "Received invalid recordingStartTime from service: " +
-                        startTimeFromService +
-                        ", current time: " +
-                        currentTime +
-                        ". Using current time instead."
-                    );
-                    startTimeFromService = currentTime;
-                }
-
-                // Set our recording start time to the validated time from service
-                recordingStartTime = startTimeFromService;
-                Log.d(
-                    TAG,
-                    "BROADCAST_ON_RECORDING_STARTED: Set recordingStartTime=" +
-                    recordingStartTime
-                );
-                // ----- Fix End for this method(registerBroadcastOnRecordingStarted) -----
+                // Note: Timer value is written to SharedPreferences by service
+                // Fragment reads it directly when calculating elapsed time
+                Log.d(TAG, "✅ BROADCAST_ON_RECORDING_STARTED received");
 
                 // Update our internal state first
                 onRecordingStarted(true);
@@ -1082,18 +1042,11 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void onRecordingStarted(boolean toast) {
-        Log.d(TAG, "onRecordingStarted. Toast: " + toast);
+        Log.d(TAG, "📍 onRecordingStarted(toast=" + toast + ") - Timer managed by service in SharedPreferences");
 
-        // ----- Fix Start for this method(onRecordingStarted) -----
-        // Reset recording start time to ensure a fresh start - always use current time
-        // This fixes cases where old stale timestamps might be causing incorrect
-        // elapsed time
-        recordingStartTime = SystemClock.elapsedRealtime();
-        Log.d(
-            TAG,
-            "onRecordingStarted: RESET recordingStartTime=" + recordingStartTime
-        );
-        // ----- Fix End for this method(onRecordingStarted) -----
+        // Note: Timer value (recordingStartTime) is managed by RecordingService
+        // Fragment reads it from SharedPreferences when calculating elapsed time
+        // This method only updates UI state
 
         recordingState = RecordingState.IN_PROGRESS;
         setUIForRecordingActive();
@@ -1101,13 +1054,16 @@ public class HomeFragment extends BaseFragment {
             requireContext(),
             R.string.video_recording_started
         );
-        acquireWakeLock(); // Acquire wake lock
+        // WakeLock moved to service
+        
+        // OPTIMIZATION: Disable debug logging during recording to save CPU/battery
+        com.fadcam.Log.setRecordingActive(true);
+        
         updateStats(); // Update stats when recording starts
 
         // Always start the info update timer to keep elapsed time current
         startUpdatingInfo();
 
-        // ----- Fix Start for this method(onRecordingStarted) -----
         // Always force preview enabled on first recording start
         isPreviewEnabled = true;
         savePreviewState();
@@ -1162,7 +1118,6 @@ public class HomeFragment extends BaseFragment {
                 );
             }
         }
-        // ----- Fix Ended for this method(onRecordingStarted) -----
     }
 
     private void onRecordingResumed() {
@@ -1221,14 +1176,20 @@ public class HomeFragment extends BaseFragment {
      * This method resets the UI to the IDLE state.
      */
     private void onRecordingStopped() {
-        // ----- Fix Start: Restructure for better state management -----
         Log.d(TAG, "onRecordingStopped broadcast received.");
+
+        // OPTIMIZATION: Re-enable debug logging now that recording has stopped
+        com.fadcam.Log.setRecordingActive(false);
 
         // First update the recording state
         recordingState = RecordingState.NONE;
+        
+        // Reset timer (service will have cleared its value too)
+        recordingStartTime = 0;
+        Log.d(TAG, "onRecordingStopped: Reset recordingStartTime to 0");
 
         // Release wake lock if it was acquired
-        releaseWakeLock();
+        // WakeLock moved to service
 
         // Reset all buttons to idle state
         try {
@@ -1255,7 +1216,6 @@ public class HomeFragment extends BaseFragment {
             recordingState = RecordingState.NONE;
             updateStartButtonAvailability();
         }
-        // ----- Fix End: Restructure for better state management -----
     }
 
     // Inside HomeFragment.java
@@ -1265,8 +1225,11 @@ public class HomeFragment extends BaseFragment {
      * and related UI elements (like preview) to their default IDLE state.
      * This means recording is stopped and the user can initiate a new one.
      * Should only be called when the fragment is attached and view is available.
+     * 
+     * Note: Changed from private to protected to allow FadRecHomeFragment to override
+     * with screen recording-specific behavior.
      */
-    private void resetUIButtonsToIdleState() {
+    protected void resetUIButtonsToIdleState() {
         Log.d(TAG, "Reset UI to idle state");
         if (!isAdded() || getContext() == null || getView() == null) {
             Log.w(
@@ -1298,12 +1261,10 @@ public class HomeFragment extends BaseFragment {
                 buttonStartStop.setBackgroundTintList(
                     ColorStateList.valueOf(btnColor)
                 );
-                // -------------- Fix Start (ensure button is always enabled in idle state)-----------
                 // Force enable the button when resetting to idle state, regardless of any debouncing
                 buttonStartStop.setEnabled(true);
                 buttonStartStop.setAlpha(1.0f);
                 Log.d(TAG, "Start button force-enabled in resetUIButtonsToIdleState");
-                // -------------- Fix Ended (ensure button is always enabled in idle state)-----------
             }
             if (buttonPauseResume != null) {
                 buttonPauseResume.setVisibility(View.VISIBLE);
@@ -1336,9 +1297,12 @@ public class HomeFragment extends BaseFragment {
     }
 
     /**
-     * Updates the start button state based on camera resource availability
+     * Updates the start button state based on camera resource availability.
+     * 
+     * Note: Changed from private to protected to allow FadRecHomeFragment to override
+     * with screen recording-specific behavior.
      */
-    private void updateStartButtonAvailability() {
+    protected void updateStartButtonAvailability() {
         if (!isAdded() || buttonStartStop == null) {
             return;
         }
@@ -1416,7 +1380,6 @@ public class HomeFragment extends BaseFragment {
 
         Log.e(TAG, "HomeFragment stopped");
 
-        // ----- Fix Start for this method(onStop)-----
         // Call the centralized unregister method
         unregisterBroadcastReceivers();
 
@@ -1444,11 +1407,8 @@ public class HomeFragment extends BaseFragment {
                 requireActivity().startService(recordingIntent);
             }
         }
-        // ----- Fix Ended for this method(onStop)-----
 
-        // ----- Fix Start for unregistering camera resource availability receiver -----
         unregisterCameraResourceAvailabilityReceiver();
-        // ----- Fix End for unregistering camera resource availability receiver -----
 
         stopUpdatingInfo();
     }
@@ -1469,21 +1429,22 @@ public class HomeFragment extends BaseFragment {
             );
         }
 
-        Log.d(
-            TAG,
-            "onResume: Fetching current recording state from service..."
-        );
-        fetchRecordingState(); // Let service callback handle UI sync
+        // Note: No need to restore recordingStartTime from SharedPreferences.
+        // We'll fetch state from service which will broadcast the correct start time.
+        Log.d(TAG, "onResume: Fetching recording state from service (source of truth)...");
+        fetchRecordingState(); // Service will broadcast state + start time via callback
 
         registerBroadcastReceivers(); // Centralized registration
 
-        // ----- Fix Start for this method(onResume)-----
         // Re-load preview state from SharedPreferences to ensure consistency
         isPreviewEnabled = sharedPreferencesManager.isPreviewEnabled();
         Log.d(
             TAG,
             "onResume: Loaded isPreviewEnabled state = " + isPreviewEnabled
         );
+
+        // Note: recordingStartTime already restored earlier (before fetchRecordingState)
+        // to prevent reset when onRecordingStarted is called
 
         // Update the preview visibility based on current state
         updatePreviewVisibility();
@@ -1509,7 +1470,6 @@ public class HomeFragment extends BaseFragment {
             );
             updateServiceWithCurrentSurface(null);
         }
-        // ----- Fix Ended for this method(onResume)-----
 
         Log.d(TAG, "onResume: Triggering stats update.");
         updateStats();
@@ -1536,6 +1496,7 @@ public class HomeFragment extends BaseFragment {
     private boolean isStateReceiversRegistered = false;
     private boolean isCompletionReceiverRegistered = false; // Renamed from isStatsReceiverRegistered
     private boolean isTorchReceiverRegistered = false;
+    private boolean isRecordingFailedReceiverRegistered = false; // Guard for double registration
     // Receiver for recording failure broadcasts
     private android.content.BroadcastReceiver recordingFailedReceiver;
 
@@ -1547,7 +1508,7 @@ public class HomeFragment extends BaseFragment {
      * Should be called from onResume or onStart.
      */
     @SuppressLint("UnspecifiedRegisterReceiverFlag") // Suppress only if targeting older SDKs AND necessary
-    private void registerBroadcastReceivers() {
+    protected void registerBroadcastReceivers() {
         Context context = requireContext();
         if (context == null) {
             Log.e(
@@ -1556,60 +1517,61 @@ public class HomeFragment extends BaseFragment {
             );
             return;
         }
-        Log.d(TAG, "Registering all HomeFragment broadcast receivers...");
+        // OPTIMIZATION: Removed generic initialization log (not needed during recording)
+        // Log.d(TAG, "Registering all HomeFragment broadcast receivers...");
 
         // Initialize if they are null (first time or after unregistration)
         initializeRecordingStateReceivers(); // Initializes all state-related receivers
         initializeRecordingCompleteReceiver();
         initializeTorchReceiver();
-        // ----- Fix Start for this method(registerBroadcastReceivers) -----
         initializeSegmentCompleteStatsReceiver();
-        // ----- Fix Ended for this method(registerBroadcastReceivers) -----
 
-        // ----- Fix Start: Also initialize camera resource availability receiver -----
         initializeCameraResourceAvailabilityReceiver();
-        // ----- Fix End: Also initialize camera resource availability receiver -----
 
         // Register them
-        // ----- Fix Start for this
         // method(registerBroadcastReceivers_update_isStateReceiversRegistered_flag_logic)-----
         // registerRecordingStateReceivers now returns a boolean indicating success
         isStateReceiversRegistered = registerRecordingStateReceivers(context);
-        // ----- Fix Ended for this
         // method(registerBroadcastReceivers_update_isStateReceiversRegistered_flag_logic)-----
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerRecordingCompleteReceiver(context);
         }
         registerTorchReceiver(context);
-        // ----- Fix Start for this method(registerBroadcastReceivers) -----
         registerSegmentCompleteStatsReceiver(context); // Register the new one
         // Register recording failed receiver
         registerRecordingFailedReceiver(context);
-        // ----- Fix Ended for this method(registerBroadcastReceivers) -----
 
-        // ----- Fix Start: Also register the camera resource availability receiver
         // -----
         registerCameraResourceAvailabilityReceiver();
-        // ----- Fix End: Also register the camera resource availability receiver -----
 
-        // ----- Fix Start for this
         // method(registerBroadcastReceivers_update_isStateReceiversRegistered_flag_logic)-----
         // isStateReceiversRegistered = true; // Assuming
         // registerRecordingStateReceivers sets this -> Moved up and tied to actual
         // success
-        // ----- Fix Ended for this
         // method(registerBroadcastReceivers_update_isStateReceiversRegistered_flag_logic)-----
         // isCompletionReceiverRegistered is managed by
         // registerRecordingCompleteReceiver
         // isTorchReceiverRegistered is managed by registerTorchReceiver
-        Log.i(
-            TAG,
-            "All HomeFragment broadcast receivers registration attempt finished."
-        );
+        // OPTIMIZATION: Removed generic completion log (reduced from 2x/sec to 0 during recording)
+        // Log.i(
+        //     TAG,
+        //     "All HomeFragment broadcast receivers registration attempt finished."
+        // );
     }
 
     private void registerRecordingFailedReceiver(Context context) {
+        // Guard: Don't register twice
+        if (isRecordingFailedReceiverRegistered) {
+            Log.d(TAG, "Recording failed receiver already registered, skipping.");
+            return;
+        }
+        
+        if (context == null) {
+            Log.e(TAG, "Context is null, cannot register recording failed receiver");
+            return;
+        }
+        
         if (recordingFailedReceiver == null) {
             recordingFailedReceiver = new android.content.BroadcastReceiver() {
                 @Override
@@ -1631,17 +1593,25 @@ public class HomeFragment extends BaseFragment {
                 }
             };
         }
-        IntentFilter filter = new IntentFilter(
-            Constants.ACTION_RECORDING_FAILED
-        );
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(
-                recordingFailedReceiver,
-                filter,
-                Context.RECEIVER_NOT_EXPORTED
+        
+        try {
+            IntentFilter filter = new IntentFilter(
+                Constants.ACTION_RECORDING_FAILED
             );
-        } else {
-            ContextCompat.registerReceiver(context, recordingFailedReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(
+                    recordingFailedReceiver,
+                    filter,
+                    Context.RECEIVER_NOT_EXPORTED
+                );
+            } else {
+                ContextCompat.registerReceiver(context, recordingFailedReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+            }
+            isRecordingFailedReceiverRegistered = true;
+            Log.d(TAG, "Recording failed receiver registered.");
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "Error registering recording failed receiver: " + e.getMessage());
+            isRecordingFailedReceiverRegistered = false;
         }
     }
 
@@ -1727,7 +1697,7 @@ public class HomeFragment extends BaseFragment {
                     );
 
                     // Perform non-UI actions previously in onRecordingStarted(true)
-                    acquireWakeLock();
+                    // WakeLock moved to service
                     setVideoBitrate();
 
                     // Call the main UI state updater
@@ -1948,12 +1918,10 @@ public class HomeFragment extends BaseFragment {
             );
 
             buttonCamSwitch.setEnabled(false); // Disable CAM SWITCH
-            // ----- Fix Start for this method(setUIForRecordingPaused_torchButton)-----
             if (buttonTorchSwitch != null) buttonTorchSwitch.setEnabled(
                 getCameraWithFlashQuietly() != null
             ); // Enable TORCH if available, even
             // when paused
-            // ----- Fix Ended for this method(setUIForRecordingPaused_torchButton)-----
 
             // Manage preview and timers
             updatePreviewVisibility();
@@ -2048,27 +2016,31 @@ public class HomeFragment extends BaseFragment {
 
     /** Helper to register all recording state change receivers */
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
-    // ----- Fix Start for this
     // method(registerRecordingStateReceivers_correct_signature_and_logic)-----
     private boolean registerRecordingStateReceivers(Context context) {
         // Ensure boolean return type
-        // ----- Fix Ended for this
         // method(registerRecordingStateReceivers_correct_signature_and_logic)-----
-        Log.d(TAG, "Registering recording state receivers...");
+        // OPTIMIZATION: Removed generic initialization log (called 2x/sec during recording)
+        // Log.d(TAG, "Registering recording state receivers...");
+        
+        // Guard: Don't register twice
+        if (isStateReceiversRegistered) {
+            // OPTIMIZATION: Removed redundant already-registered log
+            // Log.d(TAG, "Recording state receivers already registered, skipping.");
+            return true;
+        }
+        
         if (context == null) {
             Log.e(TAG, "Context is null in registerRecordingStateReceivers");
-            // ----- Fix Start for this
             // method(registerRecordingStateReceivers_return_boolean_and_check_receivers)-----
             isStateReceiversRegistered = false;
             return false;
-            // ----- Fix Ended for this
             // method(registerRecordingStateReceivers_return_boolean_and_check_receivers)-----
         }
 
         // Ensure receivers are initialized
         initializeRecordingStateReceivers();
 
-        // ----- Fix Start for this
         // method(registerRecordingStateReceivers_return_boolean_and_check_receivers)-----
         boolean allRegisteredSuccessfully = true;
         IntentFilter intentFilterStarted = new IntentFilter(
@@ -2087,7 +2059,8 @@ public class HomeFragment extends BaseFragment {
                     intentFilterStarted
                 );
             }
-            Log.d(TAG, "Registered broadcastOnRecordingStarted");
+            // OPTIMIZATION: Removed generic receiver registration log
+            // Log.d(TAG, "Registered broadcastOnRecordingStarted");
         } else {
             allRegisteredSuccessfully = false;
             Log.e(TAG, "broadcastOnRecordingStarted is null, not registering");
@@ -2109,7 +2082,8 @@ public class HomeFragment extends BaseFragment {
                     intentFilterResumed
                 );
             }
-            Log.d(TAG, "Registered broadcastOnRecordingResumed");
+            // OPTIMIZATION: Removed generic receiver registration log
+            // Log.d(TAG, "Registered broadcastOnRecordingResumed");
         } else {
             allRegisteredSuccessfully = false;
             Log.e(TAG, "broadcastOnRecordingResumed is null, not registering");
@@ -2131,7 +2105,8 @@ public class HomeFragment extends BaseFragment {
                     intentFilterPaused
                 );
             }
-            Log.d(TAG, "Registered broadcastOnRecordingPaused");
+            // OPTIMIZATION: Removed generic receiver registration log
+            // Log.d(TAG, "Registered broadcastOnRecordingPaused");
         } else {
             allRegisteredSuccessfully = false;
             Log.e(TAG, "broadcastOnRecordingPaused is null, not registering");
@@ -2153,7 +2128,8 @@ public class HomeFragment extends BaseFragment {
                     intentFilterStopped
                 );
             }
-            Log.d(TAG, "Registered broadcastOnRecordingStopped");
+            // OPTIMIZATION: Removed generic receiver registration log
+            // Log.d(TAG, "Registered broadcastOnRecordingStopped");
         } else {
             allRegisteredSuccessfully = false;
             Log.e(TAG, "broadcastOnRecordingStopped is null, not registering");
@@ -2175,7 +2151,8 @@ public class HomeFragment extends BaseFragment {
                     intentFilterStateCallback
                 );
             }
-            Log.d(TAG, "Registered broadcastOnRecordingStateCallback");
+            // OPTIMIZATION: Removed generic receiver registration log
+            // Log.d(TAG, "Registered broadcastOnRecordingStateCallback");
         } else {
             allRegisteredSuccessfully = false;
             Log.e(
@@ -2197,7 +2174,6 @@ public class HomeFragment extends BaseFragment {
             );
         }
         return allRegisteredSuccessfully;
-        // ----- Fix Ended for this
         // method(registerRecordingStateReceivers_return_boolean_and_check_receivers)-----
     }
 
@@ -2205,18 +2181,28 @@ public class HomeFragment extends BaseFragment {
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private void registerRecordingCompleteReceiver(Context context) {
+        // Guard: Don't register twice
+        if (isCompletionReceiverRegistered) {
+            Log.d(TAG, "Recording complete receiver already registered, skipping.");
+            return;
+        }
+        
         if (
-            !isCompletionReceiverRegistered &&
             context != null &&
             recordingCompleteReceiver != null
         ) {
-            context.registerReceiver(
-                recordingCompleteReceiver,
-                new IntentFilter(Constants.ACTION_RECORDING_COMPLETE),
-                Context.RECEIVER_EXPORTED
-            );
-            isCompletionReceiverRegistered = true; // isCompletionReceiverRegistered is the correct flag here
-            Log.d(TAG, "ACTION_RECORDING_COMPLETE receiver registered.");
+            try {
+                context.registerReceiver(
+                    recordingCompleteReceiver,
+                    new IntentFilter(Constants.ACTION_RECORDING_COMPLETE),
+                    Context.RECEIVER_EXPORTED
+                );
+                isCompletionReceiverRegistered = true; // isCompletionReceiverRegistered is the correct flag here
+                Log.d(TAG, "ACTION_RECORDING_COMPLETE receiver registered.");
+            } catch (IllegalArgumentException e) {
+                Log.w(TAG, "Error registering ACTION_RECORDING_COMPLETE receiver: " + e.getMessage());
+                isCompletionReceiverRegistered = false;
+            }
         }
     }
 
@@ -2235,7 +2221,6 @@ public class HomeFragment extends BaseFragment {
             Constants.BROADCAST_ON_TORCH_STATE_CHANGED
         );
         try {
-            // ----- Fix Start for this
             // method(registerTorchReceiver_add_export_flag_for_Tiramisu)-----
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(
@@ -2249,7 +2234,6 @@ public class HomeFragment extends BaseFragment {
             }
             // ContextCompat.registerReceiver(context, torchReceiver, filter,
             // ContextCompat.RECEIVER_NOT_EXPORTED);
-            // ----- Fix Ended for this
             // method(registerTorchReceiver_add_export_flag_for_Tiramisu)-----
             isTorchReceiverRegistered = true; // Use specific flag
             Log.d(TAG, "Torch receiver registered.");
@@ -2275,7 +2259,6 @@ public class HomeFragment extends BaseFragment {
             "Unregistering all HomeFragment broadcast receivers if registered..."
         );
 
-        // ----- Fix Start for this
         // method(unregisterBroadcastReceivers_check_flags)-----
         if (isStateReceiversRegistered) {
             try {
@@ -2356,17 +2339,21 @@ public class HomeFragment extends BaseFragment {
             }
             isSegmentCompleteStatsReceiverRegistered = false;
         }
-        // ----- Fix Ended for this
         // method(unregisterBroadcastReceivers_check_flags)-----
         Log.i(
             TAG,
             "All HomeFragment broadcast receivers unregistration attempt finished."
         );
         // Unregister recording failed receiver
-        if (recordingFailedReceiver != null) {
+        if (isRecordingFailedReceiverRegistered && recordingFailedReceiver != null) {
             try {
                 requireContext().unregisterReceiver(recordingFailedReceiver);
-            } catch (Exception ignore) {}
+                isRecordingFailedReceiverRegistered = false;
+                Log.d(TAG, "Unregistered recordingFailedReceiver.");
+            } catch (IllegalArgumentException e) {
+                Log.w(TAG, "Error unregistering recordingFailedReceiver: " + e.getMessage());
+                isRecordingFailedReceiverRegistered = false;
+            }
         }
     }
 
@@ -2374,25 +2361,26 @@ public class HomeFragment extends BaseFragment {
     public void onPause() {
         super.onPause();
         Log.d(TAG, "HomeFragment paused.");
-        // ----- Fix Start for this method(onPause)-----
         if (textureViewSurface != null) {
             Log.d(TAG, "onPause: Explicitly sending null surface to service");
             updateServiceWithCurrentSurface(null);
         }
-        // ----- Fix Ended for this method(onPause)-----
         // locationHelper.stopLocationUpdates();
 
-        // Only unregister if receiver exists
-        if (torchReceiver != null) {
+        // Only unregister torch receiver if it was actually registered and flag is set
+        // This prevents IllegalArgumentException crashes from double-unregistration
+        if (isTorchReceiverRegistered && torchReceiver != null) {
             try {
                 requireContext().unregisterReceiver(torchReceiver);
+                isTorchReceiverRegistered = false;
+                Log.d(TAG, "Unregistered torchReceiver in onPause");
             } catch (IllegalArgumentException e) {
-                Log.e(TAG, "Receiver was not registered: " + e.getMessage());
+                Log.w(TAG, "Receiver was not registered: " + e.getMessage());
+                isTorchReceiverRegistered = false;
             }
         }
     }
 
-    // ----- Fix Start for this method(resetTextureView)-----
     /**
      * Helper method to reset the TextureView when needed to avoid showing stale
      * frames
@@ -2441,7 +2429,6 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix Ended for this method(resetTextureView)-----
 
     // @Override
     // public void onRequestPermissionsResult(int requestCode, @NonNull String[]
@@ -2490,7 +2477,6 @@ public class HomeFragment extends BaseFragment {
         return inflater.inflate(R.layout.fragment_home, container, false);
     }
 
-    // -------------- Fix Start: Manual orientation change handling -----------
     /**
      * Called by MainActivity when orientation changes to refresh the fragment's
      * layout
@@ -2546,7 +2532,6 @@ public class HomeFragment extends BaseFragment {
         Log.d(TAG, "Restoring fragment state after orientation change");
     }
 
-    // -------------- Fix End: Manual orientation change handling -----------
 
     // Debug method to help diagnose recording time issue
     private void debugRecordingTimeVariables() {
@@ -2576,11 +2561,9 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void savePreviewState() {
-        // ----- Fix Start for this method(savePreviewState)-----
         // Use the SharedPreferencesManager's method which uses the correct constant
         sharedPreferencesManager.setPreviewEnabled(isPreviewEnabled);
         Log.d(TAG, "Preview state saved: " + isPreviewEnabled);
-        // ----- Fix Ended for this method(savePreviewState)-----
     }
 
     // function to use haptic feedbacks
@@ -2645,7 +2628,6 @@ public class HomeFragment extends BaseFragment {
                 currentTheme.equalsIgnoreCase("Amoled") ||
                 currentTheme.equalsIgnoreCase("Faded Night"));
 
-        // ----- Fix Start: Reset clock color if theme changed (always use theme
         // default) -----
         String lastTheme = sharedPreferencesManager.sharedPreferences.getString(
             "last_theme_for_clock_color",
@@ -2700,7 +2682,6 @@ public class HomeFragment extends BaseFragment {
                 currentTheme
             );
         }
-        // ----- Fix End: Reset clock color if theme changed (always use theme default)
         // -----
 
         // Initialize ExecutorService
@@ -2710,11 +2691,9 @@ public class HomeFragment extends BaseFragment {
 
         initializeViews(view);
 
-        // -------------- Fix Start (initializeComponents) --------------
         // Initialize UI components using helper
         fragmentHelper = new HomeFragmentHelper(this);
         fragmentHelper.initializeComponents(view);
-        // -------------- Fix Ended (initializeComponents) --------------
 
         // Fragment result listeners for pickers
         android.util.Log.d(
@@ -2823,7 +2802,6 @@ public class HomeFragment extends BaseFragment {
                     // Update exposure tile tinting based on current exposure and AE lock state
                     try {
                         if (tileExp != null) {
-                            // -------------- Fix Start (exposure tile tinting - Snow Veil theme)-----------
                             // Show orange tint if AE locked or exposure compensation is not at 0
                             if (aeLocked || currentEvIndex != 0) {
                                 int orange = getResources().getColor(
@@ -2855,7 +2833,6 @@ public class HomeFragment extends BaseFragment {
                                     tileExp.setTextColor(typedValue.data);
                                 }
                             }
-                            // -------------- Fix Ended (exposure tile tinting - Snow Veil theme)-----------
                         }
                     } catch (Exception ignored) {}
                 }
@@ -2904,7 +2881,6 @@ public class HomeFragment extends BaseFragment {
                     // Update exposure tile visual: tint orange when locked, reset when unlocked
                     try {
                         if (tileExp != null) {
-                            // -------------- Fix Start (AE lock exposure tile tinting - Snow Veil
                             // theme)-----------
                             // TextView Material Icons font handling with textColor
                             if (aeLocked || currentEvIndex != 0) {
@@ -2945,7 +2921,6 @@ public class HomeFragment extends BaseFragment {
                                     "Cleared tint from exposure tile"
                                 );
                             }
-                            // -------------- Fix Ended (AE lock exposure tile tinting - Snow Veil
                             // theme)-----------
                             // subtle scale to indicate active
                             tileExp.setScaleX(aeLocked ? 1.05f : 1f);
@@ -3047,7 +3022,6 @@ public class HomeFragment extends BaseFragment {
                             // Save zoom ratio to preferences
                             sp.setSpecificZoomRatio(currentCamera, zoomRatio);
 
-                            // -------------- Fix Start (zoom tile tinting - Snow Veil theme)-----------
                             // Update zoom tile tinting
                             try {
                                 if (tileZoom != null) {
@@ -3078,7 +3052,6 @@ public class HomeFragment extends BaseFragment {
                                         }
                                     }
                                 }
-                                // -------------- Fix Ended (zoom tile tinting - Snow Veil theme)-----------
                             } catch (Exception ignored) {}
 
                             // If recording service is running, apply zoom immediately
@@ -3182,14 +3155,13 @@ public class HomeFragment extends BaseFragment {
 
         setupTextureView(view);
         setupButtonListeners();
-        setupLongPressListener(); // For Easter eggs on title
+        setupLongPressListener(); // Re-enabled for preview toggle during recording
         setupClockLongPressListener(); // For display options on clock
         setupAppLogoLongPressListener(view); // <<< CALL NEW METHOD
 
         // Initialize easter egg messages and setup listener for preview placeholder
         initializeMessages();
 
-    // ----- Fix Start: Apply dynamic theme colors to preview area cards -----
         CardView cardPreview = view.findViewById(R.id.cardPreview);
         CardView cardStats = view.findViewById(R.id.cardStats);
         CardView cardStorage = view.findViewById(R.id.cardStorage);
@@ -3209,7 +3181,6 @@ public class HomeFragment extends BaseFragment {
             R.color.gray_text_light
         );
 
-        // ----- Fix Start: Apply dynamic theme colors to preview area cards (force
         // override for AMOLED and Red, use *_surface_dark) -----
         if ("Crimson Bloom".equals(themeName)) {
             int redSurface = ContextCompat.getColor(
@@ -3224,9 +3195,9 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.red_theme_text_secondary_dark
             );
-            if (cardPreview != null) cardPreview.setCardBackgroundColor(
-                redSurface
-            );
+            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
+            //     redSurface
+            // ); // Commented: Keep preview transparent with layered icons
             if (cardStats != null) cardStats.setCardBackgroundColor(redSurface);
             if (cardStorage != null) cardStorage.setCardBackgroundColor(
                 redSurface
@@ -3248,9 +3219,9 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.gold_theme_text_secondary_dark
             );
-            if (cardPreview != null) cardPreview.setCardBackgroundColor(
-                goldSurface
-            );
+            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
+            //     goldSurface
+            // ); // Commented: Keep preview transparent with layered icons
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 goldSurface
             );
@@ -3275,9 +3246,9 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.silentforest_theme_text_secondary_dark
             );
-            if (cardPreview != null) cardPreview.setCardBackgroundColor(
-                forestSurface
-            );
+            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
+            //     forestSurface
+            // ); // Commented: Keep preview transparent with layered icons
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 forestSurface
             );
@@ -3310,9 +3281,9 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.shadowalloy_theme_text_secondary_dark
             );
-            if (cardPreview != null) cardPreview.setCardBackgroundColor(
-                alloySurface
-            );
+            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
+            //     alloySurface
+            // ); // Commented: Keep preview transparent with layered icons
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 alloySurface
             );
@@ -3341,9 +3312,9 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.pookiepink_theme_text_secondary_dark
             );
-            if (cardPreview != null) cardPreview.setCardBackgroundColor(
-                pinkSurface
-            );
+            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
+            //     pinkSurface
+            // ); // Commented: Keep preview transparent with layered icons
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 pinkSurface
             );
@@ -3356,7 +3327,6 @@ public class HomeFragment extends BaseFragment {
             // setTextColorsRecursive(cardStorage, pinkHeading, pinkTextSecondary);
         } else if ("Snow Veil".equals(themeName)) {
             // Snow Veil theme (white/light)
-            // ----- Fix Start: Use darker gray for preview area in Snow Veil theme -----
             int snowSurface = ContextCompat.getColor(
                 requireContext(),
                 R.color.snowveil_theme_preview_area
@@ -3370,7 +3340,6 @@ public class HomeFragment extends BaseFragment {
             // for
             // other
             // cards
-            // ----- Fix End: Use darker gray for preview area in Snow Veil theme -----
             int snowHeading = ContextCompat.getColor(
                 requireContext(),
                 R.color.snowveil_theme_text_primary
@@ -3381,22 +3350,23 @@ public class HomeFragment extends BaseFragment {
             );
 
             // Preview area gets darker gray for better contrast
-            if (cardPreview != null) {
-                cardPreview.setCardBackgroundColor(snowSurface);
-                // Also set the background of the FrameLayout inside the CardView
-                View frameLayout = cardPreview.getChildAt(0);
-                if (frameLayout != null) {
-                    frameLayout.setBackgroundColor(snowSurface);
-                }
-                // Use a post-layout runnable to ensure the color is applied after all layout
-                // operations
-                cardPreview.post(() -> {
-                    cardPreview.setCardBackgroundColor(snowSurface);
-                    if (frameLayout != null) {
-                        frameLayout.setBackgroundColor(snowSurface);
-                    }
-                });
-            }
+            // Commented: Keep preview transparent with layered icons
+            // if (cardPreview != null) {
+            //     cardPreview.setCardBackgroundColor(snowSurface);
+            //     // Also set the background of the FrameLayout inside the CardView
+            //     View frameLayout = cardPreview.getChildAt(0);
+            //     if (frameLayout != null) {
+            //         frameLayout.setBackgroundColor(snowSurface);
+            //     }
+            //     // Use a post-layout runnable to ensure the color is applied after all layout
+            //     // operations
+            //     cardPreview.post(() -> {
+            //         cardPreview.setCardBackgroundColor(snowSurface);
+            //         if (frameLayout != null) {
+            //             frameLayout.setBackgroundColor(snowSurface);
+            //         }
+            //     });
+            // }
 
             // Other cards get white background
             if (cardStats != null) cardStats.setCardBackgroundColor(
@@ -3433,23 +3403,24 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.amoled_text_secondary_dark
             );
-            if (cardPreview != null) {
-                cardPreview.setCardBackgroundColor(fadedNightSurface);
-                // Also set the background of the FrameLayout inside the CardView to ensure it
-                // overrides the layout attribute
-                View frameLayout = cardPreview.getChildAt(0);
-                if (frameLayout != null) {
-                    frameLayout.setBackgroundColor(fadedNightSurface);
-                }
-                // Use a post-layout runnable to ensure the color is applied after all layout
-                // operations
-                cardPreview.post(() -> {
-                    cardPreview.setCardBackgroundColor(fadedNightSurface);
-                    if (frameLayout != null) {
-                        frameLayout.setBackgroundColor(fadedNightSurface);
-                    }
-                });
-            }
+            // Commented: Keep preview transparent with layered icons
+            // if (cardPreview != null) {
+            //     cardPreview.setCardBackgroundColor(fadedNightSurface);
+            //     // Also set the background of the FrameLayout inside the CardView to ensure it
+            //     // overrides the layout attribute
+            //     View frameLayout = cardPreview.getChildAt(0);
+            //     if (frameLayout != null) {
+            //         frameLayout.setBackgroundColor(fadedNightSurface);
+            //     }
+            //     // Use a post-layout runnable to ensure the color is applied after all layout
+            //     // operations
+            //     cardPreview.post(() -> {
+            //         cardPreview.setCardBackgroundColor(fadedNightSurface);
+            //         if (frameLayout != null) {
+            //             frameLayout.setBackgroundColor(fadedNightSurface);
+            //         }
+            //     });
+            // }
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 fadedNightSurface
             );
@@ -3483,9 +3454,9 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.amoled_text_secondary_dark
             );
-            if (cardPreview != null) cardPreview.setCardBackgroundColor(
-                amoledSurface
-            );
+            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
+            //     amoledSurface
+            // ); // Commented: Keep preview transparent with layered icons
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 amoledSurface
             );
@@ -3517,23 +3488,24 @@ public class HomeFragment extends BaseFragment {
                 requireContext(),
                 R.color.gray_text_light
             );
-            if (cardPreview != null) {
-                cardPreview.setCardBackgroundColor(darkSurface);
-                // Also set the background of the FrameLayout inside the CardView to ensure it
-                // overrides the layout attribute
-                View frameLayout = cardPreview.getChildAt(0);
-                if (frameLayout != null) {
-                    frameLayout.setBackgroundColor(darkSurface);
-                }
-                // Use a post-layout runnable to ensure the color is applied after all layout
-                // operations
-                cardPreview.post(() -> {
-                    cardPreview.setCardBackgroundColor(darkSurface);
-                    if (frameLayout != null) {
-                        frameLayout.setBackgroundColor(darkSurface);
-                    }
-                });
-            }
+            // Commented: Keep preview transparent with layered icons
+            // if (cardPreview != null) {
+            //     cardPreview.setCardBackgroundColor(darkSurface);
+            //     // Also set the background of the FrameLayout inside the CardView to ensure it
+            //     // overrides the layout attribute
+            //     View frameLayout = cardPreview.getChildAt(0);
+            //     if (frameLayout != null) {
+            //         frameLayout.setBackgroundColor(darkSurface);
+            //     }
+            //     // Use a post-layout runnable to ensure the color is applied after all layout
+            //     // operations
+            //     cardPreview.post(() -> {
+            //         cardPreview.setCardBackgroundColor(darkSurface);
+            //         if (frameLayout != null) {
+            //             frameLayout.setBackgroundColor(darkSurface);
+            //         }
+            //     });
+            // }
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 darkSurface
             );
@@ -3549,9 +3521,9 @@ public class HomeFragment extends BaseFragment {
             applyMidnightDuskThemeToTiles();
         } else {
             // Fallback for other themes: use dialog color for cards
-            if (cardPreview != null) cardPreview.setCardBackgroundColor(
-                colorDialog
-            );
+            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
+            //     colorDialog
+            // ); // Commented: Keep preview transparent with layered icons
             if (cardStats != null) cardStats.setCardBackgroundColor(
                 colorDialog
             );
@@ -3574,13 +3546,16 @@ public class HomeFragment extends BaseFragment {
 
     // Enable tap on the Stats card to navigate to the Records tab
     setupStatsCardNavigation(view);
-        // ----- Fix End: Apply dynamic theme colors to preview area cards (force
         // override for AMOLED and Red, use *_surface_dark) -----
+
+        // Force transparent background for preview card (override theme colors)
+        if (cardPreview != null) {
+            cardPreview.setCardBackgroundColor(android.graphics.Color.TRANSPARENT);
+        }
 
         // Apply theme-specific colors to mode switcher
         applyModeSwitcherTheming(themeName);
 
-        // ----- Fix Start: Storage card theme-specific colors (don't override theme
         // colors) -----
         if (cardStorage != null) {
             if ("Crimson Bloom".equals(themeName)) {
@@ -3623,10 +3598,8 @@ public class HomeFragment extends BaseFragment {
                 );
             }
         }
-        // ----- Fix End: Storage card theme-specific colors (don't override theme
         // colors) -----
 
-        // ----- Fix Start: Re-apply clock card color to ensure it's not affected by
         // theme styling -----
         // This ensures the clock card maintains its own independent color regardless of
         // general card styling
@@ -3644,7 +3617,6 @@ public class HomeFragment extends BaseFragment {
             " for theme: " +
             currentTheme
         );
-        // ----- Fix End: Re-apply clock card color to ensure it's not affected by theme
         // styling -----
 
         vibrator = (Vibrator) requireActivity().getSystemService(
@@ -3695,7 +3667,6 @@ public class HomeFragment extends BaseFragment {
         );
         // --- END FIX ---
 
-        // ----- Fix Start for this method(onViewCreated_resetTextureView)-----
         // If TextureView is already available, reset it to ensure clean state
         if (textureView != null && textureView.isAvailable()) {
             resetTextureView();
@@ -3704,7 +3675,6 @@ public class HomeFragment extends BaseFragment {
                 "onViewCreated: Reset TextureView to ensure clean startup state"
             );
         }
-        // ----- Fix Ended for this method(onViewCreated_resetTextureView)-----
 
         resetTimers();
         copyFontToInternalStorage();
@@ -3712,14 +3682,15 @@ public class HomeFragment extends BaseFragment {
         // Initial stats update
         Log.d(TAG, "onViewCreated: Triggering initial stats update.");
         updateStats();
-        startUpdatingClock();
+        // NOTE: Clock update is started in onStart(), not here, to avoid duplicate handlers
+        // startUpdatingClock(); // Removed - handled in onStart()
 
         // Update clock and date initially
         updateClock();
 
         // updateTip(); // Duplicate call? Check if startTipsAnimation is sufficient
         setupButtonListeners();
-        setupLongPressListener();
+        setupLongPressListener(); // Re-enabled for preview toggle during recording
         updatePreviewVisibility(); // CRUCIAL: Update visibility based on the loaded state
 
         buttonTorchSwitch = view.findViewById(R.id.buttonTorchSwitch);
@@ -3759,102 +3730,43 @@ public class HomeFragment extends BaseFragment {
             buttonTorchSwitch.setVisibility(View.GONE);
         }
 
-        // ----- Fix Start for this method(onViewCreated_kofi_support_icon) -----
-        ImageButton ivKoFiSupport = view.findViewById(R.id.ivKoFiSupport);
-        if (ivKoFiSupport != null) {
-            ivKoFiSupport.setOnClickListener(v -> {
-                // Show Ko-fi support bottom sheet
-                KoFiSupportBottomSheet bottomSheet =
-                    new KoFiSupportBottomSheet();
-                bottomSheet.show(
-                    getParentFragmentManager(),
-                    "KoFiSupportBottomSheet"
-                );
-            });
-
-            // Enhanced animation: left-right wiggle + slight rotation, with longer pause
-            float moveDistance = 10f; // pixels to move left/right
-            float rotateAngle = 15f; // degrees to rotate left/right
-            long moveDuration = 160; // ms for each move
-            long pauseDuration = 1500; // ms pause at center
-
-            final Runnable[] startWiggle = new Runnable[1];
-            startWiggle[0] = new Runnable() {
-                @Override
-                public void run() {
-                    // Move right + rotate right
-                    ObjectAnimator moveRight = ObjectAnimator.ofFloat(
-                        ivKoFiSupport,
-                        "translationX",
-                        0f,
-                        moveDistance
-                    );
-                    ObjectAnimator rotateRight = ObjectAnimator.ofFloat(
-                        ivKoFiSupport,
-                        "rotation",
-                        0f,
-                        rotateAngle
-                    );
-                    AnimatorSet rightSet = new AnimatorSet();
-                    rightSet.playTogether(moveRight, rotateRight);
-                    rightSet.setDuration(moveDuration);
-
-                    // Move left + rotate left
-                    ObjectAnimator moveLeft = ObjectAnimator.ofFloat(
-                        ivKoFiSupport,
-                        "translationX",
-                        moveDistance,
-                        -moveDistance
-                    );
-                    ObjectAnimator rotateLeft = ObjectAnimator.ofFloat(
-                        ivKoFiSupport,
-                        "rotation",
-                        rotateAngle,
-                        -rotateAngle
-                    );
-                    AnimatorSet leftSet = new AnimatorSet();
-                    leftSet.playTogether(moveLeft, rotateLeft);
-                    leftSet.setDuration(moveDuration * 2);
-
-                    // Move center + rotate back to 0
-                    ObjectAnimator moveCenter = ObjectAnimator.ofFloat(
-                        ivKoFiSupport,
-                        "translationX",
-                        -moveDistance,
-                        0f
-                    );
-                    ObjectAnimator rotateCenter = ObjectAnimator.ofFloat(
-                        ivKoFiSupport,
-                        "rotation",
-                        -rotateAngle,
-                        0f
-                    );
-                    AnimatorSet centerSet = new AnimatorSet();
-                    centerSet.playTogether(moveCenter, rotateCenter);
-                    centerSet.setDuration(moveDuration);
-
-                    AnimatorSet wiggleSet = new AnimatorSet();
-                    wiggleSet.playSequentially(rightSet, leftSet, centerSet);
-                    wiggleSet.addListener(
-                        new AnimatorListenerAdapter() {
-                            @Override
-                            public void onAnimationEnd(Animator animation) {
-                                ivKoFiSupport.postDelayed(
-                                    startWiggle[0],
-                                    pauseDuration
-                                );
-                            }
-                        }
-                    );
-                    wiggleSet.start();
+        View btnGetPro = view.findViewById(R.id.btnGetPro);
+        View proBadgeDot = view.findViewById(R.id.proBadgeDot);
+        
+        if (btnGetPro != null) {
+            // Update badge visibility based on pro feature state
+            if (proBadgeDot != null) {
+                try {
+                    MainActivity mainActivity = (MainActivity) getActivity();
+                    if (mainActivity != null && mainActivity.shouldShowProBadge()) {
+                        proBadgeDot.setVisibility(View.VISIBLE);
+                    } else {
+                        proBadgeDot.setVisibility(View.GONE);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error checking pro badge state", e);
                 }
-            };
-            // Start the animation loop
-            ivKoFiSupport.post(startWiggle[0]);
+            }
+            
+            btnGetPro.setOnClickListener(v -> {
+                // Mark pro feature as seen when clicking Pro button
+                try {
+                    com.fadcam.ui.utils.NewFeatureManager.markFeatureAsSeen(requireContext(), "pro");
+                    // Hide badge after clicking
+                    if (proBadgeDot != null) {
+                        proBadgeDot.setVisibility(View.GONE);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error marking pro as seen", e);
+                }
+                
+                // Open FadCam Pro Activity
+                Intent intent = new Intent(getActivity(), FadCamProActivity.class);
+                startActivity(intent);
+            });
+            // ShimmerTextView handles its own shimmer animation
         }
-        // ----- Fix Ended for this method(onViewCreated_kofi_support_icon) -----
 
-        // ----- Fix Start: Apply theme color to top bar and buttons in HomeFragment
         // -----
         MaterialToolbar toolbar = view.findViewById(R.id.topAppBar);
         if (toolbar != null) {
@@ -3871,7 +3783,6 @@ public class HomeFragment extends BaseFragment {
         return typedValue.data;
     }
 
-    // ----- Fix End: Apply theme color to top bar and buttons in HomeFragment -----
 
     /**
      * Show visual focus indicator at tap location
@@ -4284,7 +4195,6 @@ public class HomeFragment extends BaseFragment {
         );
     }
 
-    // -------------- Fix Start (setupButtonListeners with debouncing)-----------
     private void setupButtonListeners() {
         // Initialize debounced runnables for start/stop actions to prevent rapid clicking
         if (debouncedStartRecording == null) {
@@ -4305,7 +4215,6 @@ public class HomeFragment extends BaseFragment {
         }
 
         buttonStartStop.setOnClickListener(v -> {
-            // ----- Fix Start: Add debug logs and ensure recordingState is correct -----
             Log.d(
                 TAG,
                 "Start/Stop button clicked. recordingState=" +
@@ -4328,7 +4237,6 @@ public class HomeFragment extends BaseFragment {
                 );
                 recordingState = RecordingState.NONE;
             }
-            // ----- Fix End: Add debug logs and ensure recordingState is correct -----
 
             // Temporarily disable button to prevent rapid clicks
             buttonStartStop.setEnabled(false);
@@ -4347,7 +4255,6 @@ public class HomeFragment extends BaseFragment {
                 debouncedStopRecording.run();
             }
         });
-    // -------------- Fix Ended (setupButtonListeners with debouncing)-----------
 
         buttonPauseResume.setOnClickListener(v -> {
             if (isPaused()) {
@@ -4373,6 +4280,18 @@ public class HomeFragment extends BaseFragment {
         }
         performHapticFeedback();
         // Permission checks removed; handled by onboarding
+
+        // Check if codec is HEVC - browsers don't support HEVC for HLS live streaming
+        // Only validate if streaming is actually enabled (server running)
+        if (RemoteStreamManager.getInstance().isStreamingEnabled()) {
+            VideoCodec selectedCodec = sharedPreferencesManager.getVideoCodec();
+            if (selectedCodec == VideoCodec.HEVC) {
+                // HEVC is not browser-compatible for HLS streaming
+                // Show Material Dialog with option to auto-switch to AVC
+                showCodecIncompatibilityDialog();
+                return; // Block recording start
+            }
+        }
 
         // Force reset recording state if service is not running
         if (!isMyServiceRunning(RecordingService.class)) {
@@ -4403,7 +4322,6 @@ public class HomeFragment extends BaseFragment {
         Intent serviceIntent = new Intent(getContext(), RecordingService.class);
         serviceIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
 
-        // ----- Fix Start for this method(startRecording_passTorchState)-----
         // Pass current torch state (from HomeFragment's perspective) to the service
         // The service will use this to set the initial FLASH_MODE in its CaptureRequest
         // if it starts successfully.
@@ -4412,7 +4330,107 @@ public class HomeFragment extends BaseFragment {
             Constants.INTENT_EXTRA_INITIAL_TORCH_STATE,
             isTorchOn
         );
-        // ----- Fix Ended for this method(startRecording_passTorchState)-----
+
+        // Pass the surface if preview is enabled and surface is valid
+        if (
+            isPreviewEnabled &&
+            textureViewSurface != null &&
+            textureViewSurface.isValid()
+        ) {
+            Log.d(TAG, "Preview enabled, passing valid surface to service.");
+            serviceIntent.putExtra("SURFACE", textureViewSurface);
+        } else {
+            Log.w(
+                TAG,
+                "Preview disabled or surface invalid. Service will start without preview surface."
+            );
+            serviceIntent.putExtra("SURFACE", (Surface) null); // Explicitly pass null
+        }
+
+        ContextCompat.startForegroundService(getContext(), serviceIntent);
+        // UI state changes will be handled by broadcast receivers
+        // setUIForRecordingActive(); // Move UI update to onRecordingStarted broadcast
+        // receiver
+        Log.d(TAG, "startRecording: RecordingService start initiated.");
+    }
+
+    /**
+     * Shows a Material Dialog when HEVC codec is selected but live streaming requires AVC.
+     * Offers user to automatically switch to AVC codec and start recording.
+     */
+    private void showCodecIncompatibilityDialog() {
+        if (getContext() == null) return;
+
+        new MaterialAlertDialogBuilder(getContext())
+                .setTitle(getString(R.string.codec_hevc_incompatible_title))
+                .setMessage(getString(R.string.codec_hevc_incompatible_message))
+                .setPositiveButton(getString(R.string.codec_switch_and_record), (dialog, which) -> {
+                    // Auto-switch codec to AVC
+                    Log.d(TAG, "User requested auto-switch from HEVC to AVC codec");
+                    sharedPreferencesManager.sharedPreferences.edit()
+                        .putString(Constants.PREF_VIDEO_CODEC, VideoCodec.AVC.toString())
+                        .apply();
+                    
+                    // Show confirmation toast
+                    Toast.makeText(
+                        getContext(),
+                        getString(R.string.codec_switched_to_h264),
+                        Toast.LENGTH_SHORT
+                    ).show();
+                    
+                    // Proceed with recording start
+                    proceedWithRecordingStart();
+                })
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> {
+                    Log.d(TAG, "User cancelled recording due to codec incompatibility");
+                    dialog.dismiss();
+                })
+                .setCancelable(true)
+                .show();
+    }
+
+    /**
+     * Continue with recording start after codec validation passes.
+     * Contains the actual recording initialization logic.
+     */
+    private void proceedWithRecordingStart() {
+        // Force reset recording state if service is not running
+        if (!isMyServiceRunning(RecordingService.class)) {
+            Log.d(TAG, "Service not running, forcing recordingState to NONE");
+            recordingState = RecordingState.NONE;
+        }
+
+        if (isMyServiceRunning(RecordingService.class)) {
+            Log.w(
+                TAG,
+                "Start requested, but service appears to be already running or starting. Current state: " +
+                recordingState
+            );
+            // Query the service for its actual state if unsure
+            Intent queryIntent = new Intent(
+                getContext(),
+                RecordingService.class
+            );
+            queryIntent.setAction(
+                Constants.BROADCAST_ON_RECORDING_STATE_REQUEST
+            );
+            ContextCompat.startForegroundService(getContext(), queryIntent);
+            // UI should update based on the broadcast from the service
+            return; // Don't try to start again if it might be running
+        }
+
+        Log.d(TAG, "startRecording: Starting RecordingService.");
+        Intent serviceIntent = new Intent(getContext(), RecordingService.class);
+        serviceIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
+
+        // Pass current torch state (from HomeFragment's perspective) to the service
+        // The service will use this to set the initial FLASH_MODE in its CaptureRequest
+        // if it starts successfully.
+        Log.d(TAG, "Passing initial torch state to service: " + isTorchOn);
+        serviceIntent.putExtra(
+            Constants.INTENT_EXTRA_INITIAL_TORCH_STATE,
+            isTorchOn
+        );
 
         // Pass the surface if preview is enabled and surface is valid
         if (
@@ -4531,10 +4549,8 @@ public class HomeFragment extends BaseFragment {
         if (cardClock != null) {
             cardClock.setOnLongClickListener(v -> {
                 performHapticFeedback();
-                // ----- Fix Start for this method(setupClockLongPressListener)-----
                 // Show existing display options and new color chooser
                 showClockAppearanceDialog();
-                // ----- Fix Ended for this method(setupClockLongPressListener)-----
                 return true;
             });
         }
@@ -4726,7 +4742,6 @@ public class HomeFragment extends BaseFragment {
                 TextView text1 = view.findViewById(android.R.id.text1);
                 if (text1 != null) {
                     text1.setTextColor(white);
-                    // ----- Fix Start: Add color circle before color name -----
                     int size = (int) (text1.getTextSize() * 1.2f);
                     GradientDrawable circle = new GradientDrawable();
                     circle.setShape(GradientDrawable.OVAL);
@@ -4742,7 +4757,6 @@ public class HomeFragment extends BaseFragment {
                         null
                     );
                     text1.setCompoundDrawablePadding(24);
-                    // ----- Fix End: Add color circle before color name -----
                 }
                 return view;
             }
@@ -4852,55 +4866,41 @@ public class HomeFragment extends BaseFragment {
         String currentTime = timeFormat.format(new Date());
         tvClock.setText(currentTime);
 
-        // Get the current clock background color and determine if it's light or dark
-        int backgroundColor = -1;
-        if (cardClock != null) {
-            backgroundColor =
-                ((ColorStateList) cardClock.getCardBackgroundColor()).getDefaultColor();
-        }
-
-        // Set text colors based on background brightness and theme settings
-        if (backgroundColor != -1) {
-            // Use background color to determine text color
-            boolean isLightBackground = isLightColor(backgroundColor);
-            int textColor = isLightBackground ? Color.BLACK : Color.WHITE;
-
-            tvClock.setTextColor(textColor);
-            tvDateEnglish.setTextColor(textColor);
-            tvDateArabic.setTextColor(textColor);
-
-            Log.d(
-                TAG,
-                "updateClock: Applied text color based on clock background: " +
-                (isLightBackground ? "BLACK" : "WHITE")
-            );
-        } else {
-            // Fallback to theme-based coloring if clock background color can't be
-            // determined
-            String currentTheme =
-                sharedPreferencesManager.sharedPreferences.getString(
-                    com.fadcam.Constants.PREF_APP_THEME,
-                    Constants.DEFAULT_APP_THEME
-                );
-            if ("Crimson Bloom".equals(currentTheme)) {
-                // For Crimson Bloom theme, force white text for better visibility against red
-                // background
-                tvClock.setTextColor(Color.WHITE);
-                tvDateEnglish.setTextColor(Color.WHITE);
-                tvDateArabic.setTextColor(Color.WHITE);
-            } else if ("Premium Gold".equals(currentTheme)) {
-                // For Premium Gold theme, force black text for better visibility against gold
-                // background
-                tvClock.setTextColor(Color.BLACK);
-                tvDateEnglish.setTextColor(Color.BLACK);
-                tvDateArabic.setTextColor(Color.BLACK);
-            } else {
-                // For other dark themes, use white text
-                tvClock.setTextColor(Color.WHITE);
-                tvDateEnglish.setTextColor(Color.WHITE);
-                tvDateArabic.setTextColor(Color.WHITE);
+        // OPTIMIZATION: Cache color calculation (only recalculate every 1 second)
+        // This reduces expensive isLightColor() calls from 1/sec to 0.001/sec
+        long currentTime_ms = System.currentTimeMillis();
+        int textColor = cachedClockTextColor;
+        
+        if (cardClock != null && (currentTime_ms - lastClockColorCalcTime) >= CLOCK_COLOR_CACHE_MS) {
+            int backgroundColor = ((ColorStateList) cardClock.getCardBackgroundColor()).getDefaultColor();
+            
+            // Only recalculate if background color changed
+            if (backgroundColor != lastClockBackgroundColor) {
+                lastClockBackgroundColor = backgroundColor;
+                boolean isLightBackground = isLightColor(backgroundColor);
+                textColor = isLightBackground ? Color.BLACK : Color.WHITE;
+                cachedClockTextColor = textColor;
+                lastClockColorCalcTime = currentTime_ms;
             }
+        } else if (cardClock == null) {
+            // Fallback to theme-based coloring if card is null
+            String currentTheme = sharedPreferencesManager.sharedPreferences.getString(
+                com.fadcam.Constants.PREF_APP_THEME,
+                Constants.DEFAULT_APP_THEME
+            );
+            if ("Crimson Bloom".equals(currentTheme)) {
+                textColor = Color.WHITE;
+            } else if ("Premium Gold".equals(currentTheme)) {
+                textColor = Color.BLACK;
+            } else {
+                textColor = Color.WHITE;
+            }
+            cachedClockTextColor = textColor;
         }
+        
+        tvClock.setTextColor(textColor);
+        tvDateEnglish.setTextColor(textColor);
+        tvDateArabic.setTextColor(textColor);
 
         // Update the date in English
         SimpleDateFormat dateFormatEnglish = new SimpleDateFormat(
@@ -4936,17 +4936,20 @@ public class HomeFragment extends BaseFragment {
         tvDateArabic.setText(displayOption == 2 ? currentDateArabic : "");
     }
 
-    private void updateStorageInfo() {
-        Log.d(TAG, "updateStorageInfo: Updating storage information");
+    /**
+     * Update storage info and timer displays.
+     * Changed from private to protected to allow FadRecHomeFragment to override with screen recording logic.
+     */
+    protected void updateStorageInfo() {
+        // NOTE: Logging here is minimized to reduce spam during 1s update loop in startUpdatingInfo()
 
-        // -------------- Fix Start (updateStorageInfo) - Professional storage caching
         // -----------
 
         // Step 1: Try to use cached storage info for instant display
         StorageInfoCache.StorageInfo cachedInfo =
             StorageInfoCache.getCachedStorageInfo();
         if (cachedInfo != null) {
-            Log.d(TAG, "Using cached storage info - displaying instantly");
+            // Silent - called every 1 second during recording; no frequent logging
             updateStorageUiWithCachedInfo(cachedInfo);
             return;
         }
@@ -4976,7 +4979,6 @@ public class HomeFragment extends BaseFragment {
             }
         });
 
-        // -------------- Fix End (updateStorageInfo) -----------
     }
 
     /**
@@ -4990,19 +4992,22 @@ public class HomeFragment extends BaseFragment {
         long estimatedBytesUsed = 0;
 
         if (isRecording() || isPaused()) {
-            // Check if recordingStartTime is valid
-            if (recordingStartTime <= 0) {
-                recordingStartTime = SystemClock.elapsedRealtime();
-                Log.w(
-                    TAG,
-                    "updateStorageInfo: Invalid recordingStartTime detected, resetting to current time"
-                );
-            }
-
-            elapsedTime = Math.max(
-                0,
-                SystemClock.elapsedRealtime() - recordingStartTime
+            // Always read from SharedPreferences - service is the source of truth
+            long serviceStartTime = sharedPreferencesManager.sharedPreferences.getLong(
+                Constants.PREF_RECORDING_START_TIME,
+                0
             );
+            
+            if (serviceStartTime > 0) {
+                elapsedTime = Math.max(
+                    0,
+                    SystemClock.elapsedRealtime() - serviceStartTime
+                );
+                // Verbose timer logging removed - called too frequently (every 1s during recording)
+            } else {
+                Log.e(TAG, "❌ Timer: Service start time is ZERO in SharedPreferences!");
+                elapsedTime = 0;
+            }
 
             // Calculate estimated bytes used during recording
             long effectiveBitrate = 0;
@@ -5040,9 +5045,10 @@ public class HomeFragment extends BaseFragment {
                 0,
                 effectiveBitrate - sharedPreferencesManager.getAudioBitrate()
             );
-        } else {
-            recordingStartTime = 0;
         }
+        // Note: Do NOT reset recordingStartTime here!
+        // Only service broadcasts should set this value.
+        // Resetting here causes race condition during orientation changes.
 
         // Adjust available bytes for recording
         long adjustedAvailable =
@@ -5068,7 +5074,6 @@ public class HomeFragment extends BaseFragment {
         );
         double gbTotal = storageInfo.getTotalGB();
 
-        // -------------- Fix Start (updateStorageUiWithCachedInfo - remaining time
         // calculation)-----------
         // Calculate remaining recording time - only when recording is active
         long remainingTime = 0;
@@ -5097,7 +5102,6 @@ public class HomeFragment extends BaseFragment {
             seconds = remainingTime % 60;
         }
         // When not recording, all time components remain 0 (showing 00:00)
-        // -------------- Fix Ended (updateStorageUiWithCachedInfo - remaining time
         // calculation)-----------
 
         long elapsedMinutes = elapsedTime / 60000;
@@ -5295,7 +5299,6 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // -------------- Fix Start (formatRemainingTime)-----------
     private String formatRemainingTime(
         long days,
         long hours,
@@ -5331,7 +5334,6 @@ public class HomeFragment extends BaseFragment {
         return remainingTime.toString().trim();
     }
 
-    // -------------- Fix Ended (formatRemainingTime)-----------
 
     /**
      * Converts a resolution Size to a friendly display name (e.g., "FHD", "4K",
@@ -5470,10 +5472,11 @@ public class HomeFragment extends BaseFragment {
 
     // update storage and stats in real time while recording is started
     private void startUpdatingInfo() {
-        // Cancel any existing runnable first
+        // IMPORTANT: Check if already running to prevent duplicate handlers
+        // Similar fix to clock update - prevent calling startUpdatingInfo twice in lifecycle
         if (updateInfoRunnable != null) {
-            handlerClock.removeCallbacks(updateInfoRunnable);
-            updateInfoRunnable = null;
+            // Already running - don't create a second handler
+            return;
         }
 
         // Create a new runnable
@@ -5483,32 +5486,23 @@ public class HomeFragment extends BaseFragment {
             @Override
             public void run() {
                 if ((isRecording() || isPaused()) && isAdded()) {
-                    // Check if we have a valid recording start time
-                    if (recordingStartTime <= 0) {
-                        // Try to get the current system time as fallback
-                        recordingStartTime = SystemClock.elapsedRealtime();
-                        Log.w(
-                            TAG,
-                            "startUpdatingInfo: Invalid recordingStartTime detected, resetting to current time: " +
-                            recordingStartTime
-                        );
-                    }
-
                     // Always update storage info (lightweight)
+                    // Timer calculation now reads directly from SharedPreferences in updateStorageUiWithCachedInfo
                     updateStorageInfo();
 
-                    // Update stats every 5 seconds during recording to avoid performance impact
+                    // Update stats every 10 seconds during recording to avoid performance impact
+                    // OPTIMIZATION: Increased from 5 to 10 seconds to reduce CPU load during streaming
                     updateCounter++;
-                    if (updateCounter >= 5) {
+                    if (updateCounter >= 10) {
                         Log.d(
                             TAG,
-                            "Update timer: Refreshing stats during recording (every 5s)"
+                            "Update timer: Refreshing stats during recording (every 10s)"
                         );
                         updateStats();
                         updateCounter = 0;
                     }
 
-                    handlerClock.postDelayed(this, 1000); // Update every second
+                    handlerClock.postDelayed(this, 1000); // Update storage every second
                 } else {
                     Log.d(
                         TAG,
@@ -5521,17 +5515,15 @@ public class HomeFragment extends BaseFragment {
 
         // Post immediately to start updates
         handlerClock.post(updateInfoRunnable);
-        Log.d(
-            TAG,
-            "startUpdatingInfo: Started real-time storage/stats updates"
-        );
+        Log.d(TAG, "startUpdatingInfo: Started real-time storage/stats updates (1s intervals)");
     }
 
     private void stopUpdatingInfo() {
-        Log.d(TAG, "stopUpdatingInfo: Stopping real-time updates");
         if (updateInfoRunnable != null) {
             handlerClock.removeCallbacks(updateInfoRunnable);
             updateInfoRunnable = null;
+            // Only log when we actually stop (not at every opportunity)
+            Log.d(TAG, "stopUpdatingInfo: Stopped real-time storage/stats updates");
         }
     }
 
@@ -5558,7 +5550,6 @@ public class HomeFragment extends BaseFragment {
     private void updateStats() {
         Log.d(TAG, "updateStats: Starting calculation...");
 
-        // -------------- Fix Start (updateStats) - Live stats during recording
         // -----------
 
         // Check if recording is in progress - if so, force fresh calculation for live
@@ -5739,7 +5730,6 @@ public class HomeFragment extends BaseFragment {
             updateStatsUI(numVideos, totalSizeMB);
         });
 
-        // -------------- Fix End (updateStats) -----------
     }
 
     /**
@@ -5886,7 +5876,6 @@ public class HomeFragment extends BaseFragment {
         return items;
     }
 
-    // -------------- Fix Start (getSafRecordsListProgressive)-----------
 
     /**
      * Progressive SAF directory scanning with chunked processing to avoid blocking
@@ -6008,7 +5997,6 @@ public class HomeFragment extends BaseFragment {
         return getSafRecordsListProgressive(treeUri, null);
     }
 
-    // -------------- Fix Ended (getSafRecordsListProgressive)-----------
 
     private List<VideoItem> getTempCacheRecordsList() {
         List<VideoItem> items = new ArrayList<>();
@@ -6155,7 +6143,6 @@ public class HomeFragment extends BaseFragment {
                             : "center_focus_weak"
                     );
 
-                    // -------------- Fix Start (initial AF toggle tinting - Snow Veil
                     // theme)-----------
                     // Set appropriate color based on theme
                     String currentTheme =
@@ -6180,7 +6167,6 @@ public class HomeFragment extends BaseFragment {
                             );
                         tileAfToggle.setTextColor(typedValue.data);
                     }
-                    // -------------- Fix Ended (initial AF toggle tinting - Snow Veil
                     // theme)-----------
                 }
             } catch (Exception ignored) {}
@@ -6208,7 +6194,6 @@ public class HomeFragment extends BaseFragment {
                     int savedEvIndex = sp.getSavedExposureCompensation();
                     boolean savedAeLock = sp.isAeLockedSaved();
 
-                    // -------------- Fix Start (initial exposure tile tinting - Snow Veil
                     // theme)-----------
                     // Apply orange tint if AE locked or exposure compensation is not at 0
                     if (savedAeLock || savedEvIndex != 0) {
@@ -6261,7 +6246,6 @@ public class HomeFragment extends BaseFragment {
                             "Applied initial default tint to exposure tile"
                         );
                     }
-                    // -------------- Fix Ended (initial exposure tile tinting - Snow Veil
                     // theme)-----------
                 }
             } catch (Exception ignored) {}
@@ -6287,7 +6271,6 @@ public class HomeFragment extends BaseFragment {
                         24
                     );
 
-                    // -------------- Fix Start (initial zoom tile tinting - Snow Veil
                     // theme)-----------
                     // Apply orange tint if zoom is not at default (1.0x)
                     SharedPreferencesManager sp =
@@ -6322,7 +6305,6 @@ public class HomeFragment extends BaseFragment {
                             );
                         }
                     }
-                    // -------------- Fix Ended (initial zoom tile tinting - Snow Veil
                     // theme)-----------
                 }
             } catch (Exception ignored) {}
@@ -6766,7 +6748,6 @@ public class HomeFragment extends BaseFragment {
         stopUpdatingInfo();
         stopUpdatingClock();
 
-        // -------------- Fix Start (cleanup) --------------
         // Clean up helper
         if (fragmentHelper != null) {
             fragmentHelper.onDestroy();
@@ -6782,7 +6763,6 @@ public class HomeFragment extends BaseFragment {
             debouncedStopRecording.cancel();
             debouncedStopRecording = null;
         }
-        // -------------- Fix Ended (cleanup) --------------
     }
 
     public boolean isRecording() {
@@ -6828,7 +6808,6 @@ public class HomeFragment extends BaseFragment {
         // consider moving or ensuring isTorchOn is accurate
 
         buttonTorchSwitch.setOnClickListener(v -> {
-            // ----- Fix Start for this method(setupTorchButton_onClick)-----
             if (!isAdded() || getContext() == null) {
                 Log.w(
                     TAG,
@@ -6872,7 +6851,6 @@ public class HomeFragment extends BaseFragment {
                 // updates isTorchOn field, and calls updateTorchUI().
                 toggleTorch();
             }
-            // ----- Fix Ended for this method(setupTorchButton_onClick)-----
         });
 
         // Initialize and register the broadcast receiver for torch state changes from
@@ -6886,7 +6864,6 @@ public class HomeFragment extends BaseFragment {
         }
         if (getContext() != null && !isTorchReceiverRegistered) {
             // Check context and registration status
-            // ----- Fix Start for this
             // method(setupTorchButton_correct_torch_receiver_registration)-----
             IntentFilter filter = new IntentFilter(
                 Constants.BROADCAST_ON_TORCH_STATE_CHANGED
@@ -6905,7 +6882,6 @@ public class HomeFragment extends BaseFragment {
             }
             // ContextCompat.registerReceiver(context, torchReceiver, filter,
             // ContextCompat.RECEIVER_NOT_EXPORTED);
-            // ----- Fix Ended for this
             // method(setupTorchButton_correct_torch_receiver_registration)-----
             isTorchReceiverRegistered = true;
             Log.d(
@@ -6941,6 +6917,13 @@ public class HomeFragment extends BaseFragment {
         try {
             isTorchOn = !isTorchOn;
             cameraManager.setTorchMode(currentCameraId, isTorchOn);
+            
+            // Update SharedPreferences so RemoteStreamManager can read current torch state
+            android.content.SharedPreferences prefs = android.preference.PreferenceManager.getDefaultSharedPreferences(getContext());
+            prefs.edit()
+                .putBoolean(Constants.PREF_TORCH_STATE, isTorchOn)
+                .apply();
+            
             Log.d(
                 TAG,
                 "Torch toggled directly via CameraManager. New state: " +
@@ -7430,7 +7413,6 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix Start for this class (HomeFragment) -----
     private void initializeViews(View view) {
         Log.d(TAG, "initializeViews: Finding UI elements.");
         tvCameraTitle = view.findViewById(R.id.tvCameraTitle);
@@ -7446,6 +7428,10 @@ public class HomeFragment extends BaseFragment {
         tvRemainingTitle = view.findViewById(R.id.tvRemainingTitle);
         tvRemainingSubtitle = view.findViewById(R.id.tvRemainingSubtitle);
         btnHamburgerMenu = view.findViewById(R.id.btnHamburgerMenu);
+        hamburgerBadgeDot = view.findViewById(R.id.hamburgerBadgeDot);
+
+        // Update hamburger badge visibility
+        updateHamburgerBadgeVisibility();
 
         // Set up hamburger menu click handler
         if (btnHamburgerMenu != null) {
@@ -7456,6 +7442,7 @@ public class HomeFragment extends BaseFragment {
         }
 
         tvPreviewPlaceholder = view.findViewById(R.id.tvPreviewPlaceholder);
+        tvPreviewHint = view.findViewById(R.id.tvPreviewHint);
         buttonStartStop = view.findViewById(R.id.buttonStartStop);
         buttonPauseResume = view.findViewById(R.id.buttonPauseResume);
         buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
@@ -7490,9 +7477,7 @@ public class HomeFragment extends BaseFragment {
         // textureView is handled by setupTextureView
     }
 
-    // ----- Fix Ended for this class (HomeFragment) -----
 
-    // ----- Fix Start for this method(isRecordingOrPaused)-----
     private boolean isRecordingOrPaused() {
         return (
             recordingState == RecordingState.IN_PROGRESS ||
@@ -7500,9 +7485,7 @@ public class HomeFragment extends BaseFragment {
         );
     }
 
-    // ----- Fix Ended for this method(isRecordingOrPaused)-----
 
-    // ----- Fix Start for this method(updateServiceWithCurrentSurface)-----
     // This method replaces/refines the old updateRecordingSurface
     private void updateServiceWithCurrentSurface(
         @Nullable Surface surfaceToUse
@@ -7561,9 +7544,7 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix Ended for this method(updateServiceWithCurrentSurface)-----
 
-    // ----- Fix Start for this class (HomeFragment) -----
     private boolean isMyServiceRunning(Class<?> serviceClass) {
         if (getContext() == null) {
             return false;
@@ -7585,9 +7566,7 @@ public class HomeFragment extends BaseFragment {
         return false;
     }
 
-    // ----- Fix Ended for this class (HomeFragment) -----
 
-    // ----- Fix Start for this class (HomeFragment_clock_color_picker) -----
     private void applyClockCardColor(String colorHex) {
         if (
             cardClock != null &&
@@ -7685,7 +7664,6 @@ public class HomeFragment extends BaseFragment {
         return false;
     }
 
-    // ----- Fix Start for camera resource availability methods -----
     /**
      * Initializes the receiver for camera resource availability status updates
      */
@@ -7796,9 +7774,7 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix End for camera resource availability methods -----
 
-    // ----- Fix Start for this class (HomeFragment) -----
     private void initializeSegmentCompleteStatsReceiver() {
         if (segmentCompleteStatsReceiver == null) {
             segmentCompleteStatsReceiver = new BroadcastReceiver() {
@@ -7824,11 +7800,15 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix Ended for this class (HomeFragment) -----
 
-    // ----- Fix Start for this class (HomeFragment) -----
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private void registerSegmentCompleteStatsReceiver(Context context) {
+        // Guard: Don't register twice
+        if (isSegmentCompleteStatsReceiverRegistered) {
+            Log.d(TAG, "Segment complete stats receiver already registered, skipping.");
+            return;
+        }
+        
         // First check if fragment is attached to prevent IllegalStateException
         if (!isAdded() || isDetached()) {
             Log.e(
@@ -7869,7 +7849,8 @@ public class HomeFragment extends BaseFragment {
                     );
                 }
                 isSegmentCompleteStatsReceiverRegistered = true;
-                Log.d(TAG, "Registered segmentCompleteStatsReceiver.");
+                // OPTIMIZATION: Removed generic receiver registration log
+                // Log.d(TAG, "Registered segmentCompleteStatsReceiver.");
             } else {
                 isSegmentCompleteStatsReceiverRegistered = false;
                 Log.e(
@@ -7883,9 +7864,7 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix Ended for this class (HomeFragment) -----
 
-    // ----- Fix Start for this method(onHiddenChanged)-----
     @Override
     public void onHiddenChanged(boolean hidden) {
         super.onHiddenChanged(hidden);
@@ -7893,7 +7872,6 @@ public class HomeFragment extends BaseFragment {
             TAG,
             "onHiddenChanged: Fragment " + (hidden ? "hidden" : "shown")
         );
-        // ----- Fix Start for this method(onHiddenChanged)-----
         if (!hidden) {
             if (
                 isPreviewEnabled &&
@@ -7922,12 +7900,9 @@ public class HomeFragment extends BaseFragment {
                 updateServiceWithCurrentSurface(null);
             }
         }
-        // ----- Fix Ended for this method(onHiddenChanged)-----
     }
 
-    // ----- Fix Ended for this method(onHiddenChanged)-----
 
-    // ----- Fix Start: Add setTextColorsRecursive helper for dynamic theming -----
     private void setTextColorsRecursive(View view, int primary, int secondary) {
         if (view == null) return;
         if (view instanceof TextView) {
@@ -7948,9 +7923,7 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix End: Add setTextColorsRecursive helper for dynamic theming -----
 
-    // ----- Fix Start: Add method to get default clock color for theme -----
     private String getDefaultClockColorForTheme(String themeName) {
         com.fadcam.Log.i(
             TAG,
@@ -8072,9 +8045,7 @@ public class HomeFragment extends BaseFragment {
         return result;
     }
 
-    // ----- Fix End: Add method to get default clock color for theme -----
 
-    // ----- Fix Start: Add Snow Veil theme UI adjustments -----
     /**
      * Applies Snow Veil theme UI adjustments to improve contrast
      */
@@ -8165,7 +8136,6 @@ public class HomeFragment extends BaseFragment {
             buttonCamSwitch.setTextColor(Color.BLACK);
         }
 
-        // -------------- Fix Start (applyButtonTinting - recording tiles)-----------
         // Recording tiles - apply dark colors for Snow Veil theme visibility
         if (tileAfToggle != null) {
             // Use dark gray instead of black for better visibility on light background
@@ -8209,7 +8179,6 @@ public class HomeFragment extends BaseFragment {
                 tileZoom.setTextColor(Color.parseColor("#424242"));
             }
         }
-        // -------------- Fix Ended (applyButtonTinting - recording tiles)-----------
     }
 
     /**
@@ -8594,7 +8563,6 @@ public class HomeFragment extends BaseFragment {
             Color.WHITE
         );
 
-        // -------------- Fix Start (ensureCardTextContrast - icons)-----------
         // Keep semantic colors for icons but ensure they're visible on light background
         if (ivCameraIcon != null) {
             // Keep green color for camera icon but use a darker shade for better contrast
@@ -8605,7 +8573,6 @@ public class HomeFragment extends BaseFragment {
         if (cardStorage != null) {
             findAndColorIconsByText(cardStorage);
         }
-        // -------------- Fix Ended (ensureCardTextContrast - icons)-----------
     }
 
     /**
@@ -8729,7 +8696,6 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // ----- Fix End: Add Snow Veil theme UI adjustments -----
 
     // Utility method to get the current app version (versionName)
     private String getAppVersionForUpdates() {
@@ -8771,7 +8737,6 @@ public class HomeFragment extends BaseFragment {
         );
     }
 
-    // -------------- Fix Start (ProgressCallback Interface)-----------
     /**
      * Callback interface for progressive loading operations to update UI
      * incrementally.
@@ -8785,5 +8750,19 @@ public class HomeFragment extends BaseFragment {
          */
         void onProgress(int current, int total);
     }
-    // -------------- Fix Ended (ProgressCallback Interface)-----------
+
+    /**
+     * Updates hamburger menu badge visibility based on "What's New" feature status.
+     * Shows green badge dot if the user hasn't seen the What's New feature yet.
+     */
+    private void updateHamburgerBadgeVisibility() {
+        if (hamburgerBadgeDot != null) {
+            try {
+                boolean showBadge = com.fadcam.ui.utils.NewFeatureManager.shouldShowBadge(requireContext(), "whats_new");
+                hamburgerBadgeDot.setVisibility(showBadge ? View.VISIBLE : View.GONE);
+            } catch (Exception e) {
+                Log.e(TAG, "Error updating hamburger badge visibility", e);
+            }
+        }
+    }
 }

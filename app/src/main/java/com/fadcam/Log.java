@@ -42,6 +42,9 @@ public class Log {
     private static Uri fileUri;
 
     private static boolean isDebugEnabled = false;
+    
+    // Auto-disable debug logging during recording/streaming to save CPU and battery
+    private static volatile boolean recordingActive = false;
 
     public static void init(Context context)
     {
@@ -52,7 +55,6 @@ public class Log {
         isDebugEnabled = sharedPreferencesManager.isDebugLoggingEnabled();
 
     if (isDebugEnabled) {
-            // -------------- Fix Start for this method(init)-----------
             // Try to create the debug log target; gracefully degrade if unavailable
             try {
         Uri created = createHtmlFile(context, DEBUG_FILE_NAME);
@@ -78,23 +80,43 @@ public class Log {
                     });
                 }
             }
-            // -------------- Fix Ended for this method(init)-----------
         }
     }
 
     public static void setDebugEnabled(boolean enabled) {
         isDebugEnabled = enabled;
         if (enabled) {
-            // -------------- Fix Start for this method(setDebugEnabled)-----------
             // Ensure the single log file exists; do NOT wipe it. We keep a rolling window via trim.
             createHtmlFile(context, DEBUG_FILE_NAME);
             startWorkerIfNeeded();
-            // -------------- Fix Ended for this method(setDebugEnabled)-----------
         } else {
-            // -------------- Fix Start for this method(setDebugEnabled-disable)-----------
             stopWorkerAndFlush();
-            // -------------- Fix Ended for this method(setDebugEnabled-disable)-----------
         }
+    }
+    
+    /**
+     * Signal to Log system that recording/streaming is active.
+     * Automatically disables debug logging during recording to save CPU/battery.
+     * 
+     * @param active true when recording or streaming, false when stopped
+     */
+    public static void setRecordingActive(boolean active) {
+        recordingActive = active;
+        if (active && isDebugEnabled) {
+            // Recording started - pause debug logging to save CPU/battery
+            // Do NOT disable the feature; just pause writes
+            // Re-enable automatically when recording stops
+        } else if (!active && isDebugEnabled) {
+            // Recording stopped - resume normal debug logging
+        }
+    }
+    
+    /**
+     * Check if debug logging is actually enabled.
+     * Returns false if recording is active (even if debug mode is on).
+     */
+    private static boolean isDebugLoggingActive() {
+        return isDebugEnabled && !recordingActive;
     }
 
     private static String getCurrentTimeStamp() {
@@ -103,21 +125,22 @@ public class Log {
     }
 
     public static void d(String tag, String message) {
-        if (!isDebugEnabled) return;
+        if (!isDebugLoggingActive()) return;
         
         String logMessage = "<font color=\"34495e\">" + getCurrentTimeStamp() + " INFO: [" + tag + "]" + message + "</font>";
         appendHtmlToFile(logMessage);
     }
 
     public static void w(String tag, String message) {
-        if (!isDebugEnabled) return;
+        if (!isDebugLoggingActive()) return;
         
         String logMessage = "<font color=\"f1c40f\">" + getCurrentTimeStamp() + " WARNING: [" + tag + "]" + message + "</font>";
         appendHtmlToFile(logMessage);
     }
 
     public static void e(String tag, Object... objects) {
-        if (!isDebugEnabled) return;
+        // NOTE: Keep ERROR logs even during recording - they indicate real problems
+        // Only suppress DEBUG and WARN logs to save CPU during active recording
         
         StringBuilder message = new StringBuilder();
         for(Object object: objects)
@@ -141,7 +164,6 @@ public class Log {
     }
 
     public static Uri createHtmlFile(Context context, String fileName) {
-        // -------------- Fix Start for this method(createHtmlFile)-----------
         try {
             // Use a static filename for debug log to simplify discovery
             String debugFileName = DEBUG_FILE_NAME;
@@ -188,13 +210,11 @@ public class Log {
             e.printStackTrace();
             return null;
         }
-        // -------------- Fix Ended for this method(createHtmlFile)-----------
     }
 
     public static void appendHtmlToFile(String htmlContent) {
         if (!isDebugEnabled) return;
 
-        // -------------- Fix Start for this method(appendHtmlToFile)-----------
         // Ensure target URI exists or disable logging to avoid NPE on OEMs
         if (fileUri == null) {
             Uri created = createHtmlFile(context, DEBUG_FILE_NAME);
@@ -217,10 +237,8 @@ public class Log {
                 droppedSinceLastNote++;
             }
         }
-        // -------------- Fix Ended for this method(appendHtmlToFile)-----------
     }
 
-    // -------------- Fix Start: Helpers for manage/share/delete/read -----------
     /** Returns the current log Uri if available, creating it if needed. */
     public static Uri getLogUri(Context ctx) {
         if (fileUri == null) {
@@ -350,7 +368,6 @@ public class Log {
             if (os != null) try { os.close(); } catch (Exception ignored) {}
         }
     }
-    // -------------- Fix End: Helpers for manage/share/delete/read -----------
 
     private static Uri checkIfFileExists(Context context, String fileName) {
         Uri uri = null;

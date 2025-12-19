@@ -12,21 +12,23 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.media3.common.C;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackParameters;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.ui.PlayerView;
 import com.fadcam.Constants;
 import com.fadcam.R;
 import com.fadcam.SharedPreferencesManager;
 import com.fadcam.ui.picker.OptionItem;
 import com.fadcam.ui.picker.PickerBottomSheetFragment;
-import com.google.android.exoplayer2.C; // For Playback Speed
-import com.google.android.exoplayer2.ExoPlayer;
-import com.google.android.exoplayer2.MediaItem;
-import com.google.android.exoplayer2.PlaybackParameters;
-import com.google.android.exoplayer2.ui.StyledPlayerView;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Locale;
 import android.media.AudioManager;
+import android.media.MediaMetadataRetriever;
 import android.provider.Settings;
 
 public class VideoPlayerActivity extends AppCompatActivity {
@@ -34,7 +36,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private static final String TAG = "VideoPlayerActivity";
 
     private ExoPlayer player;
-    private StyledPlayerView playerView;
+    private PlayerView playerView;
     private android.view.GestureDetector gestureDetector;
     private android.view.ScaleGestureDetector scaleGestureDetector;
     private float currentScale = 1.0f;
@@ -50,12 +52,15 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private static final String EXTRA_URI = "extra_uri";
     private static final String EXTRA_POSITION_MS = "extra_position_ms";
     private ImageButton backButton;
+    private ImageButton infoButton;
     private ImageButton settingsButton; // For playback speed
     private TextView quickSpeedOverlay;
     private SharedPreferencesManager spm;
     private com.fadcam.ui.custom.AudioWaveformView audioWaveformView;
     private android.net.Uri currentVideoUri;
     private com.google.android.material.slider.Slider timeSlider;
+    // Cached duration for fragmented MP4s where player.getDuration() returns TIME_UNSET
+    private long cachedDurationMs = C.TIME_UNSET;
     // Gesture/interaction helpers
     private AudioManager audioManager;
     private int maxStreamVolume = 0;
@@ -129,14 +134,12 @@ public class VideoPlayerActivity extends AppCompatActivity {
             resumeSaveHandler.postDelayed(this, 5000);
         }
     };
-    // -------------- Fix Start for field(video_settings_result_keys)-----------
     private static final String RK_VIDEO_SETTINGS = "rk_video_settings";
     private static final String RK_PLAYBACK_SPEED = "rk_playback_speed";
     private static final String RK_QUICK_SPEED = "rk_quick_speed";
     private static final String RK_KEEP_SCREEN_ON = "rk_keep_screen_on";
     private static final String RK_BACKGROUND_PLAYBACK =
         "rk_background_playback";
-    // -------------- Fix Ended for field(video_settings_result_keys)-----------
 
     // Playback speed options (include more slow-speed choices 0.25 -> 0.9)
     private final CharSequence[] speedOptions = {
@@ -177,7 +180,10 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private long lastSingleTapTime = 0L;
     // Keep track of controller auto-hide timeout and scrubbing state
     private int controllerAutoHideMs = -1; // 0 means never hide
-    private boolean isTimebarScrubbing = false;
+    private volatile boolean isTimebarScrubbing = false;
+    private volatile long scrubEndTimeMs = 0; // Timestamp when scrubbing ended, for grace period
+    private volatile long lastSeekPositionMs = -1; // Last seek position to prevent slider reset
+    private static final long SCRUB_GRACE_PERIOD_MS = 1000L; // 1 second grace period after scrub
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -200,17 +206,24 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
         super.onCreate(savedInstanceState);
         setContentView(com.fadcam.R.layout.activity_video_player);
+        
+        // Ensure hardware volume buttons control media (STREAM_MUSIC) volume
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
         playerView = findViewById(com.fadcam.R.id.player_view);
         backButton = findViewById(com.fadcam.R.id.back_button);
+        infoButton = findViewById(com.fadcam.R.id.info_button);
         resetZoomButton = findViewById(com.fadcam.R.id.reset_zoom_button);
         // Wire Material time slider if present in control layout
         try {
             timeSlider = playerView.findViewById(R.id.material_time_slider);
         } catch (Exception ignored) {}
 
-    // Back button should be visible by default and hide together with controls
-    try { backButton.setVisibility(View.VISIBLE); } catch (Exception ignored) {}
+    // Top buttons (back and info) should be visible by default and hide together with controls
+    try { 
+        backButton.setVisibility(View.VISIBLE); 
+        infoButton.setVisibility(View.VISIBLE); 
+    } catch (Exception ignored) {}
         // Init audio manager for volume gestures
         try {
             audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
@@ -258,6 +271,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
 
         setupBackButton();
+        setupInfoButton();
 
         // Ensure the system status bar matches the header/back-button area color for
         // this activity
@@ -296,41 +310,68 @@ public class VideoPlayerActivity extends AppCompatActivity {
             } catch (Exception ignored) {}
 
             // Keep controller visible while scrubbing via slider
+            // Clear any existing listeners first to prevent duplicates causing slider jumping
+            try {
+                timeSlider.clearOnSliderTouchListeners();
+                timeSlider.clearOnChangeListeners();
+            } catch (Exception e) {
+                Log.w(TAG, "Error clearing slider listeners", e);
+            }
+            
             timeSlider.addOnSliderTouchListener(new com.google.android.material.slider.Slider.OnSliderTouchListener() {
                 @Override
                 public void onStartTrackingTouch(com.google.android.material.slider.Slider slider) {
+                    // Debounce protection - ignore if already scrubbing
+                    if (isTimebarScrubbing) {
+                        return;
+                    }
+                    
                     isTimebarScrubbing = true;
-                    android.util.Log.d("VideoPlayerActivity", "Started scrubbing - enforcing controller visibility");
+                    android.util.Log.d("VideoPlayerActivity", "Started scrubbing");
+                    
+                    // IMPORTANT: Don't call showController() here - it causes layout changes
+                    // that can interrupt touch tracking and make the slider snap back!
+                    // Just prevent auto-hide by setting timeout to 0
                     try {
                         if (playerView != null) {
-                            playerView.showController();
                             playerView.setControllerShowTimeoutMs(0);
-                            if (controlsHideRunnable != null) controlsHideHandler.removeCallbacks(controlsHideRunnable);
-                            
-                            // Start continuous enforcement to prevent any hide attempts during scrubbing
-                            startScrubControllerEnforcement();
+                        }
+                        if (controlsHideRunnable != null) {
+                            controlsHideHandler.removeCallbacks(controlsHideRunnable);
                         }
                     } catch (Exception ignored) {}
                 }
 
                 @Override
                 public void onStopTrackingTouch(com.google.android.material.slider.Slider slider) {
+                    // Debounce protection - ignore if not scrubbing
+                    if (!isTimebarScrubbing) {
+                        return;
+                    }
+                    
                     isTimebarScrubbing = false;
-                    android.util.Log.d("VideoPlayerActivity", "Stopped scrubbing - restoring normal controller behavior");
+                    scrubEndTimeMs = System.currentTimeMillis(); // Start grace period
+                    android.util.Log.d("VideoPlayerActivity", "Stopped scrubbing");
+                    
                     try {
-                        // Stop continuous enforcement
-                        stopScrubControllerEnforcement();
-                        
                         if (playerView != null) {
-                            if (controllerAutoHideMs >= 0) playerView.setControllerShowTimeoutMs(controllerAutoHideMs);
-                            playerView.showController();
-                            // restart hide schedule if timeout > 0
+                            // Restore auto-hide timeout
+                            if (controllerAutoHideMs >= 0) {
+                                playerView.setControllerShowTimeoutMs(controllerAutoHideMs);
+                            }
+                            // Schedule hide with delay - don't call showController immediately
                             int t = SharedPreferencesManager.getInstance(VideoPlayerActivity.this).getPlayerControlsTimeoutSeconds();
                             if (t > 0) {
-                                if (controlsHideRunnable != null) controlsHideHandler.removeCallbacks(controlsHideRunnable);
+                                if (controlsHideRunnable != null) {
+                                    controlsHideHandler.removeCallbacks(controlsHideRunnable);
+                                }
                                 controlsHideRunnable = () -> {
-                                    if (isTimebarScrubbing) return; // don't hide if user started scrubbing again
-                                    try { playerView.hideController(); backButton.setVisibility(View.GONE); } catch (Exception ignored) {}
+                                    if (isTimebarScrubbing) return;
+                                    try {
+                                        playerView.hideController();
+                                        backButton.setVisibility(View.GONE);
+                                        infoButton.setVisibility(View.GONE);
+                                    } catch (Exception ignored) {}
                                 };
                                 controlsHideHandler.postDelayed(controlsHideRunnable, t * 1000L);
                             }
@@ -350,16 +391,27 @@ public class VideoPlayerActivity extends AppCompatActivity {
                     lastSeekUptime = now;
                     try {
                         long dur = player.getDuration();
-                        if (dur > 0 && dur != com.google.android.exoplayer2.C.TIME_UNSET) {
+                        // Use cached duration as fallback for fragmented MP4s
+                        if ((dur <= 0 || dur == C.TIME_UNSET) && cachedDurationMs > 0) {
+                            dur = cachedDurationMs;
+                        }
+                        if (dur > 0 && dur != C.TIME_UNSET) {
                             // Slider value is in milliseconds (0..duration). Seek directly using value.
                             long clamped = Math.max(0L, Math.min(dur, (long) value));
-                            player.seekTo(clamped);
+                            lastSeekPositionMs = clamped; // Remember seek position to prevent reset
+                            // Use PlayerHolder's seekToPosition for fragmented MP4 compatibility
+                            com.fadcam.playback.PlayerHolder holder = com.fadcam.playback.PlayerHolder.getInstance();
+                            holder.seekToPosition(clamped);
+                            Log.d(TAG, "Seeking to: " + clamped + "ms (slider value: " + value + ")");
+                        } else {
+                            Log.w(TAG, "Cannot seek - no valid duration available");
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error during seek", e);
+                    }
                 }
             });
         }
-        // ----- Fix End: Programmatically set seekbar colors with fixed red color -----
 
         // Setup animated play/pause button and audio waveform
         setupAnimatedControls();
@@ -477,7 +529,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
         // Hide old ExoPlayer time bar if present (we now use Material Slider)
         try {
-            View legacyTimeBar = playerView.findViewById(com.google.android.exoplayer2.ui.R.id.exo_progress);
+            View legacyTimeBar = playerView.findViewById(androidx.media3.ui.R.id.exo_progress);
             if (legacyTimeBar != null) legacyTimeBar.setVisibility(View.GONE);
         } catch (Exception ignored) {}
 
@@ -507,6 +559,18 @@ public class VideoPlayerActivity extends AppCompatActivity {
         final float[] lastPanXY = new float[2];
         final boolean[] pendingTap = new boolean[] { false };
         playerView.setOnTouchListener((v, ev) -> {
+            // CRITICAL: If user is scrubbing the slider, do NOT process gestures at all!
+            // The gesture detector can steal touch events and cause the slider to snap back.
+            if (isTimebarScrubbing) {
+                return false; // Let the slider handle the touch event
+            }
+            
+            // Also check if the touch is on the slider area - avoid processing gestures there
+            // This catches the initial ACTION_DOWN before isTimebarScrubbing is set
+            if (timeSlider != null && isTouchOnView(timeSlider, ev)) {
+                return false; // Let the slider handle the touch event
+            }
+            
             boolean gdHandled = false;
             boolean scaleHandled = false;
             boolean gestureConsumed = false;
@@ -637,8 +701,8 @@ public class VideoPlayerActivity extends AppCompatActivity {
                                     // secondsDelta rounds to 0 initially.
                                     try { lastSeekDirection = dx >= 0f ? 1 : -1; } catch (Exception ignored) {}
                                     long target = seekStartPosition + deltaMs;
-                                    long dur = player != null ? player.getDuration() : com.google.android.exoplayer2.C.TIME_UNSET;
-                                    if (dur != com.google.android.exoplayer2.C.TIME_UNSET) target = Math.max(0L, Math.min(dur, target));
+                                    long dur = player != null ? player.getDuration() : C.TIME_UNSET;
+                                    if (dur != C.TIME_UNSET) target = Math.max(0L, Math.min(dur, target));
                                     else target = Math.max(0L, target);
                                     if (player != null) player.seekTo(target);
                                     showSeekOverlay((int) (deltaMs / 1000L));
@@ -708,7 +772,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                                 // Expanded boundaries - calculate based on screen size and scale
                                 android.view.View contentFrame =
                                     playerView.findViewById(
-                                        com.google.android.exoplayer2.ui.R.id.exo_content_frame
+                                        androidx.media3.ui.R.id.exo_content_frame
                                     );
                                 if (contentFrame != null) {
                                     float screenWidth = playerView.getWidth();
@@ -873,7 +937,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
     }
 
-    // -------------- Fix Start for this
     // method(showQuickSpeedPickerSheet)-----------
     private void showQuickSpeedPickerSheet() {
         ArrayList<OptionItem> items = new ArrayList<>();
@@ -932,10 +995,8 @@ public class VideoPlayerActivity extends AppCompatActivity {
         sheet.show(getSupportFragmentManager(), "quick_speed_sheet");
     }
 
-    // -------------- Fix Ended for this
     // method(showQuickSpeedPickerSheet)-----------
 
-    // -------------- Fix Start for method(showAudioWaveformSwitchSheet)-----------
     private void showAudioWaveformSwitchSheet() {
         final String RK = "rk_waveform_switch";
         boolean enabled = spm != null ? spm.isAudioWaveformEnabled() : true;
@@ -988,7 +1049,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
         sheet.show(getSupportFragmentManager(), "waveform_switch_sheet");
     }
 
-    // -------------- Fix Ended for method(showAudioWaveformSwitchSheet)-----------
 
     // Animate playback speed from start to target over duration ms
     private void animatePlaybackSpeed(
@@ -1040,9 +1100,46 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
     }
 
+    // Track the actual playback URI (for legacy compatibility)
+    private Uri actualPlaybackUri;
+
     // *** FIX: Modified method signature to accept Uri ***
     private void initializePlayer(Uri videoUri) {
         try {
+            // VLC-like fMP4 seeking is now handled automatically by PlayerHolder
+            // using SeekableFragmentedMp4MediaSourceFactory (no remuxing needed)
+            // The factory pre-scans fMP4 files to build a fragment index for seeking
+            actualPlaybackUri = videoUri;
+
+            // Check and log device volume levels
+            AudioManager audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+            if (audioManager != null) {
+                int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+                int maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                boolean isMusicMuted = currentVolume == 0;
+                boolean isMusicMutedFlg = audioManager.isStreamMute(AudioManager.STREAM_MUSIC);
+                int ringVolume = audioManager.getStreamVolume(AudioManager.STREAM_RING);
+                int alarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM);
+                int notifVolume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION);
+
+                Log.d(
+                    TAG,
+                    "AudioState: MUSIC=" + currentVolume + "/" + maxVolume +
+                        ", musicMutedVolZero=" + isMusicMuted +
+                        ", musicMutedFlag=" + isMusicMutedFlg +
+                        ", RING=" + ringVolume +
+                        ", ALARM=" + alarmVolume +
+                        ", NOTIF=" + notifVolume
+                );
+
+                if (currentVolume == 0 || isMusicMutedFlg) {
+                    Log.w(TAG, "WARNING: Device MUSIC stream is at 0 or muted flag set!");
+                    // Don't show toast - could be misleading on some devices
+                }
+            } else {
+                Log.w(TAG, "AudioManager is NULL - cannot inspect device audio state");
+            }
+            
             // Use shared player so service + activity stay in sync
             com.fadcam.playback.PlayerHolder holder =
                 com.fadcam.playback.PlayerHolder.getInstance();
@@ -1092,18 +1189,28 @@ public class VideoPlayerActivity extends AppCompatActivity {
                     );
                 }
             } catch (Exception ignored) {}
-            holder.setMediaIfNeeded(videoUri);
+            // Use the actual playback URI (may be remuxed version for seeking support)
+            Uri uriForPlayer = actualPlaybackUri != null ? actualPlaybackUri : videoUri;
+            Log.i(TAG, "initializePlayer() calling holder.setMediaIfNeeded for URI=" + uriForPlayer);
+            holder.setMediaIfNeeded(uriForPlayer);
             // Set initial playback speed
+            float initialSpeed = speedValues[currentSpeedIndex];
+            Log.d(TAG, "Setting initial playback speed to " + initialSpeed + "x");
             player.setPlaybackParameters(
-                new PlaybackParameters(speedValues[currentSpeedIndex])
+                new PlaybackParameters(initialSpeed)
             );
-            // Apply initial mute state from prefs
+            // FORCE volume to 1.0 for debugging - ignore mute preference temporarily
             boolean muted = SharedPreferencesManager.getInstance(
                 this
             ).isPlaybackMuted();
             try {
-                player.setVolume(muted ? 0f : 1f);
-            } catch (Exception ignored) {}
+                // Always use volume 1.0 for debugging
+                float volume = 1f;
+                player.setVolume(volume);
+                Log.d(TAG, "Player volume FORCED to 1.0 (mutedPref was=" + muted + ")");
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to set player volume", e);
+            }
             // Autoplay (prepared in holder if needed)
             // Restore saved playback position (resume) if available
             try {
@@ -1115,34 +1222,130 @@ public class VideoPlayerActivity extends AppCompatActivity {
                     uriStr,
                     filename
                 );
+                Log.d(
+                    TAG,
+                    "Resume check: uri=" + uriStr +
+                        ", filename=" + filename +
+                        ", savedPositionMs=" + savedMs
+                );
                 if (savedMs > 0) {
+                    Log.d(TAG, "Seeking to saved position on init: " + savedMs + "ms");
                     player.seekTo(savedMs);
                 }
             } catch (Exception ignored) {}
+            Log.d(TAG, "Calling player.play() after initialization");
             player.play();
             // Listen for seeks so we can save immediately and notify adapters
             try {
                 player.addListener(
-                    new com.google.android.exoplayer2.Player.Listener() {
+                    new Player.Listener() {
                         public void onSeekProcessed() {
                             // Save and broadcast immediately when user finishes a seek
+                            Log.d(TAG, "onSeekProcessed() - saving current playback position");
                             saveCurrentPlaybackPosition();
                         }
                         @Override
-                        public void onEvents(com.google.android.exoplayer2.Player p, com.google.android.exoplayer2.Player.Events events) {
-                            // Update slider maximum on timeline changes
-                            if (timeSlider != null) {
+                        public void onEvents(Player p, Player.Events events) {
+                            // Update slider maximum on timeline changes - BUT NOT WHILE SCRUBBING
+                            // Modifying slider during scrubbing causes the thumb to jump/snap back
+                            // Also respect grace period after scrubbing ends
+                            boolean inGracePeriod = (System.currentTimeMillis() - scrubEndTimeMs) < SCRUB_GRACE_PERIOD_MS;
+                            if (timeSlider != null && !isTimebarScrubbing && !inGracePeriod) {
                                 try {
                                     long d = p.getDuration();
-                                    if (d > 0 && d != com.google.android.exoplayer2.C.TIME_UNSET) {
+                                    if (d > 0 && d != C.TIME_UNSET) {
                                         float newMax = (float) d;
-                                        // First update max, then clamp and update value if needed
-                                        timeSlider.setValueTo(newMax);
-                                        float curVal = timeSlider.getValue();
-                                        if (curVal > newMax) timeSlider.setValue(newMax);
+                                        // Only update if significantly different (100ms+) to avoid unnecessary changes
+                                        if (Math.abs(timeSlider.getValueTo() - newMax) > 100f) {
+                                            // First update max, then clamp and update value if needed
+                                            timeSlider.setValueTo(newMax);
+                                            float curVal = timeSlider.getValue();
+                                            if (curVal > newMax) timeSlider.setValue(newMax);
+                                        }
                                     }
                                 } catch (Exception ignored) {}
                             }
+                        }
+                        @Override
+                        public void onTracksChanged(androidx.media3.common.Tracks tracks) {
+                            // Log track information for debugging
+                            Log.d(TAG, "onTracksChanged(): groups=" + tracks.getGroups().size());
+                            for (int i = 0; i < tracks.getGroups().size(); i++) {
+                                androidx.media3.common.Tracks.Group group = tracks.getGroups().get(i);
+                                String type = group.getType() == C.TRACK_TYPE_AUDIO ? "AUDIO" :
+                                              group.getType() == C.TRACK_TYPE_VIDEO ? "VIDEO" : "OTHER";
+                                Log.d(
+                                    TAG,
+                                    "TrackGroup[" + i + "] type=" + type +
+                                        ", selected=" + group.isSelected() +
+                                        ", length=" + group.length
+                                );
+                                for (int t = 0; t < group.length; t++) {
+                                    androidx.media3.common.Format fmt = group.getTrackFormat(t);
+                                    boolean selected = group.isTrackSelected(t);
+                                    Log.d(
+                                        TAG,
+                                        "  └ track#" + t +
+                                            " selected=" + selected +
+                                            ", mime=" + fmt.sampleMimeType +
+                                            ", id=" + fmt.id +
+                                            ", language=" + fmt.language +
+                                            ", channelCount=" + fmt.channelCount +
+                                            ", sampleRate=" + fmt.sampleRate +
+                                            ", bitrate=" + fmt.bitrate
+                                    );
+                                }
+                            }
+                        }
+                        @Override
+                        public void onPlayerError(androidx.media3.common.PlaybackException error) {
+                            Log.e(TAG, "Player error: " + error.getMessage(), error);
+                        }
+                        @Override
+                        public void onAudioSessionIdChanged(int audioSessionId) {
+                            Log.d(TAG, "onAudioSessionIdChanged(): " + audioSessionId);
+                        }
+                        @Override
+                        public void onVolumeChanged(float volume) {
+                            Log.d(TAG, "onVolumeChanged(): " + volume);
+                        }
+                        @Override
+                        public void onPlaybackStateChanged(int state) {
+                            String stateName;
+                            switch (state) {
+                                case Player.STATE_IDLE: stateName = "IDLE"; break;
+                                case Player.STATE_BUFFERING: stateName = "BUFFERING"; break;
+                                case Player.STATE_READY: stateName = "READY"; break;
+                                case Player.STATE_ENDED: stateName = "ENDED"; break;
+                                default: stateName = "UNKNOWN(" + state + ")"; break;
+                            }
+                            Log.i(TAG, "onPlaybackStateChanged(): " + stateName);
+                            // When ready after seeking, clear lastSeekPositionMs to sync with actual player position
+                            // This handles fragmented MP4s where seek lands on keyframe, not exact position
+                            if (state == Player.STATE_READY && lastSeekPositionMs >= 0 && player != null) {
+                                long actualPos = player.getCurrentPosition();
+                                Log.d(TAG, "  Seek completed: requested=" + lastSeekPositionMs + 
+                                           "ms, actual=" + actualPos + "ms (keyframe alignment)");
+                                lastSeekPositionMs = -1; // Clear to use actual player position
+                            }
+                            // When ready, log player audio state
+                            if (state == Player.STATE_READY && player != null) {
+                                Log.i(TAG, "  Player READY - volume=" + player.getVolume() + 
+                                           ", audioSessionId=" + player.getAudioSessionId() +
+                                           ", playWhenReady=" + player.getPlayWhenReady());
+                            }
+                        }
+                        @Override
+                        public void onIsPlayingChanged(boolean isPlaying) {
+                            Log.i(TAG, "onIsPlayingChanged(): " + isPlaying);
+                            if (isPlaying && player != null) {
+                                Log.i(TAG, "  Playback STARTED - volume=" + player.getVolume() + 
+                                           ", audioSessionId=" + player.getAudioSessionId());
+                            }
+                        }
+                        @Override
+                        public void onRenderedFirstFrame() {
+                            Log.i(TAG, "onRenderedFirstFrame() - first video frame visible");
                         }
                     }
                 );
@@ -1150,14 +1353,14 @@ public class VideoPlayerActivity extends AppCompatActivity {
             // Wire center rewind/forward buttons to use same seek logic
             try {
                 View controls = playerView.findViewById(
-                    com.google.android.exoplayer2.ui.R.id.exo_center_controls
+                    androidx.media3.ui.R.id.exo_center_controls
                 );
                 if (controls != null) {
                     View rew = controls.findViewById(
-                        com.google.android.exoplayer2.ui.R.id.exo_rew
+                        androidx.media3.ui.R.id.exo_rew
                     );
                     View ffwd = controls.findViewById(
-                        com.google.android.exoplayer2.ui.R.id.exo_ffwd
+                        androidx.media3.ui.R.id.exo_ffwd
                     );
                     if (rew != null) rew.setOnClickListener(v -> {
                         try {
@@ -1180,14 +1383,14 @@ public class VideoPlayerActivity extends AppCompatActivity {
                             long dur = player.getDuration();
                             long target = Math.min(
                                 dur ==
-                                    com.google.android.exoplayer2.C.TIME_UNSET
+                                    C.TIME_UNSET
                                     ? Long.MAX_VALUE
                                     : dur,
                                 cur + s * 1000L
                             );
                             if (
                                 dur !=
-                                com.google.android.exoplayer2.C.TIME_UNSET
+                                C.TIME_UNSET
                             ) player.seekTo(Math.min(target, dur));
                             else player.seekTo(target);
                             showDoubleTapOverlay(true);
@@ -1198,6 +1401,9 @@ public class VideoPlayerActivity extends AppCompatActivity {
             } catch (Exception ignored) {}
             // Start periodic saves
             resumeSaveHandler.postDelayed(resumeSaveRunnable, 5000);
+            // Fetch cached duration for fragmented MP4s where player doesn't report duration
+            fetchCachedDuration(videoUri);
+            
             // Start periodic slider updates when not scrubbing
             try {
                 android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -1205,25 +1411,49 @@ public class VideoPlayerActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         try {
-                            if (player != null && timeSlider != null && !isTimebarScrubbing) {
+                            // Check if we're scrubbing OR in grace period after scrubbing ends
+                            boolean inGracePeriod = (System.currentTimeMillis() - scrubEndTimeMs) < SCRUB_GRACE_PERIOD_MS;
+                            
+                            if (isTimebarScrubbing || inGracePeriod) {
+                                // Skip update while scrubbing or in grace period
+                                h.postDelayed(this, 200);
+                                return;
+                            }
+                            
+                            if (player != null && timeSlider != null) {
                                 long dur = player.getDuration();
-                                if (dur > 0 && dur != com.google.android.exoplayer2.C.TIME_UNSET) {
+                                // Use cached duration as fallback for fragmented MP4s
+                                if ((dur <= 0 || dur == C.TIME_UNSET) && cachedDurationMs > 0) {
+                                    dur = cachedDurationMs;
+                                }
+                                if (dur > 0 && dur != C.TIME_UNSET) {
                                     float newMax = (float) dur;
-                                    // Update max first
-                                    if (Math.abs(timeSlider.getValueTo() - newMax) > 0.5f) {
+                                    // Update max first - only if significantly different
+                                    if (Math.abs(timeSlider.getValueTo() - newMax) > 100f) {
                                         timeSlider.setValueTo(newMax);
                                     }
                                     long pos = player.getCurrentPosition();
+                                    // Use last seek position only during BUFFERING to show user's intended position
+                                    // Once READY, onPlaybackStateChanged clears lastSeekPositionMs for accurate sync
+                                    if (lastSeekPositionMs >= 0 && player.getPlaybackState() == Player.STATE_BUFFERING) {
+                                        pos = lastSeekPositionMs;
+                                        Log.d(TAG, "Buffering: showing seek target " + lastSeekPositionMs + "ms");
+                                    }
                                     float targetVal = (float) Math.max(0L, Math.min((long) newMax, pos));
-                                    // Avoid feedback loop by only setting if significantly changed and always <= valueTo
+                                    // Avoid feedback loop by only setting if significantly changed
                                     float cur = timeSlider.getValue();
                                     if (targetVal > timeSlider.getValueTo()) targetVal = timeSlider.getValueTo();
-                                    if (Math.abs(cur - targetVal) > 5f) {
+                                    // Only update if position changed by more than 200ms to reduce jitter
+                                    if (Math.abs(cur - targetVal) > 200f) {
                                         timeSlider.setValue(targetVal);
                                     }
+                                } else {
+                                    Log.w(TAG, "Duration still unknown: player=" + player.getDuration() + ", cached=" + cachedDurationMs);
                                 }
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error in periodic slider update", e);
+                        }
                         h.postDelayed(this, 200);
                     }
                 };
@@ -1243,6 +1473,51 @@ public class VideoPlayerActivity extends AppCompatActivity {
             ).show();
             finish(); // Close activity if player fails to initialize
         }
+    }
+
+    /**
+     * Fetches video duration using MediaMetadataRetriever as fallback for fragmented MP4s
+     * where ExoPlayer's getDuration() returns TIME_UNSET.
+     * Runs on background thread to avoid blocking UI.
+     */
+    private void fetchCachedDuration(Uri uri) {
+        if (uri == null) return;
+        new Thread(() -> {
+            MediaMetadataRetriever retriever = null;
+            try {
+                retriever = new MediaMetadataRetriever();
+                retriever.setDataSource(VideoPlayerActivity.this, uri);
+                String durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                if (durationStr != null && !durationStr.isEmpty()) {
+                    long durationMs = Long.parseLong(durationStr);
+                    if (durationMs > 0) {
+                        cachedDurationMs = durationMs;
+                        Log.d(TAG, "Cached duration fetched via MediaMetadataRetriever: " + durationMs + "ms");
+                        // Update slider max on UI thread if needed
+                        runOnUiThread(() -> {
+                            try {
+                                // Don't update slider during scrubbing or grace period
+                                boolean inGracePeriod = (System.currentTimeMillis() - scrubEndTimeMs) < SCRUB_GRACE_PERIOD_MS;
+                                if (timeSlider != null && !isTimebarScrubbing && !inGracePeriod && timeSlider.getValueTo() < durationMs) {
+                                    timeSlider.setValueTo((float) durationMs);
+                                    Log.d(TAG, "Slider max updated from cached duration: " + durationMs);
+                                }
+                            } catch (Exception e) {
+                                Log.w(TAG, "Error updating slider max from cached duration", e);
+                            }
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Error fetching duration via MediaMetadataRetriever", e);
+            } finally {
+                if (retriever != null) {
+                    try {
+                        retriever.release();
+                    } catch (Exception ignored) {}
+                }
+            }
+        }).start();
     }
 
     // Save current position to prefs keyed by current media URI
@@ -1331,14 +1606,14 @@ public class VideoPlayerActivity extends AppCompatActivity {
         try {
             if (playerView == null) return false;
             View controller = playerView.findViewById(
-                com.google.android.exoplayer2.ui.R.id.exo_controller
+                androidx.media3.ui.R.id.exo_controller
             );
             if (controller != null) return (
                 controller.getVisibility() == View.VISIBLE
             );
             // Fallback: try DefaultTimeBar visibility instead
             View timeBar = playerView.findViewById(
-                com.google.android.exoplayer2.ui.R.id.exo_progress
+                androidx.media3.ui.R.id.exo_progress
             );
             if (timeBar != null) return timeBar.getVisibility() == View.VISIBLE;
         } catch (Exception ignored) {}
@@ -1349,13 +1624,22 @@ public class VideoPlayerActivity extends AppCompatActivity {
         backButton.setOnClickListener(v -> finish());
     }
 
+    private void setupInfoButton() {
+        if (infoButton != null) {
+            infoButton.setOnClickListener(v -> {
+                PlayerInfoBottomSheetFragment sheet = PlayerInfoBottomSheetFragment.newInstance();
+                sheet.show(getSupportFragmentManager(), "player_info_sheet");
+            });
+        }
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
         // Enforce controller visibility during scrubbing by listening to visibility changes
         try {
             if (playerView != null) {
-                playerView.setControllerVisibilityListener(new StyledPlayerView.ControllerVisibilityListener() {
+                playerView.setControllerVisibilityListener(new PlayerView.ControllerVisibilityListener() {
                     @Override
                     public void onVisibilityChanged(int visibility) {
                         try {
@@ -1366,8 +1650,10 @@ public class VideoPlayerActivity extends AppCompatActivity {
                                 playerView.setControllerShowTimeoutMs(0);
                                 playerView.showController();
                                 if (backButton != null) backButton.setVisibility(View.VISIBLE);
+                                if (infoButton != null) infoButton.setVisibility(View.VISIBLE);
                             } else {
                                 if (backButton != null) backButton.setVisibility(visibility == View.VISIBLE ? View.VISIBLE : View.GONE);
+                                if (infoButton != null) infoButton.setVisibility(visibility == View.VISIBLE ? View.VISIBLE : View.GONE);
                             }
                         } catch (Exception ignored) {}
                     }
@@ -1379,10 +1665,9 @@ public class VideoPlayerActivity extends AppCompatActivity {
     // --- Playback Speed Controls ---
     private void setupCustomSettingsAction() {
         if (playerView != null) {
-            // Find settings button within the PlayerView's layout using ExoPlayer's ID
-            // Need to import com.google.android.exoplayer2.ui.R specifically for this ID
+            // Find settings button within the PlayerView's layout using Media3's ID
             settingsButton = playerView.findViewById(
-                com.google.android.exoplayer2.ui.R.id.exo_settings
+                androidx.media3.ui.R.id.exo_settings
             );
             if (settingsButton != null) {
                 settingsButton.setOnClickListener(v ->
@@ -1408,7 +1693,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
     }
 
-    // -------------- Fix Start for this method(showVideoSettingsSheet)-----------
     private void showVideoSettingsSheet() {
         ArrayList<OptionItem> items = new ArrayList<>();
         // Row: Playback Speed (show current runtime speed label)
@@ -2332,9 +2616,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         sheet.show(getSupportFragmentManager(), "video_settings_sheet");
     }
 
-    // -------------- Fix Ended for this method(showVideoSettingsSheet)-----------
 
-    // -------------- Fix Start for this
     // method(showPlaybackSpeedPickerSheet)-----------
     private void showPlaybackSpeedPickerSheet() {
         if (player == null) return;
@@ -2538,17 +2820,14 @@ public class VideoPlayerActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
-    // -------------- Fix Ended for this
     // method(showPlaybackSpeedPickerSheet)-----------
 
-    // ----- Fix Start: Add resolveThemeColor helper -----
     private int resolveThemeColor(int attr) {
         android.util.TypedValue typedValue = new android.util.TypedValue();
         getTheme().resolveAttribute(attr, typedValue, true);
         return typedValue.data;
     }
 
-    // ----- Fix End: Add resolveThemeColor helper -----
 
     // --- Lifecycle Management ---
     @Override
@@ -2585,7 +2864,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
             // player.play(); // Uncomment if you want auto-resume on activity resume
         }
 
-        // -------------- Fix Start for this method(onResume)-----------
         // Request notification permission on Android 13+
         try {
             if (android.os.Build.VERSION.SDK_INT >= 33) {
@@ -2629,7 +2907,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
         // Do not start the background service while activity is in foreground; handoff
         // occurs onPause only.
-        // -------------- Fix Ended for this method(onResume)-----------
     }
 
     // Show a temporary overlay on double-tap side (reuse a simple TextView overlay
@@ -2750,12 +3027,18 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 if (visible) {
                     if (isTimebarScrubbing) return; // don't allow hiding while scrubbing
                     playerView.hideController();
-                    try { backButton.setVisibility(View.GONE); } catch (Exception ignored) {}
+                    try { 
+                        backButton.setVisibility(View.GONE);
+                        infoButton.setVisibility(View.GONE);
+                    } catch (Exception ignored) {}
                     // Cancel any auto-hide runnable
                     if (controlsHideRunnable != null) controlsHideHandler.removeCallbacks(controlsHideRunnable);
                 } else {
                     playerView.showController();
-                    try { backButton.setVisibility(View.VISIBLE); } catch (Exception ignored) {}
+                    try { 
+                        backButton.setVisibility(View.VISIBLE);
+                        infoButton.setVisibility(View.VISIBLE);
+                    } catch (Exception ignored) {}
                     // Schedule hide according to prefs
                     int t = SharedPreferencesManager.getInstance(this).getPlayerControlsTimeoutSeconds();
                     if (t > 0) {
@@ -2767,7 +3050,11 @@ public class VideoPlayerActivity extends AppCompatActivity {
                                 if (t2 > 0) controlsHideHandler.postDelayed(controlsHideRunnable, t2 * 1000L);
                                 return;
                             }
-                            try { playerView.hideController(); backButton.setVisibility(View.GONE); } catch (Exception ignored) {}
+                            try { 
+                                playerView.hideController();
+                                backButton.setVisibility(View.GONE);
+                                infoButton.setVisibility(View.GONE);
+                            } catch (Exception ignored) {}
                         };
                         controlsHideHandler.postDelayed(controlsHideRunnable, t * 1000L);
                     }
@@ -2950,7 +3237,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
         // Allow screen to turn off when activity is paused
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         // Pause playback when activity goes into background/pause state
-        // -------------- Fix Start for this method(onPause)-----------
         if (player != null) {
             boolean bg = SharedPreferencesManager.getInstance(
                 this
@@ -3025,7 +3311,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 );
             }
         }
-        // -------------- Fix Ended for this method(onPause)-----------
         // Persist current playback position when pausing
         saveCurrentPlaybackPosition();
         // Stop periodic saves while paused
@@ -3079,15 +3364,12 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
     // --- End Lifecycle Management ---
 
-    // ----- Fix Start: Add themedDialogBuilder helper -----
     private MaterialAlertDialogBuilder themedDialogBuilder() {
         int dialogTheme = R.style.ThemeOverlay_FadCam_Dialog;
         return new MaterialAlertDialogBuilder(this, dialogTheme);
     }
 
-    // ----- Fix End: Add themedDialogBuilder helper -----
 
-    // -------------- Fix Start for
     // helper(hasPostNotificationsPermission)-----------
     /**
      * Returns true if either SDK < 33 or POST_NOTIFICATIONS permission is granted.
@@ -3107,10 +3389,8 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
     }
 
-    // -------------- Fix Ended for
     // helper(hasPostNotificationsPermission)-----------
 
-    // -------------- Fix Start for method(setupAnimatedControls)-----------
     private void setupAnimatedControls() {
         try {
             // Set up periodic waveform updates during playback
@@ -3119,7 +3399,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
             // Set up player state listener for waveform updates only
             if (player != null) {
                 player.addListener(
-                    new com.google.android.exoplayer2.Player.Listener() {
+                    new Player.Listener() {
                         @Override
                         public void onIsPlayingChanged(boolean isPlaying) {
                             updateWaveformProgress();
@@ -3222,24 +3502,20 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
     }
 
-    // -------------- Fix Ended for method(setupAnimatedControls)-----------
 
-    // -------------- Fix Start for method(setupResetZoomButton)-----------
     private void setupResetZoomButton() {
         if (resetZoomButton != null) {
             resetZoomButton.setOnClickListener(v -> resetVideoTransform());
         }
     }
 
-    // -------------- Fix Ended for method(setupResetZoomButton)-----------
 
-    // -------------- Fix Start for method(applyVideoTransform)-----------
     private void applyVideoTransform() {
         if (playerView != null) {
             try {
                 // Find the content frame to scale only video, not controls
                 android.view.View contentFrame = playerView.findViewById(
-                    com.google.android.exoplayer2.ui.R.id.exo_content_frame
+                    androidx.media3.ui.R.id.exo_content_frame
                 );
                 if (contentFrame != null) {
                     contentFrame.setScaleX(currentScale);
@@ -3249,7 +3525,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 } else {
                     // Fallback: try to find shutter or surface view
                     android.view.View shutter = playerView.findViewById(
-                        com.google.android.exoplayer2.ui.R.id.exo_shutter
+                        androidx.media3.ui.R.id.exo_shutter
                     );
                     if (shutter != null) {
                         shutter.setScaleX(currentScale);
@@ -3264,9 +3540,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
     }
 
-    // -------------- Fix Ended for method(applyVideoTransform)-----------
 
-    // -------------- Fix Start for method(resetVideoTransform)-----------
     private void resetVideoTransform() {
         currentScale = 1.0f;
         currentTranslationX = 0f;
@@ -3275,7 +3549,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         if (playerView != null) {
             try {
                 android.view.View contentFrame = playerView.findViewById(
-                    com.google.android.exoplayer2.ui.R.id.exo_content_frame
+                    androidx.media3.ui.R.id.exo_content_frame
                 );
                 if (contentFrame != null) {
                     contentFrame
@@ -3291,7 +3565,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                         .start();
                 } else {
                     android.view.View shutter = playerView.findViewById(
-                        com.google.android.exoplayer2.ui.R.id.exo_shutter
+                        androidx.media3.ui.R.id.exo_shutter
                     );
                     if (shutter != null) {
                         shutter
@@ -3315,9 +3589,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         updateResetZoomButtonVisibility();
     }
 
-    // -------------- Fix Ended for method(resetVideoTransform)-----------
 
-    // -------------- Fix Start for
     // method(updateResetZoomButtonVisibility)-----------
     private void updateResetZoomButtonVisibility() {
         if (resetZoomButton != null) {
@@ -3332,7 +3604,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
             }
         }
     }
-    // -------------- Fix Ended for
     // method(updateResetZoomButtonVisibility)-----------
 
     // -------------- Scrub Controller Enforcement Methods -----------
@@ -3350,6 +3621,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
                             playerView.setControllerShowTimeoutMs(0);
                             playerView.showController();
                             if (backButton != null) backButton.setVisibility(View.VISIBLE);
+                            if (infoButton != null) infoButton.setVisibility(View.VISIBLE);
                         }
                     } catch (Exception e) {
                         android.util.Log.e("VideoPlayerActivity", "Error in scrub controller enforcement", e);
@@ -3371,4 +3643,21 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }
     }
     // -------------- End Scrub Controller Enforcement Methods -----------
+    
+    /**
+     * Check if a MotionEvent occurred within the bounds of a given view.
+     * This is used to detect if a touch is on the slider to avoid gesture processing conflicts.
+     */
+    private boolean isTouchOnView(View view, android.view.MotionEvent event) {
+        if (view == null) return false;
+        int[] location = new int[2];
+        view.getLocationOnScreen(location);
+        float rawX = event.getRawX();
+        float rawY = event.getRawY();
+        int viewLeft = location[0];
+        int viewTop = location[1];
+        int viewRight = viewLeft + view.getWidth();
+        int viewBottom = viewTop + view.getHeight();
+        return rawX >= viewLeft && rawX <= viewRight && rawY >= viewTop && rawY <= viewBottom;
+    }
 }

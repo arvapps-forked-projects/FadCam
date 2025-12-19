@@ -28,6 +28,7 @@ import com.fadcam.ui.RecordsFragment;
 import com.fadcam.ui.TrashFragment;
 import com.fadcam.ui.ViewPagerAdapter;
 import com.fadcam.ui.FadePageTransformer;
+import com.fadcam.ui.utils.NewFeatureManager;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import java.io.File;
@@ -47,8 +48,8 @@ public class MainActivity extends AppCompatActivity {
 
     private ViewPager2 viewPager;
     private BottomNavigationView bottomNavigationView;
+    private int originalBottomNavColor = 0; // Store original bottom nav color
 
-    // ----- Fix Start: Add fields for double-back to exit -----
     private boolean doubleBackToExitPressedOnce = false;
     private boolean skipNextBackHandling = false; // New flag to skip toast on next back press
     private Handler backPressHandler = new Handler();
@@ -67,9 +68,7 @@ public class MainActivity extends AppCompatActivity {
             doubleBackToExitPressedOnce = false;
         }
     };
-    // ----- Fix End: Add fields for double-back to exit -----
 
-    // ----- Fix Start: Add method to disable back toast temporarily -----
     /**
      * Public method to be called from fragments that need to disable the
      * double-back toast temporarily
@@ -81,12 +80,10 @@ public class MainActivity extends AppCompatActivity {
         // Reset automatically after a delay
         backPressHandler.postDelayed(() -> skipNextBackHandling = false, 1000);
     }
-    // ----- Fix End: Add method to disable back toast temporarily -----
 
     // Removed Trash-specific visibility checks; overlay back handling is unified
     // below.
 
-    // -------------- Fix Start for this method(hideOverlayIfNoFragments)-----------
     /**
      * Utility so child fragments can request overlay dismissal after popping back
      * stack.
@@ -103,9 +100,146 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-    // -------------- Fix Ended for this method(hideOverlayIfNoFragments)-----------
 
-    // -------------- Fix Start for this method(showOverlayFragment)-----------
+    /**
+     * Set bottom navigation bar color dynamically.
+     * Used by fragments to change bottom nav color (e.g., Remote tab makes it black).
+     *
+     * @param color Color as integer (e.g., 0xFF000000 for black), or 0 to restore original
+     */
+    public void setBottomNavColor(int color) {
+        if (bottomNavigationView != null) {
+            if (color == 0) {
+                // Restore original color
+                if (originalBottomNavColor != 0) {
+                    bottomNavigationView.setBackgroundColor(originalBottomNavColor);
+                }
+            } else {
+                // Set custom color
+                bottomNavigationView.setBackgroundColor(color);
+            }
+        }
+    }
+
+    /**
+     * Set the status bar (notification bar at top) color dynamically.
+     * Used by fragments to change status bar color (e.g., Remote tab makes it black).
+     *
+     * @param color Color as integer (e.g., 0xFF000000 for black), or 0 to restore original from theme
+     */
+    public void setStatusBarColor(int color) {
+        if (getWindow() != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            if (color == 0) {
+                // Restore status bar to match header/nav (colorTopBar)
+                try {
+                    android.util.TypedValue typedValue = new android.util.TypedValue();
+                    int colorTopBarAttr = getResources().getIdentifier("colorTopBar", "attr", getPackageName());
+                    if (colorTopBarAttr != 0 && getTheme().resolveAttribute(colorTopBarAttr, typedValue, true)) {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            int statusColor = getColor(typedValue.resourceId);
+                            getWindow().setStatusBarColor(statusColor);
+                        } else {
+                            int statusColor = getResources().getColor(typedValue.resourceId);
+                            getWindow().setStatusBarColor(statusColor);
+                        }
+                        Log.d("MainActivity", "Restored status bar color from colorTopBar: " + Integer.toHexString(typedValue.resourceId));
+                    }
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error restoring status bar color from colorTopBar", e);
+                }
+            } else {
+                // Set custom color
+                getWindow().setStatusBarColor(color);
+            }
+        }
+    }
+
+    /**
+     * Update feature badge visibility based on whether features have been seen.
+     * Uses Material Design BadgeDrawable on BottomNavigationView items.
+     */
+    private void updateFeatureBadgeVisibility() {
+        try {
+            if (bottomNavigationView == null) {
+                return;
+            }
+            
+            // Handle Remote badge
+            boolean shouldShowRemoteBadge = NewFeatureManager.shouldShowBadge(this, "remote");
+            Log.d("MainActivity", "updateFeatureBadgeVisibility: shouldShowRemoteBadge=" + shouldShowRemoteBadge);
+            
+            if (shouldShowRemoteBadge) {
+                // Show badge on Remote nav item
+                try {
+                    com.google.android.material.badge.BadgeDrawable badge = 
+                        bottomNavigationView.getOrCreateBadge(R.id.navigation_remote);
+                    badge.setVisible(true);
+                    badge.setText("NEW"); // Show "NEW" text instead of number
+                    badge.setBackgroundColor(0xFF4CAF50); // Green background
+                    badge.setBadgeTextColor(0xFFFFFFFF); // White text color
+                    Log.d("MainActivity", "Badge shown for remote");
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error creating badge", e);
+                }
+            } else {
+                // Remove badge from Remote nav item
+                try {
+                    bottomNavigationView.removeBadge(R.id.navigation_remote);
+                    Log.d("MainActivity", "Badge removed for remote");
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error removing badge", e);
+                }
+            }
+            
+            // Handle Settings Nav Badge (separate from watermark option inside settings)
+            boolean shouldShowSettingsNavBadge = NewFeatureManager.shouldShowBadge(this, "settings_nav");
+            Log.d("MainActivity", "updateFeatureBadgeVisibility: shouldShowSettingsNavBadge=" + shouldShowSettingsNavBadge);
+            
+            if (shouldShowSettingsNavBadge) {
+                // Show badge on Settings nav item as a small dot (no text, no number)
+                try {
+                    com.google.android.material.badge.BadgeDrawable badge = 
+                        bottomNavigationView.getOrCreateBadge(R.id.navigation_settings);
+                    badge.setVisible(true);
+                    badge.clearNumber();
+                    badge.clearText();
+                    badge.setHorizontalPadding(0);
+                    badge.setVerticalPadding(0);
+                    badge.setBackgroundColor(0xFF4CAF50); // Green background
+                    Log.d("MainActivity", "Badge shown for settings");
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error creating settings badge", e);
+                }
+            } else {
+                // Remove badge from Settings nav item
+                try {
+                    bottomNavigationView.removeBadge(R.id.navigation_settings);
+                    Log.d("MainActivity", "Badge removed for settings");
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error removing settings badge", e);
+                }
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error updating badge visibility", e);
+        }
+    }
+
+    /**
+     * Public method to refresh feature badges immediately.
+     * Called by fragments after marking features as seen.
+     */
+    public void refreshFeatureBadges() {
+        updateFeatureBadgeVisibility();
+    }
+
+    /**
+     * Check if Pro feature badge should be shown.
+     * Called from HomeFragment to determine badge visibility.
+     */
+    public boolean shouldShowProBadge() {
+        return NewFeatureManager.shouldShowBadge(this, "pro");
+    }
+
     /**
      * Present a fragment in the overlay container, avoiding duplicate dark blank
      * state.
@@ -125,7 +259,6 @@ public class MainActivity extends AppCompatActivity {
                 .commitAllowingStateLoss();
         overlayContainer.animate().alpha(1f).setDuration(120).start();
     }
-    // -------------- Fix Ended for this method(showOverlayFragment)-----------
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -136,7 +269,6 @@ public class MainActivity extends AppCompatActivity {
         // dynamic choice
         applyTheme();
 
-        // -------------- Fix Start for this block(apply cloak as early as
         // possible)-----------
         try {
             if (this.sharedPreferencesManager == null) {
@@ -158,10 +290,8 @@ public class MainActivity extends AppCompatActivity {
         } catch (Throwable t) {
             android.util.Log.w("Cloak", "early cloak apply fail", t);
         }
-        // -------------- Fix Ended for this block(apply cloak as early as
         // possible)-----------
 
-        // ----- Fix Start: Ensure onboarding shows on first install -----
         // Initialize SharedPreferencesManager instance first
         this.sharedPreferencesManager = SharedPreferencesManager.getInstance(this);
 
@@ -180,17 +310,26 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Check for onboarding BEFORE applying theme or language
+        boolean completedOnboarding = sharedPreferencesManager.sharedPreferences.getBoolean(Constants.COMPLETED_ONBOARDING_KEY, false);
         boolean showOnboarding = sharedPreferencesManager.isShowOnboarding();
+        android.util.Log.d("MainActivity", "DEBUG - COMPLETED_ONBOARDING_KEY raw value: " + completedOnboarding);
+        android.util.Log.d("MainActivity", "DEBUG - isShowOnboarding() result: " + showOnboarding);
         android.util.Log.d("MainActivity", "Should show onboarding: " + showOnboarding);
 
         if (showOnboarding) {
-            // Launch onboarding activity if needed
-            Intent intent = new Intent(this, com.fadcam.ui.OnboardingActivity.class);
-            startActivity(intent);
+            // Check if onboarding was actually completed (user went through it)
+            if (!completedOnboarding) {
+                // User has NOT completed onboarding yet - show full onboarding first
+                Intent intent = new Intent(this, com.fadcam.ui.OnboardingActivity.class);
+                startActivity(intent);
+            } else {
+                // User HAS completed onboarding - show What's New screen instead
+                Intent intent = new Intent(this, com.fadcam.ui.WhatsNewActivity.class);
+                startActivity(intent);
+            }
             finish(); // Finish this activity so it's not in the back stack
             return;
         }
-        // ----- Fix End: Ensure onboarding shows on first install -----
 
         // Now that we know we're not showing onboarding, continue with normal
         // initialization
@@ -206,16 +345,13 @@ public class MainActivity extends AppCompatActivity {
             getWindow().getDecorView().setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         }
 
-        // ----- Fix Start: Remove duplicate onboarding check -----
         // The onboarding check was already done at the beginning of onCreate
-        // ----- Fix End: Remove duplicate onboarding check -----
 
         setContentView(R.layout.activity_main);
 
         // Enable edge-to-edge display for Android 15 compatibility
         enableEdgeToEdge();
 
-        // -------------- Fix Start for this block(apply persistent cloak at
         // startup)-----------
         try {
             if (this.sharedPreferencesManager == null) {
@@ -248,13 +384,11 @@ public class MainActivity extends AppCompatActivity {
         } catch (Throwable t) {
             android.util.Log.w("Cloak", "init cloak state fail", t);
         }
-        // -------------- Fix Ended for this block(apply persistent cloak at
         // startup)-----------
 
         viewPager = findViewById(R.id.view_pager);
         bottomNavigationView = findViewById(R.id.bottom_navigation);
 
-        // -------------- Fix Start for this block(init cloak overlay)-----------
         // A simple overlay that we can show/hide to mask the UI before recents
         // snapshot.
         try {
@@ -303,7 +437,23 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             android.util.Log.w("Cloak", "Failed to init cloak overlay", e);
         }
-        // -------------- Fix Ended for this block(init cloak overlay)-----------
+
+        // Save the original bottom nav background color for restoration later
+        // Get colorTopBar from theme (same color as header bar)
+        try {
+            android.util.TypedValue typedValue = new android.util.TypedValue();
+            int colorTopBarAttr = getResources().getIdentifier("colorTopBar", "attr", getPackageName());
+            if (colorTopBarAttr != 0 && getTheme().resolveAttribute(colorTopBarAttr, typedValue, true)) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    originalBottomNavColor = getColor(typedValue.resourceId);
+                } else {
+                    originalBottomNavColor = getResources().getColor(typedValue.resourceId);
+                }
+                Log.d("MainActivity", "Saved bottom nav color from colorTopBar: " + Integer.toHexString(originalBottomNavColor));
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error getting bottom nav color from colorTopBar", e);
+        }
 
         ViewPagerAdapter adapter = new ViewPagerAdapter(this);
         viewPager.setAdapter(adapter);
@@ -313,6 +463,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Keep all pages in memory to prevent content disappearing
         viewPager.setOffscreenPageLimit(adapter.getItemCount());
+
+        // Initialize badge visibility
+        updateFeatureBadgeVisibility();
 
         bottomNavigationView.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
@@ -336,9 +489,15 @@ public class MainActivity extends AppCompatActivity {
                 switch (position) {
                     case 0:
                         bottomNavigationView.setSelectedItemId(R.id.navigation_home);
+                        // Reset nav and status bar color when leaving remote
+                        setBottomNavColor(0);
+                        setStatusBarColor(0);
                         break;
                     case 1:
                         bottomNavigationView.setSelectedItemId(R.id.navigation_records);
+                        // Reset nav and status bar color when leaving remote
+                        setBottomNavColor(0);
+                        setStatusBarColor(0);
                         // Trigger lazy loading when user navigates to Records tab
                         try {
                             Fragment recordsFragment = getSupportFragmentManager().findFragmentByTag("f" + position);
@@ -351,41 +510,39 @@ public class MainActivity extends AppCompatActivity {
                         break;
                     case 2:
                         bottomNavigationView.setSelectedItemId(R.id.navigation_remote);
+                        // Remote tab will handle its own nav and status bar colors in onResume()
                         break;
                     case 3:
                         bottomNavigationView.setSelectedItemId(R.id.navigation_faditor_mini);
+                        // Reset nav and status bar color when leaving remote
+                        setBottomNavColor(0);
+                        setStatusBarColor(0);
                         break;
                     case 4:
                         bottomNavigationView.setSelectedItemId(R.id.navigation_settings);
+                        // Reset nav and status bar color when leaving remote
+                        setBottomNavColor(0);
+                        setStatusBarColor(0);
+                        // Mark settings nav badge as seen when entering Settings
+                        NewFeatureManager.markFeatureAsSeen(MainActivity.this, "settings_nav");
+                        // Refresh badges after marking
+                        updateFeatureBadgeVisibility();
                         break;
                 }
             }
         });
 
-        // Add custom badge to the Remote tab and Faditor Mini tab in
-        // BottomNavigationView
+        // Add custom "soon" badge to Faditor Mini tab only (Remote uses NewFeatureBadge system)
         bottomNavigationView.post(() -> {
             ViewGroup menuView = (ViewGroup) bottomNavigationView.getChildAt(0);
             if (menuView != null && menuView.getChildCount() > 3) {
-                // Add badge to Remote tab (index 2)
-                View remoteTab = menuView.getChildAt(2); // 0:home, 1:records, 2:remote
-                if (remoteTab instanceof ViewGroup) {
-                    // Prevent duplicate badge
-                    View existingBadge = ((ViewGroup) remoteTab).findViewById(R.id.badge_text);
-                    if (existingBadge == null) {
-                        View badge = getLayoutInflater().inflate(R.layout.custom_badge, (ViewGroup) remoteTab, false);
-                        ((ViewGroup) remoteTab).addView(badge);
-                    }
-                }
-
                 // Add badge to Faditor Mini tab (index 3)
                 View faditorMiniTab = menuView.getChildAt(3); // 0:home, 1:records, 2:remote, 3:faditor_mini
                 if (faditorMiniTab instanceof ViewGroup) {
                     // Prevent duplicate badge
                     View existingBadge = ((ViewGroup) faditorMiniTab).findViewById(R.id.badge_text);
                     if (existingBadge == null) {
-                        View badge = getLayoutInflater().inflate(R.layout.custom_badge, (ViewGroup) faditorMiniTab,
-                                false);
+                        View badge = getLayoutInflater().inflate(R.layout.custom_badge, (ViewGroup) faditorMiniTab, false);
                         ((ViewGroup) faditorMiniTab).addView(badge);
                     }
                 }
@@ -420,7 +577,6 @@ public class MainActivity extends AppCompatActivity {
         getWindow().setStatusBarColor(colorStatusBar);
         getWindow().setNavigationBarColor(colorBottomNav);
 
-        // -------------- Fix Start for this logic(reopen appearance/theme sheet after
         // theme change)-----------
         try {
             SharedPreferences reopenPrefs = sharedPreferencesManager.sharedPreferences;
@@ -461,31 +617,64 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             android.util.Log.e("ThemeReopen", "Outer fail", e);
         }
-        // -------------- Fix Ended for this logic(reopen appearance/theme sheet after
         // theme change)-----------
 
-        // -------------- Fix Start for this logic(handle widget intent to open
         // shortcuts)-----------
         handleWidgetIntent();
-        // -------------- Fix Ended for this logic(handle widget intent to open
         // shortcuts)-----------
     }
 
     private void handleWidgetIntent() {
         Intent intent = getIntent();
-        if (intent != null && intent.getBooleanExtra("open_shortcuts_widgets", false)) {
-            // Navigate to Settings tab and then open Shortcuts & Widgets screen
-            if (viewPager != null) {
-                viewPager.setCurrentItem(4, false); // Settings tab
+        if (intent != null) {
+            // Handle navigation to specific tab (e.g., from notification)
+            int navigateToTab = intent.getIntExtra("navigate_to_tab", -1);
+            if (navigateToTab >= 0 && viewPager != null) {
+                // Use a delay to ensure fragments are properly initialized
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (viewPager != null) {
+                        viewPager.setCurrentItem(navigateToTab, true); // Use smooth scroll
+                        
+                        // Trigger fragment visibility callback for Records tab
+                        if (navigateToTab == 1) {
+                            // Add extra delay to ensure fragment is fully visible before refreshing
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                try {
+                                    Fragment recordsFragment = getSupportFragmentManager()
+                                        .findFragmentByTag("f" + navigateToTab);
+                                    if (recordsFragment instanceof RecordsFragment) {
+                                        RecordsFragment records = (RecordsFragment) recordsFragment;
+                                        records.onFragmentBecameVisible();
+                                        // Trigger refresh to show the newly recorded video
+                                        records.refreshList();
+                                        android.util.Log.d("MainActivity", "Records tab refreshed after notification");
+                                    }
+                                } catch (Exception e) {
+                                    android.util.Log.e("MainActivity", "Error triggering Records refresh", e);
+                                }
+                            }, 300); // Additional delay for refresh
+                        }
+                    }
+                }, 200);
+                // Clear the extra so it doesn't trigger again on configuration change
+                intent.removeExtra("navigate_to_tab");
             }
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                try {
-                    com.fadcam.ui.ShortcutsSettingsFragment frag = new com.fadcam.ui.ShortcutsSettingsFragment();
-                    OverlayNavUtil.show(this, frag, "ShortcutsSettingsFragment");
-                } catch (Exception e) {
-                    android.util.Log.e("WidgetIntent", "Failed to open shortcuts fragment", e);
+            
+            // Handle widget intent to open shortcuts
+            if (intent.getBooleanExtra("open_shortcuts_widgets", false)) {
+                // Navigate to Settings tab and then open Shortcuts & Widgets screen
+                if (viewPager != null) {
+                    viewPager.setCurrentItem(4, false); // Settings tab
                 }
-            }, 100);
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    try {
+                        com.fadcam.ui.ShortcutsSettingsFragment frag = new com.fadcam.ui.ShortcutsSettingsFragment();
+                        OverlayNavUtil.show(this, frag, "ShortcutsSettingsFragment");
+                    } catch (Exception e) {
+                        android.util.Log.e("WidgetIntent", "Failed to open shortcuts fragment", e);
+                    }
+                }, 100);
+            }
         }
     }
 
@@ -566,7 +755,6 @@ public class MainActivity extends AppCompatActivity {
         super.onStop();
     }
 
-    // -------------- Fix Start for this method(applyCloakIfNeeded)-----------
     /** Shows or hides the cloak overlay based on preference. */
     private void applyCloakIfNeeded(boolean show) {
         try {
@@ -588,9 +776,7 @@ public class MainActivity extends AppCompatActivity {
             android.util.Log.w("Cloak", "applyCloakIfNeeded failed", e);
         }
     }
-    // -------------- Fix Ended for this method(applyCloakIfNeeded)-----------
 
-    // -------------- Fix Start for this method(applyCloakPreferenceNow)-----------
     /**
      * Immediately applies or removes recents cloaking flags at runtime based on
      * user toggle.
@@ -627,9 +813,7 @@ public class MainActivity extends AppCompatActivity {
             android.util.Log.w("Cloak", "applyCloakPreferenceNow failed", e);
         }
     }
-    // -------------- Fix Ended for this method(applyCloakPreferenceNow)-----------
 
-    // ----- Fix Start: Proper back button handling with double-press to exit -----
     @Override
     public void onBackPressed() {
         // Unified: handle any visible overlay fragment (trash or settings)
@@ -669,7 +853,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // -------------- Fix Start for this method(onResume - enforce preference
         // state)-----------
         applyCloakIfNeeded(false); // hide decoy overlay while active
         try {
@@ -700,8 +883,10 @@ public class MainActivity extends AppCompatActivity {
         } catch (Throwable t) {
             android.util.Log.w("Cloak", "onResume preference apply fail", t);
         }
-        // -------------- Fix Ended for this method(onResume - enforce preference
         // state)-----------
+
+        // Update badge visibility for new features
+        updateFeatureBadgeVisibility();
 
         // Update UI for current theme
         String currentTheme = SharedPreferencesManager.getInstance(this).sharedPreferences
@@ -782,7 +967,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -------------- Fix Start for this method(onPause)-----------
     @Override
     protected void onPause() {
         // Show cloak just before going into background to affect recents snapshot
@@ -792,7 +976,6 @@ public class MainActivity extends AppCompatActivity {
             }
             boolean enabled = sharedPreferencesManager.isCloakRecentsEnabled();
             if (enabled) {
-                // -------------- Fix Start for this block(onPause - enforce
                 // secure/recents)-----------
                 applyCloakIfNeeded(true);
                 // For Android 14+, explicitly disable recents screenshots
@@ -807,7 +990,6 @@ public class MainActivity extends AppCompatActivity {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
                 } catch (Throwable ignored) {
                 }
-                // -------------- Fix Ended for this block(onPause - enforce
                 // secure/recents)-----------
             }
         } catch (Exception e) {
@@ -815,9 +997,7 @@ public class MainActivity extends AppCompatActivity {
         }
         super.onPause();
     }
-    // -------------- Fix Ended for this method(onPause)-----------
 
-    // -------------- Fix Start for this method(onUserLeaveHint)-----------
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
@@ -828,7 +1008,6 @@ public class MainActivity extends AppCompatActivity {
             }
             boolean enabled = sharedPreferencesManager.isCloakRecentsEnabled();
             if (enabled) {
-                // -------------- Fix Start for this block(onUserLeaveHint - enforce
                 // secure/recents)-----------
                 applyCloakIfNeeded(true);
                 if (Build.VERSION.SDK_INT >= 34) {
@@ -841,16 +1020,13 @@ public class MainActivity extends AppCompatActivity {
                     getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
                 } catch (Throwable ignored) {
                 }
-                // -------------- Fix Ended for this block(onUserLeaveHint - enforce
                 // secure/recents)-----------
             }
         } catch (Exception e) {
             android.util.Log.w("Cloak", "onUserLeaveHint cloak fail", e);
         }
     }
-    // -------------- Fix Ended for this method(onUserLeaveHint)-----------
 
-    // -------------- Fix Start for this method(handleOverlayBack)-----------
     /** Handles back press for any visible overlay fragment (settings or trash). */
     private boolean handleOverlayBack() {
         View overlayContainer = findViewById(R.id.overlay_fragment_container);
@@ -860,7 +1036,6 @@ public class MainActivity extends AppCompatActivity {
         if (top == null)
             return false;
         // Animate fade out then pop
-        // -------------- Fix Start for this
         // method(handleOverlayBack_raceGuard)-----------
         final Fragment beforeTop = getSupportFragmentManager().findFragmentById(R.id.overlay_fragment_container);
         overlayContainer.animate().alpha(0f).setDuration(160).withEndAction(() -> {
@@ -877,11 +1052,9 @@ public class MainActivity extends AppCompatActivity {
                 overlayContainer.setAlpha(1f);
             }
         }).start();
-        // -------------- Fix Ended for this
         // method(handleOverlayBack_raceGuard)-----------
         return true;
     }
-    // -------------- Fix Ended for this method(handleOverlayBack)-----------
 
     @Override
     protected void onDestroy() {
@@ -889,7 +1062,6 @@ public class MainActivity extends AppCompatActivity {
         // Clean up handler callbacks to prevent memory leaks
         backPressHandler.removeCallbacks(backPressRunnable);
     }
-    // ----- Fix End: Proper back button handling with double-press to exit -----
 
     // Helper to resolve theme color attribute
     private int resolveThemeColor(Context context, int attr) {
@@ -1028,7 +1200,6 @@ public class MainActivity extends AppCompatActivity {
         sharedPreferencesManager.updateDefaultClockColorForTheme();
     }
 
-    // -------------- Fix Start for this method(applyThemeFromSettings)-----------
     /**
      * Public wrapper so settings fragments can request a theme change.
      * Persists preference already written by caller and recreates activity to apply
@@ -1038,9 +1209,7 @@ public class MainActivity extends AppCompatActivity {
         applyTheme(themeName);
         recreate();
     }
-    // -------------- Fix Ended for this method(applyThemeFromSettings)-----------
 
-    // -------------- Fix Start: Manual orientation change handling -----------
     @Override
     public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -1085,7 +1254,6 @@ public class MainActivity extends AppCompatActivity {
             Log.e("MainActivity", "Error recreating ViewPager adapter for orientation change", e);
         }
     }
-    // -------------- Fix End: Manual orientation change handling -----------
 
     /**
      * Enable edge-to-edge display following Android 15 guidelines

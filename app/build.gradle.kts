@@ -9,13 +9,21 @@ android {
     compileSdk = 36
 
     val isBundle = gradle.startParameter.taskNames.any { it.lowercase().contains("bundle") }
+    val isProBuild = gradle.startParameter.taskNames.any { it.lowercase().contains("pro") }
 
     splits {
         abi {
+            // For pro builds: enable splits but only arm64-v8a (no universal)
+            // For main builds: arm64-v8a + armeabi-v7a with universal APK
             isEnable = !isBundle
             reset()
-            include("armeabi-v7a", "arm64-v8a")
-            isUniversalApk = true
+            if (isProBuild) {
+                include("arm64-v8a")
+                isUniversalApk = false
+            } else {
+                include("armeabi-v7a", "arm64-v8a")
+                isUniversalApk = true
+            }
         }
     }
 
@@ -23,8 +31,8 @@ android {
         applicationId = "com.fadcam"
         minSdk = 28
         targetSdk = 36
-        versionCode = 27
-        versionName = "2.0.0-beta1"
+        versionCode = 31
+        versionName = "3.0.1"
         vectorDrawables.useSupportLibrary = true
         
         // Fix 16KB native library alignment for Android 15
@@ -40,20 +48,26 @@ android {
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream().use { stream ->
                 stream?.let { props.load(it) }
             }
-            storeFile = file(props.getProperty("KEYSTORE_FILE", ""))
-            storePassword = props.getProperty("KEYSTORE_PASSWORD", "")
-            keyAlias = props.getProperty("KEY_ALIAS", "")
-            keyPassword = props.getProperty("KEY_PASSWORD", "")
+            val keystoreFile = props.getProperty("KEYSTORE_FILE", "")
+            // Only set storeFile if keystore file path is provided and exists
+            if (keystoreFile.isNotEmpty() && file(keystoreFile).exists()) {
+                storeFile = file(keystoreFile)
+                storePassword = props.getProperty("KEYSTORE_PASSWORD", "")
+                keyAlias = props.getProperty("KEY_ALIAS", "")
+                keyPassword = props.getProperty("KEY_PASSWORD", "")
+            }
         }
     }
+    
+    // Helper: check if release signing config is valid
+    val releaseSigningConfigValid = signingConfigs.getByName("release").storeFile != null
 
     buildTypes {
         debug {
             applicationIdSuffix = ".beta"
             isDebuggable = true
-            // Use a different icon for debug builds
+            versionNameSuffix = "-beta"
             resValue("string", "app_name", "FadCam Beta")
-            // You can also add debug-specific configurations here
         }
         
         release {
@@ -65,7 +79,86 @@ android {
             )
             isDebuggable = false
             signingConfig = signingConfigs.getByName("release")
-            resValue("string", "app_name", "FadCam")
+        }
+        
+        create("pro") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            applicationIdSuffix = ".pro"
+            isDebuggable = false
+            if (releaseSigningConfigValid) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            versionNameSuffix = "-Pro"
+        }
+        
+        create("proPlus") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            applicationIdSuffix = ".proplus"
+            isDebuggable = false
+            if (releaseSigningConfigValid) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            versionNameSuffix = "-Pro+"
+            // Custom app name via gradle property
+            val customAppName = project.findProperty("customAppName")?.toString() ?: "FadCam Pro+"
+            resValue("string", "app_name", customAppName)
+        }
+    }
+
+    flavorDimensions += "pro"
+
+    productFlavors {
+        create("notesPro") {
+            dimension = "pro"
+            applicationIdSuffix = ".notes"
+            resValue("string", "app_name", "Notes")
+        }
+        create("calcPro") {
+            dimension = "pro"
+            applicationIdSuffix = ".calc"
+            resValue("string", "app_name", "Calculator")
+        }
+        create("weatherPro") {
+            dimension = "pro"
+            applicationIdSuffix = ".weather"
+            resValue("string", "app_name", "Weather")
+        }
+        create("default") {
+            dimension = "pro"
+            // Default for proPlus builds
+        }
+    }
+
+// ./gradlew assembleNotesProRelease - Notes Pro variant
+// ./gradlew assembleCalcProRelease - Calculator Pro variant
+// ./gradlew assembleWeatherProRelease - Weather Pro variant
+// ./gradlew assembleDefaultProPlusRelease -PcustomAppName="Custom Name" - Pro+ custom build (standalone)
+
+    // Variant filter: only build specific variants
+    variantFilter {
+        val isPreBuiltFlavor = name.contains("notesPro") || name.contains("calcPro") || name.contains("weatherPro")
+        val isDefaultFlavor = name.contains("default")
+        
+        if (isPreBuiltFlavor) {
+            // Pre-built flavors: only 'release' build type
+            if (!name.endsWith("Release")) {
+                ignore = true
+            }
+        } else if (isDefaultFlavor) {
+            // Default flavor: allow 'debug', 'release', and 'proPlus' build types
+            if (name.endsWith("Pro") && !name.endsWith("ProPlus")) {
+                ignore = true
+            }
         }
     }
 
@@ -86,6 +179,17 @@ android {
         }
         getByName("test").java.setSrcDirs(emptyList<String>())
         getByName("androidTest").java.setSrcDirs(emptyList<String>())
+        
+        // Flavor-specific resources (icons override main icons)
+        getByName("notesPro") {
+            res.srcDir("src/notesPro/res")
+        }
+        getByName("calcPro") {
+            res.srcDir("src/calcPro/res")
+        }
+        getByName("weatherPro") {
+            res.srcDir("src/weatherPro/res")
+        }
     }
 
     packaging {
@@ -106,7 +210,8 @@ android {
                 "META-INF/LGPL2.1",
                 "**/*.kotlin_metadata",
                 "**/*.kotlin_builtins",
-                "**/*.proto"
+                "**/*.proto",
+                "assets/PSDs/**"  // Exclude PSD source files from release APK
             )
         }
     }
@@ -118,6 +223,11 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        disable += "MissingTranslation"
     }
 }
 
@@ -132,8 +242,12 @@ dependencies {
     implementation(libs.camerax.video)
     implementation(libs.constraintlayout)
     implementation(libs.core.ktx)
-    implementation(libs.exoplayer.core)
-    implementation(libs.exoplayer.ui)
+    // Media3 ExoPlayer for playback (replacing deprecated exoplayer2)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+    implementation(libs.media3.session)
+    // AndroidX Media for MediaStyle notifications
+    implementation(libs.media)
     implementation(libs.glide)
     implementation(libs.gson)
     implementation(libs.lottie)
@@ -150,6 +264,17 @@ dependencies {
     implementation(libs.core.splashscreen)
     implementation(libs.documentfile)
     implementation(libs.localbroadcastmanager)
+    
+    // Media3 for fragmented MP4 muxing (patched for live streaming via composite build)
+    implementation(libs.media3.muxer)
+    implementation(libs.media3.common)
+    implementation(libs.media3.container)
+    
+    // NanoHTTPD for HTTP streaming server
+    implementation(libs.nanohttpd.core)
+    
+    // MP4Parser for reliable MP4 box structure parsing
+    implementation("com.googlecode.mp4parser:isoparser:1.1.22")
 
     annotationProcessor(libs.compiler)
 

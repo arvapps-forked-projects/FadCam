@@ -29,6 +29,8 @@ public abstract class Constants {
     // *** End New Zoom Ratio Prefs ***
     public static final String PREF_CAMERA_SELECTION = "camera_selection";
     public static final String PREF_IS_PREVIEW_ENABLED = "isPreviewEnabled";
+    public static final String PREF_RECORDING_START_TIME = "recording_start_time"; // Stores recording start timestamp for orientation changes
+    public static final String PREF_FLOATING_CONTROLS_ENABLED = "floating_controls_enabled"; // Enable floating quick menu for FadRec
     public static final String PREF_BOTH_TORCHES_ENABLED =
         "pref_both_torches_enabled";
     public static final String PREF_SELECTED_TORCH_SOURCE =
@@ -38,8 +40,19 @@ public abstract class Constants {
     public static final String PREF_EMBED_LOCATION_DATA = "embed_location_data";
     public static final String PREF_DEBUG_DATA = "debug_data";
     public static final String PREF_WATERMARK_OPTION = "watermark_option";
+    public static final String PREF_WATERMARK_CUSTOM_TEXT = "watermark_custom_text";
     public static final String PREF_VIDEO_CODEC = "video_codec";
     public static final String PREF_APP_THEME = "app_theme";
+    
+    // Remote Authentication Constants
+    public static final String PREF_REMOTE_AUTH_ENABLED = "remote_auth_enabled";
+    public static final String PREF_REMOTE_AUTH_PASSWORD_HASH = "remote_auth_password_hash";
+    public static final String PREF_REMOTE_AUTH_AUTO_LOCK_TIMEOUT = "remote_auth_auto_lock_timeout"; // in minutes, 0 = never
+    public static final String PREF_REMOTE_AUTH_SESSIONS = "remote_auth_sessions"; // JSON string of active sessions
+    public static final long REMOTE_AUTH_TOKEN_EXPIRY_MS = 24L * 60 * 60 * 1000; // 24 hours
+    public static final int REMOTE_AUTH_MIN_PASSWORD_LENGTH = 4;
+    public static final int REMOTE_AUTH_MAX_PASSWORD_LENGTH = 32;
+    
     /**
      * Default theme used throughout the app.
      * This constant should be used as the fallback value whenever getting the theme
@@ -59,12 +72,10 @@ public abstract class Constants {
     public static final String PREF_AE_LOCK = "pref_ae_lock"; // boolean
     public static final String PREF_AF_MODE = "pref_af_mode"; // int
 
-    // -------------- Fix Start (ModeSwitcher Constants) --------------
     // Mode switcher constants
     public static final String MODE_FADCAM = "FADCAM";
     public static final String MODE_FADREC = "FADREC";
     public static final String MODE_FADMIC = "FADMIC";
-    // -------------- Fix Ended (ModeSwitcher Constants) --------------
 
     // Fragment result keys used by PickerBottomSheetFragment listeners
     public static final String RK_EXPOSURE_COMPENSATION =
@@ -118,6 +129,74 @@ public abstract class Constants {
     public static final String EXTRA_AE_LOCK = "com.fadcam.EXTRA_AE_LOCK"; // boolean
     public static final String EXTRA_AF_MODE = "com.fadcam.EXTRA_AF_MODE"; // int (CaptureRequest.CONTROL_AF_MODE
     // values)
+
+    // -------------- FadRec (Screen Recording) Constants Start --------------
+    // Directory and file naming
+    public static final String RECORDING_DIRECTORY_FADREC = "FadRec";
+    public static final String RECORDING_FILE_PREFIX_FADREC = "FadRec_";
+
+    // Screen recording intent actions
+    public static final String INTENT_ACTION_START_SCREEN_RECORDING =
+        "com.fadcam.ACTION_START_SCREEN_RECORDING";
+    public static final String INTENT_ACTION_STOP_SCREEN_RECORDING =
+        "com.fadcam.ACTION_STOP_SCREEN_RECORDING";
+    public static final String INTENT_ACTION_PAUSE_SCREEN_RECORDING =
+        "com.fadcam.ACTION_PAUSE_SCREEN_RECORDING";
+    public static final String INTENT_ACTION_RESUME_SCREEN_RECORDING =
+        "com.fadcam.ACTION_RESUME_SCREEN_RECORDING";
+
+    // Query current screen recording state (service will respond via state broadcast)
+    public static final String INTENT_ACTION_QUERY_SCREEN_RECORDING_STATE =
+        "com.fadcam.ACTION_QUERY_SCREEN_RECORDING_STATE";
+    
+    // Floating controls actions (from overlay)
+    public static final String ACTION_START_SCREEN_RECORDING_FROM_OVERLAY =
+        "com.fadcam.ACTION_START_SCREEN_RECORDING_FROM_OVERLAY";
+    public static final String ACTION_PAUSE_SCREEN_RECORDING =
+        "com.fadcam.ACTION_PAUSE_SCREEN_RECORDING";
+    public static final String ACTION_RESUME_SCREEN_RECORDING =
+        "com.fadcam.ACTION_RESUME_SCREEN_RECORDING";
+    public static final String ACTION_STOP_SCREEN_RECORDING =
+        "com.fadcam.ACTION_STOP_SCREEN_RECORDING";
+    
+    // Transparent permission activity actions
+    public static final String ACTION_SCREEN_RECORDING_PERMISSION_GRANTED =
+        "com.fadcam.ACTION_SCREEN_RECORDING_PERMISSION_GRANTED";
+    public static final String ACTION_SCREEN_RECORDING_PERMISSION_DENIED =
+        "com.fadcam.ACTION_SCREEN_RECORDING_PERMISSION_DENIED";
+
+    // Screen recording broadcast actions
+    public static final String BROADCAST_ON_SCREEN_RECORDING_STARTED =
+        "com.fadcam.ON_SCREEN_RECORDING_STARTED";
+    public static final String BROADCAST_ON_SCREEN_RECORDING_STOPPED =
+        "com.fadcam.ON_SCREEN_RECORDING_STOPPED";
+    public static final String BROADCAST_ON_SCREEN_RECORDING_PAUSED =
+        "com.fadcam.ON_SCREEN_RECORDING_PAUSED";
+    public static final String BROADCAST_ON_SCREEN_RECORDING_RESUMED =
+        "com.fadcam.ON_SCREEN_RECORDING_RESUMED";
+    public static final String BROADCAST_ON_SCREEN_RECORDING_STATE_CALLBACK =
+        "com.fadcam.ON_SCREEN_RECORDING_STATE_CALLBACK";
+
+    // Screen recording preferences
+    public static final String PREF_SCREEN_RECORDING_AUDIO_SOURCE =
+        "pref_screen_recording_audio_source"; // mic/none
+    public static final String PREF_SCREEN_RECORDING_WATERMARK_ENABLED =
+        "pref_screen_recording_watermark_enabled"; // boolean
+    public static final String PREF_IS_SCREEN_RECORDING_IN_PROGRESS =
+        "pref_is_screen_recording_in_progress"; // boolean
+    public static final String PREF_SCREEN_RECORDING_STATE =
+        "pref_screen_recording_state"; // NONE/IN_PROGRESS/PAUSED
+
+    // Default screen recording quality settings
+    public static final int DEFAULT_SCREEN_RECORDING_WIDTH = 1920; // FHD
+    public static final int DEFAULT_SCREEN_RECORDING_HEIGHT = 1080; // FHD
+    public static final int DEFAULT_SCREEN_RECORDING_FPS = 30;
+    public static final int DEFAULT_SCREEN_RECORDING_BITRATE = 8_000_000; // 8 Mbps
+
+    // Screen recording audio source options
+    public static final String AUDIO_SOURCE_NONE = "none";
+    public static final String AUDIO_SOURCE_MIC = "microphone";
+    // -------------- FadRec (Screen Recording) Constants End --------------
     public static final String EXTRA_FOCUS_X = "com.fadcam.EXTRA_FOCUS_X"; // float (normalized 0..1)
     public static final String EXTRA_FOCUS_Y = "com.fadcam.EXTRA_FOCUS_Y"; // float (normalized 0..1)
     public static final String EXTRA_ZOOM_RATIO = "com.fadcam.EXTRA_ZOOM_RATIO"; // float
@@ -152,11 +231,9 @@ public abstract class Constants {
     public static final boolean DEFAULT_RECORD_AUDIO = true;
     public static final int DEFAULT_AUDIO_BITRATE = 192000; // 192 kbps stereo AAC
     public static final int DEFAULT_AUDIO_SAMPLING_RATE = 48000; // 48 kHz
-    // -------------- Fix Start for this
     // class(Constants_video_bitrate_defaults)-----------
     public static final String PREF_VIDEO_BITRATE = "video_bitrate"; // stored in raw bps
     public static final int DEFAULT_VIDEO_BITRATE = 8_000_000; // 8 Mbps default
-    // -------------- Fix Ended for this
     // class(Constants_video_bitrate_defaults)-----------
 
     public static final String INTENT_ACTION_TOGGLE_RECORDING_TORCH =
@@ -195,7 +272,6 @@ public abstract class Constants {
     public static final String EXTRA_PROCESSING_URI_STRING =
         "com.fadcam.EXTRA_PROCESSING_URI_STRING";
 
-    // -------------- Fix Start: Add constant for recording failure broadcast
     // -----------
     // Broadcast action sent by RecordingService when it fails to start
     public static final String ACTION_RECORDING_FAILED =
@@ -204,9 +280,7 @@ public abstract class Constants {
         "com.fadcam.EXTRA_ERROR_MESSAGE";
     public static final String EXTRA_STACK_TRACE =
         "com.fadcam.EXTRA_STACK_TRACE";
-    // -------------- Fix Ended for this constant -----------
 
-    // ----- Fix Start for this class (Constants_video_splitting_broadcast) -----
     // Broadcast action sent by RecordingService when a video segment is complete
     // (due to splitting)
     public static final String ACTION_RECORDING_SEGMENT_COMPLETE =
@@ -222,7 +296,6 @@ public abstract class Constants {
     // Extra key for the segment number that just completed
     public static final String INTENT_EXTRA_SEGMENT_NUMBER =
         "com.fadcam.EXTRA_SEGMENT_NUMBER";
-    // ----- Fix Ended for this class (Constants_video_splitting_broadcast) -----
 
     // SharedPreferences key for opened videos
     public static final String PREF_OPENED_VIDEO_URIS = "opened_video_uris";
@@ -245,14 +318,12 @@ public abstract class Constants {
     // replacement
     // tracking
 
-    // ----- Fix Start for camera resource availability -----
     // Broadcast for camera resource availability status
     public static final String ACTION_CAMERA_RESOURCE_AVAILABILITY =
         "com.fadcam.ACTION_CAMERA_RESOURCE_AVAILABILITY";
     public static final String EXTRA_CAMERA_RESOURCES_AVAILABLE =
         "com.fadcam.EXTRA_CAMERA_RESOURCES_AVAILABLE";
     public static final int CAMERA_RESOURCE_COOLDOWN_MS = 1500; // 1.5 seconds cooldown for camera resources
-    // ----- Fix End for camera resource availability -----
 
     // Add the location reinitialize intent action
     public static final String INTENT_ACTION_REINITIALIZE_LOCATION =

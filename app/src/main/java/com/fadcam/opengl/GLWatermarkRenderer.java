@@ -140,6 +140,7 @@ public class GLWatermarkRenderer {
     }
 
     private OnFrameAvailableListener externalFrameListener;
+    private android.os.Handler glThreadHandler; // Handler for GL thread callbacks
 
     // Add this field to track the FullFrameRect instance
     private com.fadcam.opengl.grafika.FullFrameRect mFullFrameBlit = null;
@@ -632,6 +633,10 @@ public class GLWatermarkRenderer {
                 new com.fadcam.opengl.grafika.Texture2dProgram(
                         com.fadcam.opengl.grafika.Texture2dProgram.ProgramType.TEXTURE_EXT));
 
+        // CRITICAL: Store the current thread's Handler for SurfaceTexture callbacks
+        // This ensures frame callbacks run on the GL thread instead of arbitrary threads
+        glThreadHandler = new android.os.Handler(android.os.Looper.myLooper());
+
         createCameraSurfaceTexture();
         setupWatermarkTexture();
         updateMatrices();
@@ -653,6 +658,9 @@ public class GLWatermarkRenderer {
         cameraSurfaceTexture = new SurfaceTexture(oesTextureId);
         cameraSurfaceTexture.setDefaultBufferSize(videoWidth, videoHeight);
         cameraInputSurface = new Surface(cameraSurfaceTexture);
+        // CRITICAL FIX: Pass GL thread's handler to ensure callbacks run on GL thread
+        // Without this, callbacks run on arbitrary threads causing "no current context" errors
+        // and black video frames because texture updates happen on wrong thread
         cameraSurfaceTexture.setOnFrameAvailableListener(surfaceTexture -> {
             synchronized (frameSyncObject) {
                 frameAvailable = true;
@@ -661,7 +669,7 @@ public class GLWatermarkRenderer {
             if (externalFrameListener != null) {
                 externalFrameListener.onFrameAvailable();
             }
-        });
+        }, glThreadHandler);
     }
 
     private void setupWatermarkTexture() {
@@ -686,7 +694,6 @@ public class GLWatermarkRenderer {
         updateWatermarkTexture();
     }
 
-    // -------------- Fix Start for this
     // method(updateWatermarkTextOnGlThread)-----------
     /**
      * Updates watermark text ensuring it runs on the GL thread with a current EGL
@@ -714,7 +721,6 @@ public class GLWatermarkRenderer {
         }
         updateWatermarkTexture();
     }
-    // -------------- Fix Ended for this
     // method(updateWatermarkTextOnGlThread)-----------
 
     private void updateWatermarkTexture() {
@@ -829,7 +835,6 @@ public class GLWatermarkRenderer {
     }
 
     private void drawOESTexture(float[] mvpMatrix, float[] texMatrix) {
-        // ----- Fix Start for this method(drawOESTexture)-----
         try {
             if (released || oesTextureId == 0) {
                 Log.w(TAG, "drawOESTexture: Renderer released or OES texture invalid, skipping draw");
@@ -922,14 +927,12 @@ public class GLWatermarkRenderer {
         } catch (Exception e) {
             Log.e(TAG, "Error in drawOESTexture", e);
         }
-        // ----- Fix Ended for this method(drawOESTexture)-----
     }
 
     /**
      * Fallback drawing method when the primary method fails
      */
     private void drawWithFallbackMethod(float[] mvpMatrix, float[] texMatrix) {
-        // ----- Fix Start for this method(drawWithFallbackMethod)-----
         try {
             // Clear any existing errors
             int error = GLES20.glGetError();
@@ -969,7 +972,6 @@ public class GLWatermarkRenderer {
         } catch (Exception e) {
             Log.e(TAG, "Error in fallback drawing method", e);
         }
-        // ----- Fix Ended for this method(drawWithFallbackMethod)-----
     }
 
     private void setupSimpleWatermarkShader() {
@@ -1093,7 +1095,6 @@ public class GLWatermarkRenderer {
     }
 
     public void release() {
-        // ----- Fix Start for this method(release)-----
         synchronized (renderLock) {
             if (released) {
                 Log.d(TAG, "release called more than once; ignoring");
@@ -1119,7 +1120,6 @@ public class GLWatermarkRenderer {
             mFullFrameBlit = null;
             initialized = false;
         }
-        // ----- Fix Ended for this method(release)-----
     }
 
     public void setDeviceOrientation(int orientation) {
@@ -1253,10 +1253,8 @@ public class GLWatermarkRenderer {
         // ", sensorOrientation=" + sensorOrientation);
         // Log.d("FAD-MATRIX", "Applying rotation: " + rotationDegrees);
 
-        // ----- Fix Start: Use required rotation for encoder output -----
         Matrix.setIdentityM(recordingMvpMatrix, 0);
         Matrix.rotateM(recordingMvpMatrix, 0, rotationDegrees, 0f, 0f, 1f);
-        // ----- Fix End: Use required rotation for encoder output -----
 
         // Preview matrix: handles rotation, mirroring, and aspect ratio
         Matrix.setIdentityM(previewMvpMatrix, 0);
@@ -1324,7 +1322,6 @@ public class GLWatermarkRenderer {
     }
 
     private int getRequiredRotation() {
-        // ----- Fix Start: Standard camera app rotation logic -----
         int rotation = (sensorOrientation - deviceOrientation + 360) % 360;
         if (isFrontCamera()) {
             rotation = (360 - rotation) % 360;
@@ -1332,7 +1329,6 @@ public class GLWatermarkRenderer {
         // Log.d("FAD-ROT", "Device: " + deviceOrientation + " Sensor: " +
         // sensorOrientation + " ➜ Rotation = " + rotation);
         return rotation;
-        // ----- Fix End: Standard camera app rotation logic -----
     }
 
     private boolean isFrontCamera() {
