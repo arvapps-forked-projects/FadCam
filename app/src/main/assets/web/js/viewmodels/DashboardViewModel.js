@@ -1,5 +1,11 @@
 /**
  * DashboardViewModel - Business logic for dashboard page
+ * 
+ * Supports two modes (handled by ApiService internally):
+ * - Local mode: Phone's HTTP server (192.168.x.x)
+ * - Cloud mode: Relay server (live.fadseclab.com:8443)
+ * 
+ * ApiService automatically detects the mode based on FadCamRemote.isCloudMode()
  */
 class DashboardViewModel {
     constructor() {
@@ -14,6 +20,14 @@ class DashboardViewModel {
     async initialize() {
         console.log('[DashboardViewModel] Initializing...');
         
+        // Listen for cloud mode ready event (FadCamRemote sets up stream context)
+        if (typeof eventBus !== 'undefined') {
+            eventBus.on('cloud-mode-ready', (ctx) => {
+                console.log('[DashboardViewModel] ☁️ Cloud mode ready, reinitializing...', ctx);
+                this.updateStatus(); // Force refresh with updated context
+            });
+        }
+        
         // Initial fetch
         await this.updateStatus();
         
@@ -23,6 +37,7 @@ class DashboardViewModel {
     
     /**
      * Update status from API
+     * ApiService automatically handles local vs cloud mode
      */
     async updateStatus() {
         try {
@@ -32,7 +47,8 @@ class DashboardViewModel {
             // Emit event for views to update
             eventBus.emit('status-updated', this.statusModel);
             
-            console.log(`✅ [DashboardViewModel] Status updated: ${data.state}, streaming: ${data.streaming}, clients: ${data.totalConnectedClients}, uptime: ${data.uptime}`);
+            const modeLabel = data.cloudMode ? '☁️' : '📱';
+            console.log(`✅ [DashboardViewModel] ${modeLabel} Status updated: ${data.state}, streaming: ${data.streaming}, clients: ${data.totalConnectedClients || 0}`);
         } catch (error) {
             console.error('❌ [DashboardViewModel] Failed to update status:', error.message);
             
