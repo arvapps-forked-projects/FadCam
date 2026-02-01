@@ -387,6 +387,13 @@ public class RemoteStreamManager {
                 CloudStreamUploader uploader = CloudStreamUploader.getInstance(context);
                 if (uploader.isEnabled() && uploader.isReady()) {
                     uploader.uploadSegment(sequenceNumber, fragmentData, null);
+                    
+                    // Generate and upload HLS playlist for cloud streaming
+                    // This allows the cloud dashboard to play the stream
+                    String playlist = generateCloudPlaylist();
+                    if (playlist != null) {
+                        uploader.uploadPlaylist(playlist, null);
+                    }
                 }
             }
             
@@ -528,6 +535,65 @@ public class RemoteStreamManager {
     }
     
     /**
+     * Generate HLS playlist for cloud streaming.
+     * Similar to LiveM3U8Server but with relative URLs for cloud relay.
+     * 
+     * @return M3U8 playlist string, or null if not enough fragments buffered
+     */
+    @Nullable
+    private String generateCloudPlaylist() {
+        bufferLock.readLock().lock();
+        try {
+            // Get buffered fragments
+            List<FragmentData> fragments = new ArrayList<>();
+            int validRangeStart = Math.max(1, fragmentSequence - BUFFER_SIZE + 1);
+            
+            for (FragmentData fragment : fragmentBuffer) {
+                if (fragment != null && fragment.sequenceNumber >= validRangeStart && fragment.sequenceNumber <= fragmentSequence) {
+                    fragments.add(fragment);
+                }
+            }
+            
+            // Need at least 2 fragments for HLS
+            if (fragments.size() < 2 || initializationSegment == null) {
+                return null;
+            }
+            
+            // Sort by sequence number
+            fragments.sort((a, b) -> Integer.compare(a.sequenceNumber, b.sequenceNumber));
+            
+            // Get live edge (last 5 fragments for sliding window)
+            int LIVE_WINDOW_SIZE = 5;
+            List<FragmentData> liveEdge = new ArrayList<>();
+            int startIdx = Math.max(0, fragments.size() - LIVE_WINDOW_SIZE);
+            for (int i = startIdx; i < fragments.size(); i++) {
+                liveEdge.add(fragments.get(i));
+            }
+            
+            // Build M3U8 playlist
+            StringBuilder m3u8 = new StringBuilder();
+            m3u8.append("#EXTM3U\n");
+            m3u8.append("#EXT-X-VERSION:7\n"); // fMP4 requires version 7
+            m3u8.append("#EXT-X-INDEPENDENT-SEGMENTS\n");
+            m3u8.append("#EXT-X-TARGETDURATION:2\n"); // 2-second max fragment duration
+            m3u8.append("#EXT-X-MEDIA-SEQUENCE:").append(liveEdge.get(0).sequenceNumber).append("\n");
+            
+            // Init segment - relative path for cloud (same directory)
+            m3u8.append("#EXT-X-MAP:URI=\"init.mp4\"\n");
+            
+            // Add fragments - use relative paths (seg-N.m4s, not /seg-N.m4s)
+            for (FragmentData fragment : liveEdge) {
+                m3u8.append("#EXTINF:").append(String.format(java.util.Locale.US, "%.3f", fragment.getDurationSeconds())).append(",\n");
+                m3u8.append("seg-").append(fragment.sequenceNumber).append(".m4s\n");
+            }
+            
+            return m3u8.toString();
+        } finally {
+            bufferLock.readLock().unlock();
+        }
+    }
+    
+    /**
      * Get status JSON for HTTP /status endpoint.
      * OPTIMIZED: Caches JSON response for 1 second to reduce CPU load during polling.
      */
@@ -547,7 +613,7 @@ public class RemoteStreamManager {
             // CRITICAL: Check if context is null (happens when app is backgrounded/destroyed)
             if (context == null) {
                 Log.w(TAG, "⚠️ [getStatusJson] Context is null (app backgrounded). Returning safe state...");
-                String safeState = "{\"streaming\": " + streamingEnabled + ", \"state\": \"backgrounded\", \"message\": \"App is backgrounded\", \"is_recording\": false}";
+                String safeState = "{\"streaming\": " + streamingEnabled + ", \"state\": \"backgrounded\", \"message\": \"App is backgrounded\", \"isRecording\": false}";
                 cachedStatusJson = safeState;
                 lastStatusJsonTime = currentTime;
                 return safeState;
@@ -634,7 +700,7 @@ public class RemoteStreamManager {
             // Get uptime details
             java.util.Map<String, Object> uptimeDetailsMap = getUptimeDetails();
             String uptimeDetailsJson = String.format(
-                "{\"seconds\": %d, \"formatted\": \"%s\", \"start_time\": \"%s\", \"start_timestamp\": %d}",
+                "{\"seconds\": %d, \"formatted\": \"%s\", \"startTime\": \"%s\", \"startTimestamp\": %d}",
                 uptimeDetailsMap.get("seconds"),
                 uptimeDetailsMap.get("formatted"),
                 uptimeDetailsMap.get("startTime"),
@@ -676,23 +742,23 @@ public class RemoteStreamManager {
             // Import JsonEscaper for safe JSON string embedding
             String result = String.format(
                 "{\"streaming\": %s, \"mode\": %s, \"state\": %s, \"message\": %s, " +
-                "\"is_recording\": %s, \"fragments_buffered\": %d, \"buffer_size_mb\": %.2f, " +
-                "\"latest_sequence\": %d, \"oldest_sequence\": %d, \"active_connections\": %d, " +
-                "\"has_init_segment\": %s, \"uptime_seconds\": %d, " +
-                "\"battery_details\": %s, " +
-                "\"uptime_details\": %s, " +
-                "\"network_type\": %s, \"network_connected\": %s, " +
-                "\"network_health\": %s, " +
-                "\"stream_quality\": %s, " +
-                "\"video_codec\": %s, " +
-                "\"torch_state\": %s, " +
-                "\"volume\": %d, \"max_volume\": %d, \"volume_percentage\": %.1f, " +
-                "\"alarm\": {\"is_ringing\": %s, \"sound\": %s, \"duration_ms\": %d, \"remaining_ms\": %d}, " +
-                "\"auth_enabled\": %s, \"auth_timeout_ms\": %d, \"auth_sessions_count\": %d, \"auth_sessions_cleared\": %s, " +
+                "\"isRecording\": %s, \"fragmentsBuffered\": %d, \"bufferSizeMb\": %.2f, " +
+                "\"latestSequence\": %d, \"oldestSequence\": %d, \"activeConnections\": %d, " +
+                "\"hasInitSegment\": %s, \"uptimeSeconds\": %d, " +
+                "\"batteryDetails\": %s, " +
+                "\"uptimeDetails\": %s, " +
+                "\"networkType\": %s, \"networkConnected\": %s, " +
+                "\"networkHealth\": %s, " +
+                "\"streamQuality\": %s, " +
+                "\"videoCodec\": %s, " +
+                "\"torchState\": %s, " +
+                "\"volume\": %d, \"maxVolume\": %d, \"volumePercentage\": %.1f, " +
+                "\"alarm\": {\"isRinging\": %s, \"sound\": %s, \"durationMs\": %d, \"remainingMs\": %d}, " +
+                "\"authEnabled\": %s, \"authTimeoutMs\": %d, \"authSessionsCount\": %d, \"authSessionsCleared\": %s, " +
                 "\"events\": %s, " +
                 "\"clients\": %s, " +
-                "\"memory_usage\": %s, \"storage\": %s, " +
-                "\"total_data_transferred_mb\": %d}",
+                "\"memoryUsage\": %s, \"storage\": %s, " +
+                "\"totalDataTransferredMb\": %d}",
                 streamingEnabled,
                 com.fadcam.streaming.util.JsonEscaper.escapeToJsonString(streamingMode.toString().toLowerCase()),
                 com.fadcam.streaming.util.JsonEscaper.escapeToJsonString(state),
@@ -1103,7 +1169,7 @@ public class RemoteStreamManager {
         String chargingStatus = isCharging ? "Charging" : "Discharging";
         
         String result = String.format(
-            "{\"percent\": %d, \"status\": \"%s\", \"consumed\": %d, \"remaining_hours\": %.1f, \"warning\": %s, \"warning_threshold\": %d}",
+            "{\"percent\": %d, \"status\": \"%s\", \"consumed\": %d, \"remainingHours\": %.1f, \"warning\": %s, \"warningThreshold\": %d}",
             currentLevel, chargingStatus, consumed, remainingHours, warningJson, warningThreshold
         );
         // Log.d(TAG, "[Battery] Returning JSON: " + result);

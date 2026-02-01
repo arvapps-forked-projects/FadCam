@@ -1,5 +1,9 @@
 /**
  * HlsService - HLS.js wrapper for video streaming
+ * 
+ * Supports both local mode (no auth) and cloud mode (auth token required).
+ * In cloud mode, the token is appended to URLs via xhrSetup callback.
+ * This is the standard approach to avoid CORS issues with custom headers.
  */
 class HlsService {
     constructor() {
@@ -13,6 +17,45 @@ class HlsService {
     }
     
     /**
+     * Get HLS config with xhrSetup for cloud mode auth
+     * Uses URL token approach (standard for HLS authentication)
+     * @returns {Object} HLS.js configuration object
+     */
+    _getHlsConfig() {
+        const baseConfig = { ...CONFIG.HLS_CONFIG };
+        
+        // Check if we're in cloud mode and have a stream token
+        const isCloudMode = typeof FadCamRemote !== 'undefined' && 
+                           typeof FadCamRemote.isCloudMode === 'function' && 
+                           FadCamRemote.isCloudMode();
+        
+        if (isCloudMode) {
+            const streamToken = FadCamRemote.getStreamToken();
+            if (streamToken) {
+                console.log('[HlsService] ☁️ Cloud mode detected, using URL token auth');
+                
+                // Standard xhrSetup approach - modify URL before request is sent
+                // This is the recommended way per hls.js documentation
+                baseConfig.xhrSetup = function(xhr, url) {
+                    // Only modify cloud stream URLs
+                    if (url.includes('/stream/') || url.includes('live.fadseclab.com')) {
+                        const separator = url.includes('?') ? '&' : '?';
+                        const authUrl = `${url}${separator}token=${encodeURIComponent(streamToken)}`;
+                        // Re-open with the new URL (must call open before setRequestHeader)
+                        xhr.open('GET', authUrl, true);
+                    }
+                };
+            } else {
+                console.warn('[HlsService] ☁️ Cloud mode but no stream token available!');
+            }
+        } else {
+            console.log('[HlsService] 📱 Local mode, no auth needed');
+        }
+        
+        return baseConfig;
+    }
+    
+    /**
      * Load HLS stream
      * @param {string} url - M3U8 playlist URL
      * @param {HTMLVideoElement} videoElement - Video DOM element
@@ -23,7 +66,10 @@ class HlsService {
         
         if (Hls.isSupported()) {
             console.log('[HlsService] HLS.js supported, loading stream');
-            this.hls = new Hls(CONFIG.HLS_CONFIG);
+            
+            // Get config with auth headers if in cloud mode
+            const hlsConfig = this._getHlsConfig();
+            this.hls = new Hls(hlsConfig);
             
             this.setupHlsListeners();
             this.hls.loadSource(url);

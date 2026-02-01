@@ -127,6 +127,22 @@ class ApiService {
         return null;
     }
     
+    /**
+     * Build cloud URL with token in query string
+     * This avoids CORS issues with Authorization headers
+     * @param {string} path - API path (e.g., /api/status/...)
+     * @returns {string} Full URL with token
+     */
+    _buildCloudUrl(path) {
+        let url = `${this.relayBaseUrl}${path}`;
+        const token = this._getStreamToken();
+        if (token) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += `${separator}token=${encodeURIComponent(token)}`;
+        }
+        return url;
+    }
+
     // =========================================================================
     // Status API
     // =========================================================================
@@ -193,18 +209,18 @@ class ApiService {
                 return this._getOfflineStatus('Missing user or device ID');
             }
             
-            // Try to fetch status from relay
-            const statusUrl = `${this.relayBaseUrl}/api/status/${userId}/${deviceId}`;
-            console.log(`☁️ [/status] Fetching from relay: ${statusUrl}`);
+            // Build status URL with token in query string (avoids CORS issues)
+            const statusUrl = this._buildCloudUrl(`/api/status/${userId}/${deviceId}`);
+            console.log(`☁️ [/status] Fetching from relay...`);
             
             try {
                 const response = await fetch(statusUrl, {
-                    method: 'GET',
-                    headers: this.getHeaders()
+                    method: 'GET'
                 });
                 
                 if (response.ok) {
                     // Phone has pushed status to relay
+                    // ServerStatus model handles snake_case → camelCase transformation
                     this.statusCache = await response.json();
                     this.statusCache.cloudMode = true;
                     this.lastFetchTime = Date.now();
@@ -250,10 +266,11 @@ class ApiService {
         }
         
         try {
-            const playlistUrl = `${this.relayBaseUrl}/stream/${this.streamContext.userId}/${this.streamContext.deviceId}/live.m3u8`;
+            // Use URL token auth to avoid CORS issues
+            const playlistPath = `/stream/${this.streamContext.userId}/${this.streamContext.deviceId}/live.m3u8`;
+            const playlistUrl = this._buildCloudUrl(playlistPath);
             const response = await fetch(playlistUrl, {
-                method: 'HEAD',
-                headers: this.getHeaders()
+                method: 'HEAD'
             });
             return response.ok;
         } catch (e) {
@@ -397,14 +414,14 @@ class ApiService {
             source: 'dashboard'
         };
         
-        // Send command to relay
-        const commandUrl = `${this.relayBaseUrl}/api/command/${userId}/${deviceId}/${cmdId}`;
-        console.log(`☁️ [COMMAND] PUT ${commandUrl}`, command);
+        // Build URL with token auth (avoids CORS header issues)
+        const commandUrl = this._buildCloudUrl(`/api/command/${userId}/${deviceId}/${cmdId}`);
+        console.log(`☁️ [COMMAND] PUT to relay`, command);
         
         try {
             const response = await fetch(commandUrl, {
                 method: 'PUT',
-                headers: this.getHeaders(),
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(command)
             });
             
@@ -483,13 +500,23 @@ class ApiService {
     
     /**
      * Get HLS stream URL for video player
+     * In cloud mode, appends auth token as query parameter to avoid CORS issues
      */
     getHlsUrl() {
         if (this.isCloudMode()) {
             if (!this.streamContext?.userId || !this.streamContext?.deviceId) {
                 return null;
             }
-            return `${this.relayBaseUrl}/stream/${this.streamContext.userId}/${this.streamContext.deviceId}/live.m3u8`;
+            let url = `${this.relayBaseUrl}/stream/${this.streamContext.userId}/${this.streamContext.deviceId}/live.m3u8`;
+            
+            // Append token as query parameter for cloud mode auth
+            // This is required because HLS.js fragment requests can't easily add headers
+            if (this.streamAccessToken) {
+                url += `?token=${encodeURIComponent(this.streamAccessToken)}`;
+                console.log('[ApiService] 🔑 Token appended to HLS URL');
+            }
+            
+            return url;
         }
         return `${this.localBaseUrl}${CONFIG.ENDPOINTS.HLS}`;
     }
