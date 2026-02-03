@@ -232,11 +232,12 @@ public class LiveM3U8Server extends NanoHTTPD {
             m3u8.append("#EXTM3U\n");
             m3u8.append("#EXT-X-VERSION:7\n"); // fMP4 requires version 7
             m3u8.append("#EXT-X-INDEPENDENT-SEGMENTS\n"); // MUST come early
-            m3u8.append("#EXT-X-TARGETDURATION:2\n"); // 2-second max fragment duration
+            m3u8.append("#EXT-X-TARGETDURATION:4\n"); // 4-second max fragment duration (2s actual, with margin)
             
             // CRITICAL: Get buffered fragments before generating rest of playlist
+            // Apple HLS spec requires minimum 6 segments, we use 8 for more buffer room
             java.util.List<RemoteStreamManager.FragmentData> stable = new java.util.ArrayList<>(fragments);
-            int LIVE_WINDOW_SIZE = 5;
+            int LIVE_WINDOW_SIZE = 8;
             java.util.List<RemoteStreamManager.FragmentData> liveEdge = new java.util.ArrayList<>();
             int startIdx = Math.max(0, stable.size() - LIVE_WINDOW_SIZE);
             for (int i = startIdx; i < stable.size(); i++) {

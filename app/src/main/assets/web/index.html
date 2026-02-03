@@ -1033,7 +1033,8 @@
     <script src="js/services/AuthService.js?v=2.5.0"></script>
     <script src="js/services/RealtimeCommandService.js?v=2.5.0"></script>
     <script src="js/services/ApiService.js?v=2.5.0"></script>
-    <script src="js/services/HlsService.js?v=2.5.0"></script>
+    <script src="js/services/HlsService.js?v=2.7.0"></script>
+    <script src="js/config.js?v=2.7.0"></script>
     <script src="js/services/FadexNotificationManager.js?v=2.5.0"></script>
     <script src="js/models/ServerStatus.js?v=2.5.0"></script>
     <script src="js/viewmodels/DashboardViewModel.js?v=2.5.0"></script>
@@ -1507,11 +1508,11 @@
                     <div class="modal-rows-group">
                         <div class="modal-row-container">
                             <div class="modal-row-label">Started Date</div>
-                            <div class="modal-row-value">${uptimeDetails.session_started_date || 'Not started'}</div>
+                            <div class="modal-row-value">${uptimeDetails.sessionStartedDate || uptimeDetails.startDate || 'Not started'}</div>
                         </div>
                         <div class="modal-row-container">
                             <div class="modal-row-label">Started Time</div>
-                            <div class="modal-row-value">${uptimeDetails.start_time || uptimeDetails.session_started_time || 'Not started'}</div>
+                            <div class="modal-row-value">${uptimeDetails.sessionStartedTime || uptimeDetails.startTime || 'Not started'}</div>
                         </div>
                     </div>
                 </div>
@@ -1525,85 +1526,105 @@
 
         function showClientsModal() {
             if (!currentStatus) return;
+            
+            // Check if we're in cloud mode (cloudViewers > 0 means relay is being used)
+            const isCloudMode = currentStatus.cloudViewers > 0;
+            
             let clientsHtml = `
                 <div class="modal-section">
                     <div class="modal-rows-group">
                         <div class="modal-row-container">
-                            <div class="modal-row-label">Connected Clients</div>
+                            <div class="modal-row-label">${isCloudMode ? 'Cloud Viewers' : 'Connected Clients'}</div>
                             <div class="modal-row-value">${currentStatus.activeConnections || 0}</div>
                         </div>
                     </div>
                 </div>
             `;
             
-            // Show total API calls across all clients
-            if (currentStatus.clients && currentStatus.clients.length > 0) {
-                let totalGetCalls = 0;
-                let totalPostCalls = 0;
-                currentStatus.clients.forEach(client => {
-                    totalGetCalls += client.getRequests || 0;
-                    totalPostCalls += client.postRequests || 0;
-                });
-                
+            if (isCloudMode) {
+                // CLOUD MODE: Only show aggregate stats (per-viewer details not available without IP tracking)
                 clientsHtml += `
                     <div class="modal-section">
-                        <div class="modal-section-title">API Summary</div>
+                        <div class="modal-section-title">Cloud Streaming</div>
                         <div class="modal-rows-group">
                             <div class="modal-row-container">
-                                <div class="modal-row-label">Total GET Requests</div>
-                                <div class="modal-row-value">${totalGetCalls}</div>
+                                <div class="modal-row-label">Total Data Served</div>
+                                <div class="modal-row-value">${currentStatus.dataTransferredMb?.toFixed(1) || '0'} MB</div>
                             </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Total POST Requests</div>
-                                <div class="modal-row-value">${totalPostCalls}</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Total API Calls</div>
-                                <div class="modal-row-value">${totalGetCalls + totalPostCalls}</div>
-                            </div>
+                        </div>
+                        <div class="modal-info-note" style="margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 11px; color: rgba(255,255,255,0.5); line-height: 1.4;">
+                            <span style="color: rgba(255,255,255,0.7);">🔒 Zero-Log Policy:</span> Per-viewer metrics are not available in cloud mode to protect viewer privacy. Only aggregate data is shown.
                         </div>
                     </div>
                 `;
-            }
-            
-            if (currentStatus.clients && currentStatus.clients.length > 0) {
-                clientsHtml += '<div class="modal-section"><div class="modal-section-title">Client Details</div>';
-                currentStatus.clients.forEach((client, idx) => {
-                    const sessionMinutes = Math.floor((client.sessionDurationSeconds || 0) / 60);
+            } else {
+                // LOCAL MODE: Show full per-client details (client IPs are private/local)
+                if (currentStatus.clients && currentStatus.clients.length > 0) {
+                    let totalGetCalls = 0;
+                    let totalPostCalls = 0;
+                    currentStatus.clients.forEach(client => {
+                        totalGetCalls += client.getRequests || 0;
+                        totalPostCalls += client.postRequests || 0;
+                    });
+                    
                     clientsHtml += `
-                        <div class="modal-rows-group">
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">IP Address</div>
-                                <div class="modal-row-value" style="font-size: 11px;">${client.ip || 'N/A'}</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Data Served</div>
-                                <div class="modal-row-value">${client.mbServed ? client.mbServed.toFixed(1) : '0'} MB</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Avg Bitrate</div>
-                                <div class="modal-row-value">${(client.averageBitrateMbps || 0).toFixed(2)} Mbps</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Session Duration</div>
-                                <div class="modal-row-value">${sessionMinutes}m ${(client.sessionDurationSeconds || 0) % 60}s</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">GET Requests</div>
-                                <div class="modal-row-value">${client.getRequests || 0}</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">POST Requests</div>
-                                <div class="modal-row-value">${client.postRequests || 0}</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Total API Calls</div>
-                                <div class="modal-row-value">${(client.totalApiCalls || 0)}</div>
+                        <div class="modal-section">
+                            <div class="modal-section-title">API Summary</div>
+                            <div class="modal-rows-group">
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Total GET Requests</div>
+                                    <div class="modal-row-value">${totalGetCalls}</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Total POST Requests</div>
+                                    <div class="modal-row-value">${totalPostCalls}</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Total API Calls</div>
+                                    <div class="modal-row-value">${totalGetCalls + totalPostCalls}</div>
+                                </div>
                             </div>
                         </div>
                     `;
-                });
-                clientsHtml += '</div>';
+                    
+                    clientsHtml += '<div class="modal-section"><div class="modal-section-title">Client Details</div>';
+                    currentStatus.clients.forEach((client, idx) => {
+                        const sessionMinutes = Math.floor((client.sessionDurationSeconds || 0) / 60);
+                        clientsHtml += `
+                            <div class="modal-rows-group">
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">IP Address</div>
+                                    <div class="modal-row-value" style="font-size: 11px;">${client.ip || 'N/A'}</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Data Served</div>
+                                    <div class="modal-row-value">${client.mbServed ? client.mbServed.toFixed(1) : '0'} MB</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Avg Bitrate</div>
+                                    <div class="modal-row-value">${(client.averageBitrateMbps || 0).toFixed(2)} Mbps</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Session Duration</div>
+                                    <div class="modal-row-value">${sessionMinutes}m ${(client.sessionDurationSeconds || 0) % 60}s</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">GET Requests</div>
+                                    <div class="modal-row-value">${client.getRequests || 0}</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">POST Requests</div>
+                                    <div class="modal-row-value">${client.postRequests || 0}</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Total API Calls</div>
+                                    <div class="modal-row-value">${(client.totalApiCalls || 0)}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    clientsHtml += '</div>';
+                }
             }
             
             document.getElementById('clientsContent').innerHTML = clientsHtml;
@@ -1823,83 +1844,118 @@
             if (!currentStatus) return;
             const dataTransferred = currentStatus.dataTransferredMb || 0;
             const displayValue = dataTransferred > 1000 ? (dataTransferred / 1024).toFixed(2) + ' GB' : dataTransferred.toFixed(1) + ' MB';
-            const activeClientsCount = currentStatus.clients ? currentStatus.clients.length : 0;
             
-            // Build per-client breakdown with all metrics
-            let clientsHtml = '';
-            if (currentStatus.clients && currentStatus.clients.length > 0) {
-                clientsHtml = currentStatus.clients.map(client => {
-                    // Calculate duration display
-                    let durationDisplay = '0m';
-                    if (client.sessionDurationSeconds) {
-                        const seconds = client.sessionDurationSeconds;
-                        if (seconds < 60) {
-                            durationDisplay = seconds + 's';
-                        } else if (seconds < 3600) {
-                            durationDisplay = Math.floor(seconds / 60) + 'm';
-                        } else {
-                            const hours = Math.floor(seconds / 3600);
-                            const mins = Math.floor((seconds % 3600) / 60);
-                            durationDisplay = hours + 'h ' + mins + 'm';
-                        }
-                    }
-                    
-                    // Get data served
-                    const dataMb = client.mbServed || 0;
-                    const fragments = client.fragmentsServed || 0;
-                    const isActive = client.isActive !== false; // Default to active if not specified
-                    
-                    return `
-                        <div class="modal-rows-group" style="margin-bottom: 12px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #24272d;">
-                                <div style="font-size: 13px; font-weight: 700; color: #e6edf3; font-family: monospace;">${client.ip || 'Unknown'}</div>
-                                <div style="font-size: 11px; font-weight: 700; color: #ffffff; background: ${isActive ? '#3fb950' : '#6e7681'}; padding: 4px 8px; border-radius: 4px;">${isActive ? 'Active' : 'Inactive'}</div>
+            // Check if we're in cloud mode
+            const isCloudMode = currentStatus.cloudViewers > 0;
+            
+            let content = '';
+            
+            if (isCloudMode) {
+                // CLOUD MODE: Only show aggregate stats (per-viewer details not available)
+                const cloudViewers = currentStatus.cloudViewers || 0;
+                
+                content = `
+                    <div class="modal-section">
+                        <div class="modal-rows-group">
+                            <div class="modal-row-container">
+                                <div class="modal-row-label">Total Served</div>
+                                <div class="modal-row-value">${displayValue}</div>
                             </div>
                             <div class="modal-row-container">
-                                <div class="modal-row-label">Data Served</div>
-                                <div class="modal-row-value">${dataMb.toFixed(1)} MB</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Duration</div>
-                                <div class="modal-row-value">${durationDisplay}</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Fragments</div>
-                                <div class="modal-row-value">${fragments}</div>
+                                <div class="modal-row-label">Cloud Viewers</div>
+                                <div class="modal-row-value">${cloudViewers}</div>
                             </div>
                         </div>
-                    `;
-                }).join('');
+                    </div>
+                    
+                    <div class="modal-info-box" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
+                        <div class="modal-info-text" style="line-height: 1.5;">
+                            🔒 <strong>Zero-Log Policy</strong><br>
+                            Per-viewer breakdown is not available in cloud mode to protect viewer privacy. 
+                            Only aggregate data is shown.
+                        </div>
+                    </div>
+                `;
             } else {
-                clientsHtml = '<div style="text-align: center; padding: 16px; color: #8b949e; font-size: 12px;">No clients connected</div>';
+                // LOCAL MODE: Show full per-client breakdown
+                const activeClientsCount = currentStatus.clients ? currentStatus.clients.length : 0;
+                
+                let clientsHtml = '';
+                if (currentStatus.clients && currentStatus.clients.length > 0) {
+                    clientsHtml = currentStatus.clients.map(client => {
+                        // Calculate duration display
+                        let durationDisplay = '0m';
+                        if (client.sessionDurationSeconds) {
+                            const seconds = client.sessionDurationSeconds;
+                            if (seconds < 60) {
+                                durationDisplay = seconds + 's';
+                            } else if (seconds < 3600) {
+                                durationDisplay = Math.floor(seconds / 60) + 'm';
+                            } else {
+                                const hours = Math.floor(seconds / 3600);
+                                const mins = Math.floor((seconds % 3600) / 60);
+                                durationDisplay = hours + 'h ' + mins + 'm';
+                            }
+                        }
+                        
+                        // Get data served
+                        const dataMb = client.mbServed || 0;
+                        const fragments = client.fragmentsServed || 0;
+                        const isActive = client.isActive !== false;
+                        
+                        return `
+                            <div class="modal-rows-group" style="margin-bottom: 12px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #24272d;">
+                                    <div style="font-size: 13px; font-weight: 700; color: #e6edf3; font-family: monospace;">${client.ip || 'Unknown'}</div>
+                                    <div style="font-size: 11px; font-weight: 700; color: #ffffff; background: ${isActive ? '#3fb950' : '#6e7681'}; padding: 4px 8px; border-radius: 4px;">${isActive ? 'Active' : 'Inactive'}</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Data Served</div>
+                                    <div class="modal-row-value">${dataMb.toFixed(1)} MB</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Duration</div>
+                                    <div class="modal-row-value">${durationDisplay}</div>
+                                </div>
+                                <div class="modal-row-container">
+                                    <div class="modal-row-label">Fragments</div>
+                                    <div class="modal-row-value">${fragments}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    clientsHtml = '<div style="text-align: center; padding: 16px; color: #8b949e; font-size: 12px;">No clients connected</div>';
+                }
+                
+                content = `
+                    <div class="modal-section">
+                        <div class="modal-rows-group">
+                            <div class="modal-row-container">
+                                <div class="modal-row-label">Total Served</div>
+                                <div class="modal-row-value">${displayValue}</div>
+                            </div>
+                            <div class="modal-row-container">
+                                <div class="modal-row-label">Active Clients</div>
+                                <div class="modal-row-value">${activeClientsCount}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-section">
+                        <div class="modal-section-title">Per-Client Breakdown</div>
+                        <div style="margin-top: 8px;">
+                            ${clientsHtml}
+                        </div>
+                    </div>
+                    
+                    <div class="modal-info-box">
+                        <div class="modal-info-text">
+                            ℹ️ Shows detailed data transmission metrics for each connected client.
+                        </div>
+                    </div>
+                `;
             }
             
-            const content = `
-                <div class="modal-section">
-                    <div class="modal-rows-group">
-                        <div class="modal-row-container">
-                            <div class="modal-row-label">Total Served</div>
-                            <div class="modal-row-value">${displayValue}</div>
-                        </div>
-                        <div class="modal-row-container">
-                            <div class="modal-row-label">Active Clients</div>
-                            <div class="modal-row-value">${activeClientsCount}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-section">
-                    <div class="modal-section-title">Per-Client Breakdown</div>
-                    <div style="margin-top: 8px;">
-                        ${clientsHtml}
-                    </div>
-                </div>
-                
-                <div class="modal-info-box">
-                    <div class="modal-info-text">
-                        ℹ️ Shows detailed data transmission metrics for each connected client.
-                    </div>
-                </div>
-            `;
             document.getElementById('dataTransferContent').innerHTML = content;
             document.getElementById('dataTransferModal').classList.add('visible');
         }
@@ -2280,6 +2336,29 @@
                 hlsService.destroy();
             }
             hlsService = new HlsService(); // Fresh instance
+            
+            // Register for recovery/reload events to show user-friendly notifications
+            hlsService.on('recovery', (data) => {
+                console.log('[Stream] 🔧 Recovering from media error:', data);
+                showToast('🔧 Recovering stream...', 3000);
+            });
+            
+            hlsService.on('reload', (data) => {
+                console.log('[Stream] 🔃 Reloading stream:', data);
+                showToast('🔃 Reloading stream...', 3000);
+            });
+            
+            // Auto-seek to live edge when extremely far behind
+            // Use cooldown to prevent toast spam (30 second cooldown)
+            let lastSeekToLiveToast = 0;
+            hlsService.on('seekToLive', (data) => {
+                console.log('[Stream] 🎯 Auto-seek to live:', data);
+                const now = Date.now();
+                if (now - lastSeekToLiveToast > 30000) { // 30 second cooldown
+                    showToast('🎯 Syncing to live...', 2000);
+                    lastSeekToLiveToast = now;
+                }
+            });
             
             hlsService.load(streamUrl, videoElement);
             videoElement.play().catch(err => console.log('[Video] Play deferred, will play when ready'));

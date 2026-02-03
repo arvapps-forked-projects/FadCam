@@ -91,8 +91,10 @@ public class RemoteStreamManager {
     
     // Cloud viewer tracking (fetched from relay by CloudStatusManager)
     // This tracks viewers who connect via cloud relay, not directly to phone
+    // PRIVACY: We only track count and aggregate bytes, never individual IPs
     private int cloudViewerCount = 0;
     private long cloudViewerCountUpdatedAt = 0; // Timestamp of last update
+    private long cloudBytesServed = 0; // Total bytes served by relay to all cloud viewers
     
     /**
      * Streaming mode options.
@@ -388,17 +390,30 @@ public class RemoteStreamManager {
             //     (fragmentData.length / 1024) + " KB) [" + getBufferedCount() + "/" + BUFFER_SIZE + " slots] oldest=" + oldestSequence + ", head=" + bufferHead);
             
             // Upload to cloud relay if enabled
+            // CRITICAL FIX: Upload playlist ONLY AFTER segment upload succeeds
+            // This prevents race condition where viewer gets playlist before segment is available
             if (context != null) {
                 CloudStreamUploader uploader = CloudStreamUploader.getInstance(context);
                 if (uploader.isEnabled() && uploader.isReady()) {
-                    uploader.uploadSegment(sequenceNumber, fragmentData, null);
+                    // Capture playlist now (while we have the lock) but upload after segment succeeds
+                    final String playlist = generateCloudPlaylist();
                     
-                    // Generate and upload HLS playlist for cloud streaming
-                    // This allows the cloud dashboard to play the stream
-                    String playlist = generateCloudPlaylist();
-                    if (playlist != null) {
-                        uploader.uploadPlaylist(playlist, null);
-                    }
+                    // Upload segment with callback - playlist uploaded only after segment succeeds
+                    uploader.uploadSegment(sequenceNumber, fragmentData, new CloudStreamUploader.UploadCallback() {
+                        @Override
+                        public void onSuccess() {
+                            // Segment uploaded successfully - NOW upload the playlist
+                            if (playlist != null) {
+                                uploader.uploadPlaylist(playlist, null);
+                            }
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            // Segment failed - don't update playlist (viewers won't see missing segment)
+                            Log.w(TAG, "⚠️ Segment " + sequenceNumber + " upload failed, skipping playlist update: " + error);
+                        }
+                    });
                 }
             }
             
@@ -567,8 +582,9 @@ public class RemoteStreamManager {
             // Sort by sequence number
             fragments.sort((a, b) -> Integer.compare(a.sequenceNumber, b.sequenceNumber));
             
-            // Get live edge (last 5 fragments for sliding window)
-            int LIVE_WINDOW_SIZE = 5;
+            // Get live edge (last 8 fragments for sliding window)
+            // Apple HLS spec requires minimum 6 segments, we use 8 for more buffer room
+            int LIVE_WINDOW_SIZE = 8;
             List<FragmentData> liveEdge = new ArrayList<>();
             int startIdx = Math.max(0, fragments.size() - LIVE_WINDOW_SIZE);
             for (int i = startIdx; i < fragments.size(); i++) {
@@ -580,7 +596,7 @@ public class RemoteStreamManager {
             m3u8.append("#EXTM3U\n");
             m3u8.append("#EXT-X-VERSION:7\n"); // fMP4 requires version 7
             m3u8.append("#EXT-X-INDEPENDENT-SEGMENTS\n");
-            m3u8.append("#EXT-X-TARGETDURATION:2\n"); // 2-second max fragment duration
+            m3u8.append("#EXT-X-TARGETDURATION:4\n"); // 4-second max fragment duration (2s actual, with margin)
             m3u8.append("#EXT-X-MEDIA-SEQUENCE:").append(liveEdge.get(0).sequenceNumber).append("\n");
             
             // Init segment - relative path for cloud (same directory)
@@ -676,14 +692,24 @@ public class RemoteStreamManager {
             long uptimeSeconds = getServerUptimeMs() / 1000;
             
             // Get client metrics as JSON array
+            // In cloud mode, show empty clients array (privacy: per-viewer details not available)
+            // Dashboard uses cloudViewers count and dataTransferredMb for aggregate stats
             StringBuilder clientsJson = new StringBuilder("[");
-            List<ClientMetrics> clients = getAllClientMetrics();
-            for (int i = 0; i < clients.size(); i++) {
-                clientsJson.append(clients.get(i).toJson());
-                if (i < clients.size() - 1) {
-                    clientsJson.append(", ");
+            boolean isCloudMode = context != null && 
+                CloudStreamUploader.getInstance(context) != null &&
+                CloudStreamUploader.getInstance(context).isEnabled();
+            
+            if (!isCloudMode) {
+                // Local mode: Show local clients with full metrics
+                List<ClientMetrics> clients = getAllClientMetrics();
+                for (int i = 0; i < clients.size(); i++) {
+                    clientsJson.append(clients.get(i).toJson());
+                    if (i < clients.size() - 1) {
+                        clientsJson.append(", ");
+                    }
                 }
             }
+            // Cloud mode: clients array is empty - use cloudViewers and totalDataTransferredMb instead
             clientsJson.append("]");
             
             // Get all system health metrics
@@ -782,7 +808,7 @@ public class RemoteStreamManager {
                 totalBytes / (1024.0 * 1024.0),
                 fragmentSequence,
                 oldestSequence,
-                getAllClientMetrics().size(),
+                isCloudMode ? cloudViewerCount : getAllClientMetrics().size(), // activeConnections: cloud viewers or local clients
                 cloudViewerCount,
                 hasInit,
                 uptimeSeconds,
@@ -979,13 +1005,42 @@ public class RemoteStreamManager {
      * Streaming mode options.
      */
     public void trackClientIP(String clientIP) {
-        if (clientIP != null && !clientIP.isEmpty()) {
-            synchronized (clientMetricsMap) {
-                boolean isNewClient = !clientMetricsMap.containsKey(clientIP);
-                if (isNewClient) {
-                    clientMetricsMap.put(clientIP, new ClientMetrics(clientIP));
-                    Log.i(TAG, "New client connected: " + clientIP + " (Total: " + clientMetricsMap.size() + ")");
-                }
+        if (clientIP == null || clientIP.isEmpty()) {
+            return;
+        }
+        
+        // In cloud mode, don't track localhost connections (internal dashboard requests)
+        // Real viewers connect via relay, not directly to phone
+        boolean isCloudMode = context != null && 
+            CloudStreamUploader.getInstance(context) != null &&
+            CloudStreamUploader.getInstance(context).isEnabled();
+        
+        if (isCloudMode && (clientIP.equals("127.0.0.1") || clientIP.equals("localhost") || clientIP.startsWith("::1"))) {
+            return; // Skip internal requests in cloud mode
+        }
+        
+        synchronized (clientMetricsMap) {
+            boolean isNewClient = !clientMetricsMap.containsKey(clientIP);
+            if (isNewClient) {
+                clientMetricsMap.put(clientIP, new ClientMetrics(clientIP));
+                Log.i(TAG, "New client connected: " + clientIP + " (Total: " + clientMetricsMap.size() + ")");
+            }
+        }
+    }
+    
+    /**
+     * Clear localhost entries from client metrics.
+     * Call this when switching to cloud mode to remove internal request tracking.
+     */
+    public void clearLocalhostClients() {
+        synchronized (clientMetricsMap) {
+            int beforeSize = clientMetricsMap.size();
+            clientMetricsMap.remove("127.0.0.1");
+            clientMetricsMap.remove("localhost");
+            clientMetricsMap.remove("::1");
+            int afterSize = clientMetricsMap.size();
+            if (beforeSize != afterSize) {
+                Log.i(TAG, "Cleared localhost clients: " + (beforeSize - afterSize) + " removed");
             }
         }
     }
@@ -1047,12 +1102,37 @@ public class RemoteStreamManager {
     }
     
     /**
-     * Get list of connected client IPs.
+     * Get list of connected client identifiers.
+     * In local mode: returns IP addresses of directly connected clients.
+     * In cloud mode: returns empty list (use getCloudViewerCount() instead).
+     * 
+     * Note: For cloud mode, per-client details are not available due to 
+     * zero-log privacy policy. Use getCloudViewerCount() and getTotalDataTransferred()
+     * for aggregate stats only.
      */
-    public List<String> getConnectedClientIPs() {
+    public List<String> getConnectedClients() {
+        boolean isCloudMode = context != null && 
+            CloudStreamUploader.getInstance(context) != null &&
+            CloudStreamUploader.getInstance(context).isEnabled();
+        
+        if (isCloudMode) {
+            // Cloud mode: return empty - per-client details not available
+            // Use getCloudViewerCount() for aggregate count
+            return new ArrayList<>();
+        }
+        
+        // Local mode: Return actual client IPs
         synchronized (clientMetricsMap) {
             return new ArrayList<>(clientMetricsMap.keySet());
         }
+    }
+    
+    /**
+     * @deprecated Use getConnectedClients() instead. Renamed for clarity.
+     */
+    @Deprecated
+    public List<String> getConnectedClientIPs() {
+        return getConnectedClients();
     }
     
     /**
@@ -1088,9 +1168,21 @@ public class RemoteStreamManager {
      * @param count Number of unique cloud viewers
      */
     public void setCloudViewerCount(int count) {
+        setCloudViewerCount(count, 0);
+    }
+    
+    /**
+     * Set cloud viewer count and bytes served (fetched from relay server by CloudStatusManager).
+     * Cloud viewers connect to the relay, not directly to the phone.
+     * PRIVACY: bytesServed is aggregate total, not per-viewer.
+     * @param count Number of unique cloud viewers
+     * @param bytesServed Total bytes served by relay to all cloud viewers
+     */
+    public void setCloudViewerCount(int count, long bytesServed) {
         this.cloudViewerCount = count;
+        this.cloudBytesServed = bytesServed;
         this.cloudViewerCountUpdatedAt = System.currentTimeMillis();
-        Log.d(TAG, "☁️ Cloud viewer count updated: " + count);
+        Log.d(TAG, "☁️ Cloud viewer count updated: " + count + " (bytes served: " + bytesServed + ")");
     }
     
     /**
@@ -1099,6 +1191,15 @@ public class RemoteStreamManager {
      */
     public int getCloudViewerCount() {
         return cloudViewerCount;
+    }
+    
+    /**
+     * Get total bytes served by relay to cloud viewers.
+     * PRIVACY: This is aggregate total, not per-viewer.
+     * @return Total bytes served, or 0 if not tracked
+     */
+    public long getCloudBytesServed() {
+        return cloudBytesServed;
     }
     
     /**
@@ -1561,8 +1662,18 @@ public class RemoteStreamManager {
     
     /**
      * Get total data transferred to clients (persistent across session).
+     * In cloud mode, this includes data uploaded to the relay server.
      */
     public long getTotalDataTransferred() {
+        // Include cloud uploads if cloud mode is active
+        if (context != null) {
+            CloudStreamUploader uploader = CloudStreamUploader.getInstance(context);
+            if (uploader != null && uploader.isEnabled()) {
+                // In cloud mode, return cloud upload data (that's what viewers are receiving)
+                return uploader.getTotalBytesUploaded();
+            }
+        }
+        // In local mode, return locally served data
         return totalDataServed;
     }
     
