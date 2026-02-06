@@ -208,6 +208,7 @@ public class HomeFragment extends BaseFragment {
 
     private View cardPreview;
     private Vibrator vibrator;
+    private ImageView ivBubbleBackground; // Rotating bubble shape behind camera icon
 
     private CardView cardClock;
     private TextView tvClock, tvDateEnglish, tvDateArabic;
@@ -948,6 +949,11 @@ public class HomeFragment extends BaseFragment {
                     case PAUSED:
                         onRecordingPaused();
                         break;
+                    case WAITING_FOR_CAMERA:
+                        // Camera taken by another app - recording continues with black frames
+                        // Show appropriate UI state
+                        setUIForWaitingForCamera();
+                        break;
                 }
 
                 recordingState = recordingStateIntent;
@@ -1150,8 +1156,22 @@ public class HomeFragment extends BaseFragment {
         );
         buttonStartStop.setEnabled(true);
 
-        // Keep camera switch button ENABLED for live switching during recording
-        // Don't disable it here
+        // Re-enable camera switch button (may have been disabled during WAITING_FOR_CAMERA)
+        if (buttonCamSwitch != null) {
+            buttonCamSwitch.setEnabled(true);
+            buttonCamSwitch.setAlpha(1.0f);
+        }
+
+        // Re-enable torch button (may have been disabled during WAITING_FOR_CAMERA)
+        if (buttonTorchSwitch != null) {
+            buttonTorchSwitch.setEnabled(true);
+            buttonTorchSwitch.setAlpha(1.0f);
+        }
+
+        // Restore preview visibility (may have shown placeholder during WAITING_FOR_CAMERA)
+        isPreviewEnabled = true;
+        savePreviewState();
+        updatePreviewVisibility();
 
         startUpdatingInfo();
     }
@@ -1484,6 +1504,9 @@ public class HomeFragment extends BaseFragment {
         Log.d(TAG, "onResume: Triggering stats update.");
         updateStats();
         updateTorchUI(isTorchOn);
+
+        // Start bubble rotation animation when visible (battery optimization)
+        startBubbleRotation();
     }
 
     // Inside HomeFragment.java
@@ -1821,6 +1844,11 @@ public class HomeFragment extends BaseFragment {
             case PAUSED:
                 setUIForRecordingPaused(); // Call helper to set Stop/Resume buttons etc.
                 break;
+            case WAITING_FOR_CAMERA:
+                // Camera was taken by another app, recording continues with black frames
+                // Show UI similar to paused but indicate camera is being recaptured
+                setUIForWaitingForCamera();
+                break;
             case NONE:
             default:
                 // Service state is NONE. Recording is stopped.
@@ -1949,6 +1977,63 @@ public class HomeFragment extends BaseFragment {
             stopUpdatingInfo(); // Show placeholder/last frame, stop timers
         } catch (Exception e) {
             Log.e(TAG, "Error setting UI for Paused state", e);
+        }
+    }
+
+    /**
+     * Helper to set UI elements for the WAITING_FOR_CAMERA state.
+     * This state occurs when another app has taken the camera during recording.
+     * Recording continues with black frames while attempting to recapture camera.
+     */
+    private void setUIForWaitingForCamera() {
+        if (!isAdded() || getContext() == null) return;
+        Log.d(TAG, "Setting UI to: WAITING_FOR_CAMERA (camera interrupted)");
+        try {
+            // Similar to PAUSED state but indicates camera is being recaptured
+            buttonStartStop.setEnabled(true); // Enable STOP (user can still stop recording)
+            buttonStartStop.setBackgroundTintList(
+                ContextCompat.getColorStateList(
+                    requireContext(),
+                    R.color.button_stop
+                )
+            );
+            buttonStartStop.setText(getString(R.string.button_stop));
+            buttonStartStop.setIcon(
+                AppCompatResources.getDrawable(
+                    requireContext(),
+                    R.drawable.ic_stop
+                )
+            );
+
+            // Disable pause button during camera interruption (doesn't make sense)
+            buttonPauseResume.setEnabled(false);
+            buttonPauseResume.setAlpha(0.5f);
+            buttonPauseResume.setIcon(
+                AppCompatResources.getDrawable(
+                    requireContext(),
+                    R.drawable.ic_pause
+                )
+            );
+
+            // Disable camera switch (camera not available)
+            if (buttonCamSwitch != null) {
+                buttonCamSwitch.setEnabled(false);
+                buttonCamSwitch.setAlpha(0.5f);
+            }
+            // Disable torch (camera not available)
+            if (buttonTorchSwitch != null) {
+                buttonTorchSwitch.setEnabled(false);
+                buttonTorchSwitch.setAlpha(0.5f);
+            }
+
+            // Keep updating timer since recording is still ongoing (black frames)
+            updatePreviewVisibility();
+            // Keep timer running - recording is still in progress
+            if (updateInfoRunnable == null) {
+                startUpdatingInfo();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting UI for WaitingForCamera state", e);
         }
     }
 
@@ -2520,6 +2605,10 @@ public class HomeFragment extends BaseFragment {
     public void onPause() {
         super.onPause();
         Log.d(TAG, "HomeFragment paused.");
+
+        // Stop bubble rotation animation to save battery
+        stopBubbleRotation();
+
         if (textureViewSurface != null) {
             Log.d(TAG, "onPause: Explicitly sending null surface to service");
             updateServiceWithCurrentSurface(null);
@@ -7661,6 +7750,9 @@ public class HomeFragment extends BaseFragment {
         // consistently)
         buttonTorchSwitch = view.findViewById(R.id.buttonTorchSwitch);
 
+        // Initialize rotating bubble background (animation started in onResume for battery optimization)
+        ivBubbleBackground = view.findViewById(R.id.ivBubbleBackground);
+
         // Compact overlay handling removed: we now use PickerBottomSheetFragment for
         // controls.
 
@@ -7668,6 +7760,27 @@ public class HomeFragment extends BaseFragment {
         // textureView is handled by setupTextureView
     }
 
+    /**
+     * Starts a continuous slow rotation animation on the bubble background shape.
+     * Creates a modern, dynamic visual effect behind the camera icon.
+     */
+    private void startBubbleRotation() {
+        if (ivBubbleBackground != null) {
+            android.view.animation.Animation rotateAnimation = 
+                android.view.animation.AnimationUtils.loadAnimation(requireContext(), R.anim.rotate_slow_left);
+            ivBubbleBackground.startAnimation(rotateAnimation);
+            Log.d(TAG, "Started bubble background rotation animation");
+        }
+    }
+
+    /**
+     * Stops the bubble rotation animation (for cleanup on pause/destroy).
+     */
+    private void stopBubbleRotation() {
+        if (ivBubbleBackground != null) {
+            ivBubbleBackground.clearAnimation();
+        }
+    }
 
     private boolean isRecordingOrPaused() {
         return (
