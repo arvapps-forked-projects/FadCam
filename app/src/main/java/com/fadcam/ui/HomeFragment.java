@@ -208,6 +208,7 @@ public class HomeFragment extends BaseFragment {
     private boolean isPreviewEnabled = true;
 
     private View cardPreview;
+    private TextView btnFullscreenPreview;
     private Vibrator vibrator;
     private ImageView ivBubbleBackground; // Rotating bubble shape behind camera icon
 
@@ -264,6 +265,18 @@ public class HomeFragment extends BaseFragment {
     // ── Dual Camera ────────────────────────────────────────────────────
     /** {@code true} while a dual-camera recording session is active. */
     private volatile boolean isDualRecordingActive = false;
+    /**
+     * Guard flag: set before launching fullscreen preview to prevent
+     * {@link #onPause()} from sending a null surface to the service.
+     */
+    private volatile boolean isLaunchingFullscreen = false;
+
+    /**
+     * Guard flag: set when returning from fullscreen to prevent
+     * {@link #onSurfaceTextureDestroyed()} from sending null surface
+     * during texture recreation. Cleared when new surface is ready.
+     */
+    private volatile boolean isReturningFromFullscreen = false;
     private BroadcastReceiver broadcastOnDualRecordingStarted;
     private BroadcastReceiver broadcastOnDualRecordingStopped;
     private BroadcastReceiver broadcastOnDualRecordingPaused;
@@ -275,6 +288,8 @@ public class HomeFragment extends BaseFragment {
     private BroadcastReceiver cameraResourceAvailabilityReceiver;
     private boolean isCameraResourceAvailabilityReceiverRegistered = false;
     private boolean areCameraResourcesAvailable = true; // Default to true
+    private boolean hasRequiredRecordingHardware = true;
+    private boolean isHardwareSupportToastShown = false;
 
     // buttonTorchSwitch declaration moved to line 195 (changed to protected)
 
@@ -673,6 +688,9 @@ public class HomeFragment extends BaseFragment {
             if (tvPreviewHint != null) tvPreviewHint.setVisibility(View.GONE); // Hide hint
             Log.d(TAG, "Not recording - keeping placeholder hidden");
         }
+
+        // Show fullscreen button only when preview is active and recording
+        updateFullscreenButtonVisibility();
     }
 
     private void resetTimers() {
@@ -767,8 +785,10 @@ public class HomeFragment extends BaseFragment {
             );
         }
 
-        // Set camera resources as available by default when starting
-        areCameraResourcesAvailable = true;
+        // Evaluate hardware capabilities (important for watches with limited hardware).
+        hasRequiredRecordingHardware = hasRequiredRecordingHardware();
+        areCameraResourcesAvailable = hasRequiredRecordingHardware;
+        isHardwareSupportToastShown = false;
 
         // Fetch initial state and update UI
         fetchRecordingState(); // Get current service state
@@ -811,6 +831,10 @@ public class HomeFragment extends BaseFragment {
 
         // Ensure we have the latest state
         fetchRecordingState();
+        updateStartButtonAvailability();
+        if (!hasRequiredRecordingHardware) {
+            showUnsupportedHardwareMessage();
+        }
 
         // ----- Update Check Bottom Sheet Start -----
         if (
@@ -1374,7 +1398,7 @@ public class HomeFragment extends BaseFragment {
         // Only update if we're in a state where the start button would normally be
         // enabled
         if (recordingState == RecordingState.NONE) {
-            boolean shouldEnable = areCameraResourcesAvailable;
+            boolean shouldEnable = areCameraResourcesAvailable && hasRequiredRecordingHardware;
             buttonStartStop.setEnabled(shouldEnable);
             buttonStartStop.setAlpha(shouldEnable ? 1.0f : 0.5f);
 
@@ -1386,7 +1410,7 @@ public class HomeFragment extends BaseFragment {
             if (!shouldEnable) {
                 Log.d(
                     TAG,
-                    "Start button disabled due to camera resources being released"
+                    "Start button disabled due to camera resources/hardware availability"
                 );
             } else {
                 Log.d(
@@ -1395,6 +1419,47 @@ public class HomeFragment extends BaseFragment {
                 );
             }
         }
+    }
+
+    private boolean hasRequiredRecordingHardware() {
+        if (!isAdded() || getContext() == null) {
+            return true;
+        }
+        try {
+            PackageManager pm = requireContext().getPackageManager();
+            boolean hasCamera =
+                pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) ||
+                pm.hasSystemFeature(PackageManager.FEATURE_CAMERA);
+            boolean hasMic = pm.hasSystemFeature(PackageManager.FEATURE_MICROPHONE);
+            return hasCamera && hasMic;
+        } catch (Exception e) {
+            Log.w(
+                TAG,
+                "Unable to check required recording hardware: " + e.getMessage()
+            );
+            return true;
+        }
+    }
+
+    private boolean ensureRecordingHardwareSupported() {
+        if (!hasRequiredRecordingHardware) {
+            showUnsupportedHardwareMessage();
+            updateStartButtonAvailability();
+            return false;
+        }
+        return true;
+    }
+
+    private void showUnsupportedHardwareMessage() {
+        if (!isAdded() || getContext() == null || isHardwareSupportToastShown) {
+            return;
+        }
+        isHardwareSupportToastShown = true;
+        Toast.makeText(
+            requireContext(),
+            getString(R.string.watch_recording_hardware_not_supported),
+            Toast.LENGTH_LONG
+        ).show();
     }
 
     /**
@@ -1457,20 +1522,9 @@ public class HomeFragment extends BaseFragment {
             prefsListener = null;
         }
 
-        // The following lines for sending surface update on stop if recording
-        // should remain, as they are not related to receiver unregistration.
-        if (isRecording()) {
-            // isRecording() checks recordingState
-            Intent recordingIntent = new Intent(
-                getActivity(),
-                RecordingService.class
-            );
-            recordingIntent.setAction(Constants.INTENT_ACTION_CHANGE_SURFACE);
-            // Check if activity is still available before starting service
-            if (getActivity() != null) {
-                requireActivity().startService(recordingIntent);
-            }
-        }
+        // Surface update is handled properly at line ~2828 via updateServiceWithCurrentSurface()
+        // which correctly routes to RecordingService or DualCameraRecordingService
+        // and includes the IS_FULLSCREEN_TRANSITION flag when needed
 
         unregisterCameraResourceAvailabilityReceiver();
 
@@ -1515,17 +1569,18 @@ public class HomeFragment extends BaseFragment {
 
         // Critical: When resuming, send the appropriate surface to the service
         // This ensures preview shows correctly after app is minimized/restored
-        if (
-            isPreviewEnabled &&
-            isRecordingOrPaused() &&
-            textureViewSurface != null &&
-            textureViewSurface.isValid()
-        ) {
-            Log.d(
-                TAG,
-                "onResume: Preview enabled, sending valid surface to service"
-            );
-            updateServiceWithCurrentSurface(textureViewSurface);
+        if (isPreviewEnabled && isRecordingOrPaused()) {
+            // Attempt to recover surface if it was lost
+            if (textureViewSurface == null || !textureViewSurface.isValid()) {
+                Log.d(TAG, "onResume: Surface null/invalid, attempting recovery via resetTextureView");
+                resetTextureView();
+            }
+            if (textureViewSurface != null && textureViewSurface.isValid()) {
+                Log.d(TAG, "onResume: Preview enabled, sending valid surface to service");
+                updateServiceWithCurrentSurface(textureViewSurface);
+            } else {
+                Log.d(TAG, "onResume: Surface still unavailable after reset — onSurfaceTextureAvailable will handle it");
+            }
         } else if (!isPreviewEnabled || !isRecordingOrPaused()) {
             // If preview is disabled or not recording, send null surface
             Log.d(
@@ -2101,9 +2156,11 @@ public class HomeFragment extends BaseFragment {
             if (buttonCamSwitch != null) {
                 buttonCamSwitch.setEnabled(true);
             }
-            if (buttonTorchSwitch != null) buttonTorchSwitch.setEnabled(
-                getCameraWithFlashQuietly() != null
-            ); // Enable TORCH if available
+            if (buttonTorchSwitch != null) {
+                boolean hasFlash = getCameraWithFlashQuietly() != null;
+                buttonTorchSwitch.setEnabled(hasFlash);
+                buttonTorchSwitch.setAlpha(hasFlash ? 1.0f : 0.5f);
+            }
 
             // Manage preview and timers
             updatePreviewVisibility();
@@ -2158,10 +2215,11 @@ public class HomeFragment extends BaseFragment {
             if (buttonCamSwitch != null) {
                 buttonCamSwitch.setEnabled(true);
             }
-            if (buttonTorchSwitch != null) buttonTorchSwitch.setEnabled(
-                getCameraWithFlashQuietly() != null
-            ); // Enable TORCH if available, even
-            // when paused
+            if (buttonTorchSwitch != null) {
+                boolean hasFlash = getCameraWithFlashQuietly() != null;
+                buttonTorchSwitch.setEnabled(hasFlash);
+                buttonTorchSwitch.setAlpha(hasFlash ? 1.0f : 0.5f);
+            }
 
             // Manage preview and timers
             updatePreviewVisibility();
@@ -2803,9 +2861,11 @@ public class HomeFragment extends BaseFragment {
         // Stop bubble rotation animation to save battery
         stopBubbleRotation();
 
-        if (textureViewSurface != null) {
+        if (textureViewSurface != null && !isReturningFromFullscreen) {
             Log.d(TAG, "onPause: Explicitly sending null surface to service");
-            updateServiceWithCurrentSurface(null);
+            updateServiceWithCurrentSurface(null, -1, -1, isLaunchingFullscreen);
+        } else if (isReturningFromFullscreen) {
+            Log.d(TAG, "onPause: Skipping null surface — returning from fullscreen, new surface incoming");
         }
         // locationHelper.stopLocationUpdates();
 
@@ -4552,6 +4612,11 @@ public class HomeFragment extends BaseFragment {
                         TAG,
                         "onSurfaceTextureAvailable: Created new surface from texture"
                     );
+                    // Clear the returning flag now that surface is ready
+                    if (isReturningFromFullscreen) {
+                        Log.d(TAG, "onSurfaceTextureAvailable: Clearing isReturningFromFullscreen flag");
+                        isReturningFromFullscreen = false;
+                    }
                     if (isPreviewEnabled && isRecordingOrPaused()) {
                         Log.d(
                             TAG,
@@ -4572,7 +4637,7 @@ public class HomeFragment extends BaseFragment {
 
                 @Override
                 public void onSurfaceTextureSizeChanged(
-                    @NonNull SurfaceTexture surfaceTexture,
+                    @NonNull SurfaceTexture surface,
                     int width,
                     int height
                 ) {
@@ -4610,12 +4675,20 @@ public class HomeFragment extends BaseFragment {
                         "onSurfaceTextureDestroyed: SurfaceTexture is being destroyed."
                     );
                     if (textureViewSurface != null) {
-                        if (isRecordingOrPaused()) {
+                        // Only send null if we're not returning from fullscreen.
+                        // During fullscreen return, texture is destroyed/recreated rapidly, and
+                        // sending null causes "Surface lost" dummy surface creation.
+                        if (isRecordingOrPaused() && !isReturningFromFullscreen) {
                             Log.d(
                                 TAG,
                                 "onSurfaceTextureDestroyed: Recording active, sending null surface to service."
                             );
                             updateServiceWithCurrentSurface(null);
+                        } else if (isReturningFromFullscreen) {
+                            Log.d(
+                                TAG,
+                                "onSurfaceTextureDestroyed: Skipping null surface — returning from fullscreen"
+                            );
                         }
                         textureViewSurface.release();
                         textureViewSurface = null;
@@ -4722,6 +4795,10 @@ public class HomeFragment extends BaseFragment {
             Log.e(TAG, "Context is null, cannot start recording.");
             return;
         }
+        if (!ensureRecordingHardwareSupported()) {
+            Log.w(TAG, "startRecording blocked: required recording hardware missing");
+            return;
+        }
         performHapticFeedback();
         // Permission checks removed; handled by onboarding
 
@@ -4814,6 +4891,10 @@ public class HomeFragment extends BaseFragment {
     private void startDualRecording() {
         if (getContext() == null) {
             Log.e(TAG, "startDualRecording: Context null");
+            return;
+        }
+        if (!ensureRecordingHardwareSupported()) {
+            Log.w(TAG, "startDualRecording blocked: required recording hardware missing");
             return;
         }
 
@@ -4940,6 +5021,10 @@ public class HomeFragment extends BaseFragment {
      * Contains the actual recording initialization logic.
      */
     private void proceedWithRecordingStart() {
+        if (!ensureRecordingHardwareSupported()) {
+            Log.w(TAG, "proceedWithRecordingStart blocked: required recording hardware missing");
+            return;
+        }
         // Force reset recording state if service is not running
         if (!isMyServiceRunning(RecordingService.class)) {
             Log.d(TAG, "Service not running, forcing recordingState to NONE");
@@ -8073,6 +8158,8 @@ public class HomeFragment extends BaseFragment {
         buttonPauseResume = view.findViewById(R.id.buttonPauseResume);
         buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
         cardPreview = view.findViewById(R.id.cardPreview); // Assuming R.id.cardPreview exists
+        btnFullscreenPreview = view.findViewById(R.id.btnFullscreenPreview);
+        setupFullscreenButton();
         vibrator = (Vibrator) requireActivity().getSystemService(
             Context.VIBRATOR_SERVICE
         );
@@ -8128,6 +8215,68 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
+    // ─── Fullscreen Preview ──────────────────────────────────────────────────
+
+    /**
+     * Wires the fullscreen preview button: launches {@link FullscreenPreviewActivity}
+     * when tapped, and re-sends the HomeFragment surface when the user returns.
+     */
+    private void setupFullscreenButton() {
+        if (btnFullscreenPreview == null) return;
+
+        btnFullscreenPreview.setOnClickListener(v -> {
+            if (!isRecordingOrPaused()) {
+                Toast.makeText(requireContext(),
+                        getString(R.string.fullscreen_preview_not_recording),
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            // Launch fullscreen preview — the activity will take over the preview surface
+            Intent intent = new Intent(requireContext(), FullscreenPreviewActivity.class);
+            isLaunchingFullscreen = true;
+            fullscreenLauncher.launch(intent);
+        });
+    }
+
+    /**
+     * Activity result launcher for returning from fullscreen preview.
+     * Re-sends the HomeFragment TextureView surface to the recording service.
+     */
+    private final androidx.activity.result.ActivityResultLauncher<Intent> fullscreenLauncher =
+            registerForActivityResult(
+                    new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        // Fullscreen activity finished — push our surface immediately.
+                        // FullscreenPreview does NOT send null on destroy, so there
+                        // is no race condition. We just need to reclaim the preview.
+                        isLaunchingFullscreen = false;
+                        isReturningFromFullscreen = true;
+                        resetTextureView();
+                        // Safety retry: if TextureView wasn't ready yet (e.g. it
+                        // was recreated), onSurfaceTextureAvailable handles it.
+                        // But if it IS available and the first reset didn't take
+                        // (debounce / timing), retry once more.
+                        new android.os.Handler(android.os.Looper.getMainLooper())
+                                .postDelayed(() -> {
+                                    if (textureViewSurface == null
+                                            || !textureViewSurface.isValid()) {
+                                        resetTextureView();
+                                    }
+                                    // Clear the guard flag after surface should be stable
+                                    isReturningFromFullscreen = false;
+                                }, 600);
+                    });
+
+    /**
+     * Update fullscreen button visibility based on recording + preview state.
+     * Button is shown only when both recording and preview are active.
+     */
+    private void updateFullscreenButtonVisibility() {
+        if (btnFullscreenPreview == null) return;
+        boolean show = isPreviewEnabled && isRecordingOrPaused();
+        btnFullscreenPreview.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
     private boolean isRecordingOrPaused() {
         return (
             recordingState == RecordingState.IN_PROGRESS ||
@@ -8140,13 +8289,22 @@ public class HomeFragment extends BaseFragment {
     private void updateServiceWithCurrentSurface(
         @Nullable Surface surfaceToUse
     ) {
-        updateServiceWithCurrentSurface(surfaceToUse, -1, -1);
+        updateServiceWithCurrentSurface(surfaceToUse, -1, -1, false);
     }
 
     private void updateServiceWithCurrentSurface(
         @Nullable Surface surfaceToUse,
         int width,
         int height
+    ) {
+        updateServiceWithCurrentSurface(surfaceToUse, width, height, false);
+    }
+
+    private void updateServiceWithCurrentSurface(
+        @Nullable Surface surfaceToUse,
+        int width,
+        int height,
+        boolean isFullscreenTransition
     ) {
         if (!isAdded() || getContext() == null) {
             Log.w(
@@ -8156,9 +8314,34 @@ public class HomeFragment extends BaseFragment {
             return;
         }
 
-        // Dual camera recording does not use a preview surface from HomeFragment
+        // When dual camera recording is active, send the surface to
+        // DualCameraRecordingService instead of RecordingService.
         if (isDualRecordingActive) {
-            Log.d(TAG, "updateServiceWithCurrentSurface: Skipped — dual recording active");
+            Intent dualIntent = new Intent(getContext(),
+                    com.fadcam.dualcam.service.DualCameraRecordingService.class);
+            dualIntent.setAction(Constants.INTENT_ACTION_CHANGE_SURFACE);
+            if (surfaceToUse != null && surfaceToUse.isValid()) {
+                dualIntent.putExtra("SURFACE", surfaceToUse);
+                if (width > 0 && height > 0) {
+                    dualIntent.putExtra("SURFACE_WIDTH", width);
+                    dualIntent.putExtra("SURFACE_HEIGHT", height);
+                }
+                // Mark as fullscreen transition when exiting fullscreen with valid surface
+                if (isReturningFromFullscreen) {
+                    dualIntent.putExtra("IS_FULLSCREEN_TRANSITION", true);
+                    Log.d(TAG, "Sending VALID surface with FULLSCREEN return flag to DualCam");
+                }
+            } else {
+                dualIntent.putExtra("SURFACE", (Surface) null);
+                if (isFullscreenTransition) {
+                    dualIntent.putExtra("IS_FULLSCREEN_TRANSITION", true);
+                }
+            }
+            Context ctx = getContext();
+            if (ctx != null) {
+                ctx.startService(dualIntent);
+            }
+            Log.d(TAG, "updateServiceWithCurrentSurface: Sent to DualCameraRecordingService");
             return;
         }
 
@@ -8171,6 +8354,11 @@ public class HomeFragment extends BaseFragment {
             if (width > 0 && height > 0) {
                 intent.putExtra("SURFACE_WIDTH", width);
                 intent.putExtra("SURFACE_HEIGHT", height);
+                // Mark as fullscreen transition when returning with valid surface
+                if (isReturningFromFullscreen) {
+                    intent.putExtra("IS_FULLSCREEN_TRANSITION", true);
+                    Log.d(TAG, "Sending VALID surface with FULLSCREEN return flag");
+                }
                 Log.d(
                     TAG,
                     "updateServiceWithCurrentSurface: Sending new VALID surface to RecordingService with dimensions " +
@@ -8179,6 +8367,11 @@ public class HomeFragment extends BaseFragment {
                     height
                 );
             } else {
+                // Mark as fullscreen return if coming back with valid surface but no dimensions yet
+                if (isReturningFromFullscreen) {
+                    intent.putExtra("IS_FULLSCREEN_TRANSITION", true);
+                    Log.d(TAG, "Sending VALID surface with FULLSCREEN return flag (no dimensions)");
+                }
                 Log.d(
                     TAG,
                     "updateServiceWithCurrentSurface: Sending new VALID surface to RecordingService."
@@ -8186,10 +8379,12 @@ public class HomeFragment extends BaseFragment {
             }
         } else {
             intent.putExtra("SURFACE", (Surface) null);
-            Log.d(
-                TAG,
-                "updateServiceWithCurrentSurface: Sending NULL surface to RecordingService (preview disabled or surface invalid/destroyed)."
-            );
+            if (isFullscreenTransition) {
+                intent.putExtra("IS_FULLSCREEN_TRANSITION", true);
+                Log.d(TAG, "updateServiceWithCurrentSurface: Sending NULL surface with FULLSCREEN_TRANSITION flag");
+            } else {
+                Log.d(TAG, "updateServiceWithCurrentSurface: Sending NULL surface to RecordingService (preview disabled or surface invalid/destroyed).");
+            }
         }
 
         // Use requireContext() for starting service if preferred and appropriate for
@@ -8343,7 +8538,7 @@ public class HomeFragment extends BaseFragment {
                         true
                     );
 
-                    areCameraResourcesAvailable = isAvailable;
+                    areCameraResourcesAvailable = isAvailable && hasRequiredRecordingHardware;
                     updateStartButtonAvailability();
 
                     Log.d(

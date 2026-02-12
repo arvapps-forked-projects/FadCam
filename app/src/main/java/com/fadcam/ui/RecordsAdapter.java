@@ -470,79 +470,8 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         }
         // *** END RESTORED Status Badge Logic ***
 
-        // --- 5. Handle Selection Mode Visuals (picker-style check container &
-        // BACKGROUND/TEXT COLOR) ---
-        if (holder.iconCheckContainer != null && holder.checkIcon != null) {
-            if (this.isSelectionModeActive) {
-                holder.iconCheckContainer.setVisibility(View.VISIBLE);
-
-                // Tint the inner check icon to match theme toggle color
-                try {
-                    int tint = resolveThemeColor(context, R.attr.colorToggle);
-                    holder.checkIcon.setImageTintList(ColorStateList.valueOf(tint));
-                } catch (Exception e) {
-                    // Fallback to primary color
-                    holder.checkIcon.setImageTintList(
-                            ColorStateList.valueOf(ContextCompat.getColor(context, R.color.colorPrimary)));
-                }
-
-                if (isCurrentlySelected) {
-                    // Ensure bg visible and animate inner check in
-                    holder.checkIcon.setAlpha(1f);
-                    holder.checkIcon.setScaleX(1f);
-                    holder.checkIcon.setScaleY(1f);
-                    // Highlight background and adjust text color for contrast
-                    if (holder.itemView instanceof CardView && context != null) {
-                        if (isSnowVeilTheme) {
-                            ((CardView) holder.itemView).setCardBackgroundColor(
-                                    ContextCompat.getColor(context, R.color.snowveil_theme_accent));
-                            if (holder.textViewRecord != null)
-                                holder.textViewRecord.setTextColor(Color.BLACK);
-                        } else {
-                            ((CardView) holder.itemView)
-                                    .setCardBackgroundColor(resolveThemeColor(context, R.attr.colorButton));
-                            if (holder.textViewRecord != null)
-                                holder.textViewRecord.setTextColor(Color.WHITE);
-                        }
-                    }
-                } else {
-                    // ensure inner check hidden
-                    holder.checkIcon.setAlpha(0f);
-                    holder.checkIcon.setScaleX(0f);
-                    holder.checkIcon.setScaleY(0f);
-                    // Reset background and text color
-                    if (holder.itemView instanceof CardView && context != null) {
-                        if (isSnowVeilTheme) {
-                            ((CardView) holder.itemView).setCardBackgroundColor(Color.WHITE);
-                            if (holder.textViewRecord != null)
-                                holder.textViewRecord.setTextColor(Color.BLACK);
-                        } else {
-                            ((CardView) holder.itemView)
-                                    .setCardBackgroundColor(ContextCompat.getColor(context, R.color.gray));
-                            if (holder.textViewRecord != null)
-                                holder.textViewRecord.setTextColor(holder.defaultTextColor);
-                        }
-                    }
-                }
-            } else { // Not in selection mode
-                holder.iconCheckContainer.setVisibility(View.GONE);
-                // Reset bg and text color
-                if (holder.itemView instanceof CardView && context != null) {
-                    if (isSnowVeilTheme) {
-                        ((CardView) holder.itemView).setCardBackgroundColor(Color.WHITE);
-                        if (holder.textViewRecord != null)
-                            holder.textViewRecord.setTextColor(Color.BLACK);
-                    } else {
-                        ((CardView) holder.itemView)
-                                .setCardBackgroundColor(ContextCompat.getColor(context, R.color.gray));
-                        if (holder.textViewRecord != null)
-                            holder.textViewRecord.setTextColor(holder.defaultTextColor);
-                    }
-                }
-            }
-        } else {
-            Log.w(TAG, "iconCheckContainer or checkIcon is null in ViewHolder at pos " + position);
-        }
+        // --- 5. Handle Selection Mode Visuals (center check + dim overlay) ---
+        applySelectionVisuals(holder, isCurrentlySelected, false);
 
         // --- 6. Set Enabled State and Listeners ---
         holder.itemView.setEnabled(allowGeneralInteractions); // Click/LongClick allowed if not processing
@@ -725,6 +654,63 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         }
     }
 
+    private void applySelectionVisuals(@NonNull RecordViewHolder holder, boolean isCurrentlySelected, boolean animateCheck) {
+        if (holder.iconCheckContainer == null || holder.checkIcon == null) {
+            return;
+        }
+        float contentAlpha = (isSelectionModeActive && isCurrentlySelected) ? 0.58f : 1f;
+        if (holder.textViewRecord != null) holder.textViewRecord.setAlpha(contentAlpha);
+        if (holder.textViewTimeAgo != null) holder.textViewTimeAgo.setAlpha(contentAlpha);
+        if (holder.textViewFileSize != null) holder.textViewFileSize.setAlpha(contentAlpha);
+        if (holder.textViewFileTime != null) holder.textViewFileTime.setAlpha(contentAlpha);
+        if (holder.textViewSerialNumber != null) holder.textViewSerialNumber.setAlpha(contentAlpha);
+        if (holder.textViewStatusBadge != null) holder.textViewStatusBadge.setAlpha(contentAlpha);
+        if (holder.menuButtonContainer != null) holder.menuButtonContainer.setAlpha(contentAlpha);
+        if (holder.selectionDimOverlay != null) {
+            holder.selectionDimOverlay.setVisibility((isSelectionModeActive && isCurrentlySelected) ? View.VISIBLE : View.GONE);
+        }
+
+        if (!isSelectionModeActive) {
+            holder.iconCheckContainer.setVisibility(View.GONE);
+            holder.checkIcon.setAlpha(0f);
+            holder.checkIcon.setScaleX(0f);
+            holder.checkIcon.setScaleY(0f);
+            return;
+        }
+
+        // Keep card colors stable in selection mode; selected state is shown by dim+center check only.
+        if (holder.itemView instanceof CardView && context != null) {
+            if (isSnowVeilTheme) {
+                ((CardView) holder.itemView).setCardBackgroundColor(Color.WHITE);
+                if (holder.textViewRecord != null) holder.textViewRecord.setTextColor(Color.BLACK);
+            } else {
+                ((CardView) holder.itemView).setCardBackgroundColor(ContextCompat.getColor(context, R.color.gray));
+                if (holder.textViewRecord != null) holder.textViewRecord.setTextColor(holder.defaultTextColor);
+            }
+        }
+
+        if (isCurrentlySelected) {
+            holder.iconCheckContainer.setVisibility(View.VISIBLE);
+            if (animateCheck) {
+                animateCheckIcon(holder.checkIcon, true);
+            } else {
+                holder.checkIcon.setAlpha(1f);
+                holder.checkIcon.setScaleX(1f);
+                holder.checkIcon.setScaleY(1f);
+            }
+        } else {
+            if (animateCheck) {
+                animateCheckIcon(holder.checkIcon, false);
+                holder.checkIcon.postDelayed(() -> holder.iconCheckContainer.setVisibility(View.GONE), 170);
+            } else {
+                holder.checkIcon.setAlpha(0f);
+                holder.checkIcon.setScaleX(0f);
+                holder.checkIcon.setScaleY(0f);
+                holder.iconCheckContainer.setVisibility(View.GONE);
+            }
+        }
+    }
+
     // Update the setThumbnail method to consider scrolling state with caching
     private void setThumbnail(RecordViewHolder holder, Uri videoUri) {
         if (holder.imageViewThumbnail == null || context == null)
@@ -852,12 +838,30 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
             }
 
             if (payloads.contains("SELECTION_TOGGLE")) {
-                // Animate the inner check in/out based on current selection state
                 if (position < records.size()) {
                     VideoItem videoItem = records.get(position);
                     boolean isCurrentlySelected = this.currentSelectedUris.contains(videoItem.uri);
-                    // animate using unified bounce+fade helper
-                    animateCheckIcon(holder.checkIcon, isCurrentlySelected);
+                    applySelectionVisuals(holder, isCurrentlySelected, true);
+                }
+                return;
+            }
+
+            if (payloads.contains("SELECTION_MODE")) {
+                if (position < records.size()) {
+                    VideoItem videoItem = records.get(position);
+                    boolean isCurrentlySelected = this.currentSelectedUris.contains(videoItem.uri);
+                    applySelectionVisuals(holder, isCurrentlySelected, false);
+                    boolean isProcessing = this.currentlyProcessingUris.contains(videoItem.uri);
+                    boolean allowGeneralInteractions = !isProcessing;
+                    boolean allowMenuClick = !isProcessing && !this.isSelectionModeActive;
+                    holder.itemView.setEnabled(allowGeneralInteractions);
+                    if (holder.menuButtonContainer != null) {
+                        holder.menuButtonContainer.setEnabled(allowMenuClick);
+                        holder.menuButtonContainer.setClickable(allowMenuClick);
+                    }
+                    if (holder.menuButton != null) {
+                        holder.menuButton.setAlpha(allowMenuClick ? 1.0f : 0.4f);
+                    }
                 }
                 return;
             }
@@ -2127,23 +2131,51 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         // Get file path for FFprobe - try multiple approaches for content:// URIs
         String filePath = getFFprobePathForUri(videoUri);
         
-        // Use FFprobeKit to get accurate duration
-        try {
-            com.arthenica.ffmpegkit.MediaInformationSession session = 
-                com.arthenica.ffmpegkit.FFprobeKit.getMediaInformation(filePath);
-            com.arthenica.ffmpegkit.MediaInformation info = session.getMediaInformation();
-            
-            if (info != null) {
-                String durationStr = info.getDuration();
-                if (durationStr != null) {
-                    double durationSec = Double.parseDouble(durationStr);
-                    long durationMs = (long) (durationSec * 1000);
-                    Log.d(TAG, "Duration from FFprobe: " + durationMs + "ms");
-                    return durationMs;
+        // Use FFprobeKit to get accurate duration (direct file path)
+        if (!filePath.startsWith("saf:")) {
+            try {
+                com.arthenica.ffmpegkit.MediaInformationSession session = 
+                    com.arthenica.ffmpegkit.FFprobeKit.getMediaInformation(filePath);
+                com.arthenica.ffmpegkit.MediaInformation info = session.getMediaInformation();
+                
+                if (info != null) {
+                    String durationStr = info.getDuration();
+                    if (durationStr != null) {
+                        double durationSec = Double.parseDouble(durationStr);
+                        long durationMs = (long) (durationSec * 1000);
+                        Log.d(TAG, "Duration from FFprobe (path): " + durationMs + "ms");
+                        return durationMs;
+                    }
                 }
+            } catch (Exception e) {
+                Log.e(TAG, "Error getting duration from FFprobe for path: " + filePath, e);
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting duration from FFprobe for URI: " + videoUri, e);
+        }
+
+        // For content:// URIs where path reconstruction failed, use FD-based FFprobe
+        if ("content".equals(videoUri.getScheme())) {
+            try {
+                ParcelFileDescriptor pfd = context.getContentResolver()
+                        .openFileDescriptor(videoUri, "r");
+                if (pfd != null) {
+                    try {
+                        String fdPath = "/proc/self/fd/" + pfd.getFd();
+                        com.arthenica.ffmpegkit.MediaInformationSession session =
+                                com.arthenica.ffmpegkit.FFprobeKit.getMediaInformation(fdPath);
+                        com.arthenica.ffmpegkit.MediaInformation info = session.getMediaInformation();
+                        if (info != null && info.getDuration() != null) {
+                            double durationSec = Double.parseDouble(info.getDuration());
+                            long durationMs = (long) (durationSec * 1000);
+                            Log.d(TAG, "Duration from FFprobe (fd): " + durationMs + "ms");
+                            return durationMs;
+                        }
+                    } finally {
+                        pfd.close();
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "FFprobe FD-based duration failed for: " + videoUri, e);
+            }
         }
         
         // Fallback: Use MediaMetadataRetriever (proper Android API for content:// URIs)
@@ -2174,7 +2206,8 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
     
     /**
      * Gets the appropriate file path for FFprobeKit.
-     * For content:// URIs, tries reconstructed path first, then falls back to SAF protocol.
+     * For content:// URIs, tries reconstructed path on ALL storage volumes
+     * (internal + SD card), then falls back to SAF protocol.
      */
     private String getFFprobePathForUri(Uri videoUri) {
         if ("file".equals(videoUri.getScheme()) && videoUri.getPath() != null) {
@@ -2184,16 +2217,14 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         // For content:// URIs, try to get actual file path first (more reliable)
         String path = videoUri.getPath();
         if (path != null && path.contains(":")) {
-            // SAF URIs often have format /tree/primary:FadCam/document/primary:FadCam/file.mp4
-            // or /document/primary:Download/FadCam/file.mp4
             int lastColonIndex = path.lastIndexOf(':');
             if (lastColonIndex >= 0 && lastColonIndex < path.length() - 1) {
                 String relativePath = path.substring(lastColonIndex + 1);
-                String reconstructedPath = "/storage/emulated/0/" + relativePath;
-                java.io.File file = new java.io.File(reconstructedPath);
-                if (file.exists() && file.canRead()) {
-                    Log.d(TAG, "Using reconstructed file path for FFprobe: " + reconstructedPath);
-                    return reconstructedPath;
+                // Try all mounted storage volumes (internal + SD cards)
+                String resolved = resolveRelativePathOnVolumes(relativePath);
+                if (resolved != null) {
+                    Log.d(TAG, "Using reconstructed file path for FFprobe: " + resolved);
+                    return resolved;
                 }
             }
         }
@@ -2201,6 +2232,36 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         // Fall back to SAF protocol
         Log.d(TAG, "Using SAF protocol for FFprobe: saf:" + videoUri.toString());
         return "saf:" + videoUri.toString();
+    }
+
+    /**
+     * Resolves a relative path against all mounted storage volumes.
+     * Checks internal (/storage/emulated/0/) and any SD cards (/storage/XXXX-XXXX/).
+     */
+    private String resolveRelativePathOnVolumes(String relativePath) {
+        if (context == null || relativePath == null) return null;
+        try {
+            java.io.File[] externalDirs = context.getExternalFilesDirs(null);
+            if (externalDirs != null) {
+                for (java.io.File dir : externalDirs) {
+                    if (dir == null) continue;
+                    // externalDirs paths look like: /storage/XXXX-XXXX/Android/data/com.fadcam/files
+                    String dirPath = dir.getAbsolutePath();
+                    int androidIdx = dirPath.indexOf("/Android/");
+                    if (androidIdx > 0) {
+                        String volumeRoot = dirPath.substring(0, androidIdx + 1);
+                        String reconstructed = volumeRoot + relativePath;
+                        java.io.File file = new java.io.File(reconstructed);
+                        if (file.exists() && file.canRead()) {
+                            return reconstructed;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error resolving storage volumes: " + e.getMessage());
+        }
+        return null;
     }
 
     // Get file name from URI (Helper) - Crucial for Save to Gallery/Rename default
@@ -2253,6 +2314,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         TextView textViewStatusBadge; // *** ADDED: Reference for the single status badge ***
         ImageView menuWarningDot; // *** ADDED: Reference for the warning dot ***
         FrameLayout menuButtonContainer; // *** ADDED: Reference to the container holding the button and dot ***
+        View selectionDimOverlay;
 
         View processingScrim;
         ProgressBar processingSpinner;
@@ -2277,6 +2339,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
             menuButtonContainer = itemView.findViewById(R.id.menu_button_container); // *** Find the container ***
             textViewStatusBadge = itemView.findViewById(R.id.text_view_status_badge); // *** Find the new single badge
                                                                                       // ***
+            selectionDimOverlay = itemView.findViewById(R.id.selection_dim_overlay);
 
             processingScrim = itemView.findViewById(R.id.processing_scrim);
             processingSpinner = itemView.findViewById(R.id.processing_spinner);
@@ -2306,17 +2369,30 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
     @SuppressLint("NotifyDataSetChanged")
     public void setSelectionModeActive(boolean isActive, @NonNull List<Uri> currentSelection) {
         boolean modeChanged = this.isSelectionModeActive != isActive;
-        boolean selectionChanged = !this.currentSelectedUris.equals(currentSelection); // Check if selection list
-                                                                                       // differs
+        List<Uri> previousSelection = new ArrayList<>(this.currentSelectedUris);
+        boolean selectionChanged = !previousSelection.equals(currentSelection);
 
         this.isSelectionModeActive = isActive;
         this.currentSelectedUris = new ArrayList<>(currentSelection); // Update internal copy
 
-        // If mode changed OR selection changed, refresh visuals
-        if (modeChanged || selectionChanged) {
-            Log.d(TAG, "setSelectionModeActive: Mode=" + isActive + ", SelCount=" + currentSelectedUris.size()
-                    + ". Triggering notifyDataSetChanged.");
-            notifyDataSetChanged(); // Full refresh easiest way to update all visuals
+        if (modeChanged) {
+            Log.d(TAG, "setSelectionModeActive: mode changed, payload refresh");
+            notifyItemRangeChanged(0, getItemCount(), "SELECTION_MODE");
+        }
+
+        if (selectionChanged) {
+            java.util.Set<Uri> changed = new java.util.HashSet<>(previousSelection);
+            changed.addAll(currentSelection);
+            for (Uri uri : changed) {
+                boolean before = previousSelection.contains(uri);
+                boolean after = currentSelection.contains(uri);
+                if (before != after) {
+                    int pos = findPositionByUri(uri);
+                    if (pos != -1) {
+                        notifyItemChanged(pos, "SELECTION_TOGGLE");
+                    }
+                }
+            }
         } else {
             Log.d(TAG, "setSelectionModeActive: Mode and selection unchanged, no refresh needed.");
         }
@@ -2420,6 +2496,9 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         }
         if (holder.iconCheckContainer != null) {
             holder.iconCheckContainer.setVisibility(View.GONE);
+        }
+        if (holder.selectionDimOverlay != null) {
+            holder.selectionDimOverlay.setVisibility(View.GONE);
         }
 
         // Step 6: Apply professional shimmer effect to the entire card

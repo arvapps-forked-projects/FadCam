@@ -38,6 +38,8 @@ import android.widget.CheckBox;
 import android.widget.TextView; // Import TextView
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog; // Import AlertDialog
 import android.widget.ProgressBar;
 // Import Toolbar
@@ -46,6 +48,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.documentfile.provider.DocumentFile;
+import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -55,13 +58,19 @@ import com.fadcam.MainActivity;
 import com.fadcam.R;
 import com.fadcam.SharedPreferencesManager; // Import your manager
 import com.fadcam.Utils;
+import com.fadcam.utils.RecordingStoragePaths;
+import com.fadcam.ui.picker.OptionItem;
+import com.fadcam.ui.picker.PickerBottomSheetFragment;
 // Import the new VideoItem class
 // Ensure adapter import is correct
 import com.fadcam.utils.TrashManager; // <<< ADD IMPORT FOR TrashManager
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 
 // Add AppLock imports
 import com.guardanis.applock.AppLock;
@@ -200,17 +209,11 @@ public class RecordsFragment extends BaseFragment implements
                     recordsAdapter.setSkeletonMode(false);
                 }
 
-                // Replace data in all collections
+                // Replace source data, then apply active filter to visible list.
                 allLoadedItems.clear();
-                allLoadedItems.addAll(actualItems);
-                videoItems.clear();
-                videoItems.addAll(actualItems);
-
-                // CRITICAL FIX: Update adapter's internal records list
-                if (recordsAdapter != null) {
-                    recordsAdapter.updateRecords(actualItems);
-                    Log.d(TAG, "Adapter updated with " + actualItems.size() + " videos");
-                }
+                allLoadedItems.addAll(normalizeVideoCategories(actualItems));
+                applyActiveFilterToUi();
+                Log.d(TAG, "Applied active filter to " + actualItems.size() + " loaded videos");
 
                 // Update UI visibility
                 updateUiVisibility();
@@ -302,7 +305,7 @@ public class RecordsFragment extends BaseFragment implements
     private LinearLayout emptyStateContainer; // Add field for the empty state layout
     private RecordsAdapter recordsAdapter;
     private boolean isGridView = true;
-    private FloatingActionButton fabDeleteSelected;
+    private ExtendedFloatingActionButton fabDeleteSelected;
     private FloatingActionButton fabScrollNavigation; // Navigation FAB for scroll to top/bottom
     private boolean isScrollingDown = true; // Track scroll direction for FAB icon
     private ObjectAnimator currentRotationAnimator; // Smooth rotation animation for FAB icon
@@ -324,6 +327,25 @@ public class RecordsFragment extends BaseFragment implements
     private View selectAllContainer;
     private android.widget.ImageView selectAllCheck;
     private CharSequence originalToolbarTitle;
+    private Chip chipFilterAll;
+    private Chip chipFilterCamera;
+    private Chip chipFilterDual;
+    private Chip chipFilterScreen;
+    private Chip chipFilterFaditor;
+    private Chip chipFilterStream;
+    private ChipGroup chipGroupRecordsFilter;
+    private TextView filterHelperText;
+    private TextView filterChecklistButton;
+    private View selectionActionsRow;
+    private TextView btnActionSelectAll;
+    private TextView btnActionBatchSave;
+    private TextView btnActionBatchFaditor;
+    private TextView btnActionBatchDelete;
+    private VideoItem.Category activeFilter = VideoItem.Category.ALL;
+    private ActivityResultLauncher<Uri> customExportTreePickerLauncher;
+    private List<Uri> pendingCustomExportUris = new ArrayList<>();
+    private BroadcastReceiver batchMediaCompletedReceiver;
+    private boolean isBatchMediaReceiverRegistered = false;
 
     // --- Selection State ---
     private boolean isInSelectionMode = false;
@@ -479,6 +501,7 @@ public class RecordsFragment extends BaseFragment implements
         registerStorageLocationChangedReceiver();
         registerProcessingStateReceivers();
         registerSegmentCompleteReceiver();
+        registerBatchMediaCompletedReceiver();
     }
 
     // *** Unregister in onStop ***
@@ -489,6 +512,43 @@ public class RecordsFragment extends BaseFragment implements
         unregisterStorageLocationChangedReceiver();
         unregisterProcessingStateReceivers();
         unregisterSegmentCompleteReceiver();
+        unregisterBatchMediaCompletedReceiver();
+    }
+
+    private void registerBatchMediaCompletedReceiver() {
+        if (isBatchMediaReceiverRegistered || getContext() == null) return;
+        if (batchMediaCompletedReceiver == null) {
+            batchMediaCompletedReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (!isAdded() || intent == null) return;
+                    if (!Constants.ACTION_BATCH_MEDIA_COMPLETED.equals(intent.getAction())) return;
+                    String message = intent.getStringExtra(Constants.EXTRA_BATCH_COMPLETED_MESSAGE);
+                    if (message == null || message.trim().isEmpty()) {
+                        message = getString(R.string.records_batch_completed);
+                    }
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                    com.fadcam.utils.VideoSessionCache.invalidateOnNextAccess(sharedPreferencesManager);
+                    loadRecordsList();
+                }
+            };
+        }
+        ContextCompat.registerReceiver(
+                requireContext(),
+                batchMediaCompletedReceiver,
+                new IntentFilter(Constants.ACTION_BATCH_MEDIA_COMPLETED),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+        );
+        isBatchMediaReceiverRegistered = true;
+    }
+
+    private void unregisterBatchMediaCompletedReceiver() {
+        if (!isBatchMediaReceiverRegistered || batchMediaCompletedReceiver == null || getContext() == null) return;
+        try {
+            requireContext().unregisterReceiver(batchMediaCompletedReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
+        isBatchMediaReceiverRegistered = false;
     }
 
     // ** NEW: Method to register the storage location change receiver **
@@ -582,6 +642,12 @@ public class RecordsFragment extends BaseFragment implements
                                     break;
                                 }
                             }
+                            for (int i = allLoadedItems.size() - 1; i >= 0; i--) {
+                                if (allLoadedItems.get(i).uri.equals(originalTempSafUri)) {
+                                    allLoadedItems.remove(i);
+                                    break;
+                                }
+                            }
 
                             if (success && finalUriString != null) {
                                 Uri finalUri = Uri.parse(finalUriString);
@@ -595,6 +661,7 @@ public class RecordsFragment extends BaseFragment implements
                                     newItem.isTemporary = false;
                                     newItem.isNew = true;
                                     videoItems.add(0, newItem); // Add to top, assuming latest
+                                    allLoadedItems.add(0, newItem);
                                     Log.d(TAG, "Added final SAF VideoItem: " + finalUriString);
                                 } else {
                                     Log.w(TAG, "Final SAF DocumentFile does not exist or is null: " + finalUriString);
@@ -608,11 +675,9 @@ public class RecordsFragment extends BaseFragment implements
                             }
 
                             if (foundAndRemoved || (success && finalUriString != null)) {
-                                // Sort and update UI only if changes were made
-                                performVideoSort(); // Re-sort the list
-                                if (recordsAdapter != null) {
-                                    recordsAdapter.notifyDataSetChanged(); // Consider more specific notifications
-                                }
+                                // Sort source list and re-apply current filter.
+                                sortItems(allLoadedItems, currentSortOption);
+                                applyActiveFilterToUi();
                                 updateUiVisibility();
                             }
                             return; // Handled SAF replacement case
@@ -713,6 +778,26 @@ public class RecordsFragment extends BaseFragment implements
             executorService = Executors.newSingleThreadExecutor();
             Log.d(TAG, "ExecutorService initialized in onCreate.");
         }
+
+        if (customExportTreePickerLauncher == null) {
+            customExportTreePickerLauncher = registerForActivityResult(
+                    new ActivityResultContracts.OpenDocumentTree(),
+                    uri -> {
+                        if (uri == null) {
+                            pendingCustomExportUris.clear();
+                            return;
+                        }
+                        if (getContext() == null) return;
+                        try {
+                            final int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                            requireContext().getContentResolver().takePersistableUriPermission(uri, flags);
+                        } catch (Exception ignored) {
+                        }
+                        exportSelectedToCustomTree(uri);
+                    });
+        }
+
         // --- Back Press Handling ---
         requireActivity().getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -755,6 +840,20 @@ public class RecordsFragment extends BaseFragment implements
         closeButton = view.findViewById(R.id.action_close);
         selectAllContainer = view.findViewById(R.id.action_select_all_container);
         selectAllCheck = view.findViewById(R.id.action_select_all_check);
+        chipFilterAll = view.findViewById(R.id.chip_filter_all);
+        chipFilterCamera = view.findViewById(R.id.chip_filter_camera);
+        chipFilterDual = view.findViewById(R.id.chip_filter_dual);
+        chipFilterScreen = view.findViewById(R.id.chip_filter_screen);
+        chipFilterFaditor = view.findViewById(R.id.chip_filter_faditor);
+        chipFilterStream = view.findViewById(R.id.chip_filter_stream);
+        chipGroupRecordsFilter = view.findViewById(R.id.chip_group_records_filter);
+        filterHelperText = view.findViewById(R.id.filter_helper_text);
+        filterChecklistButton = view.findViewById(R.id.btn_filter_checklist);
+        selectionActionsRow = view.findViewById(R.id.selection_actions_row);
+        btnActionSelectAll = view.findViewById(R.id.btn_action_select_all);
+        btnActionBatchSave = view.findViewById(R.id.btn_action_batch_save);
+        btnActionBatchFaditor = view.findViewById(R.id.btn_action_batch_faditor);
+        btnActionBatchDelete = view.findViewById(R.id.btn_action_batch_delete);
 
         // Setup menu button click listener
         if (menuButton != null) {
@@ -762,6 +861,9 @@ public class RecordsFragment extends BaseFragment implements
         }
         if (closeButton != null) {
             closeButton.setOnClickListener(v -> exitSelectionMode());
+        }
+        if (selectAllContainer != null) {
+            selectAllContainer.setVisibility(View.GONE);
         }
         if (selectAllContainer != null && selectAllCheck != null) {
             selectAllContainer.setOnClickListener(v -> {
@@ -848,6 +950,8 @@ public class RecordsFragment extends BaseFragment implements
                 updateUiForSelectionMode();
             });
         }
+        setupFilterUi();
+        setupSelectionActionsUi();
 
         originalToolbarTitle = getString(R.string.records_title);
 
@@ -942,9 +1046,11 @@ public class RecordsFragment extends BaseFragment implements
             loadRecordsList();
         } else {
             Log.d(TAG, "onViewCreated: Existing data found (" + videoItems.size() + " items), updating UI visibility.");
-            // If data exists (e.g., fragment recreated), update adapter & UI
-            if (recordsAdapter != null)
-                recordsAdapter.updateRecords(videoItems); // Make sure adapter has the data
+            // If data exists (e.g., fragment recreated), ensure source list + active filter are applied.
+            if (allLoadedItems.isEmpty()) {
+                allLoadedItems.addAll(videoItems);
+            }
+            applyActiveFilterToUi();
             updateUiVisibility();
         }
         // unlocked (session-based) -----
@@ -962,11 +1068,11 @@ public class RecordsFragment extends BaseFragment implements
         // ?attr/colorTopBar in XML
         // No need to set background color programmatically
         // Apply theme to FABs
-        int colorButton = resolveThemeColor(R.attr.colorButton);
+        int colorButton = resolveThemeColor(R.attr.colorToggle);
         if (fabDeleteSelected != null) {
             fabDeleteSelected.setBackgroundTintList(android.content.res.ColorStateList.valueOf(colorButton));
-            fabDeleteSelected
-                    .setImageTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE));
+            fabDeleteSelected.setIconTint(android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE));
+            fabDeleteSelected.setTextColor(android.graphics.Color.WHITE);
         }
         // RecordsFragment -----
     } // End onViewCreated
@@ -1327,7 +1433,7 @@ public class RecordsFragment extends BaseFragment implements
                     Log.e(TAG, "fabDeleteSelected clicked but fragment not ready!");
                     return;
                 }
-                confirmDeleteSelected(); // Call the confirmation dialog method
+                showBatchActionsSheet();
             });
             Log.d(TAG, "FAB Delete listener set.");
         } else {
@@ -1386,6 +1492,16 @@ public class RecordsFragment extends BaseFragment implements
     private final List<VideoItem> cachedSafItems = new ArrayList<>(); // Cache SAF items
     private final List<VideoItem> cachedTempItems = new ArrayList<>(); // Cache temp items
 
+    private static final class SafCandidate {
+        final DocumentFile file;
+        final VideoItem.Category category;
+
+        SafCandidate(@NonNull DocumentFile file, @NonNull VideoItem.Category category) {
+            this.file = file;
+            this.category = category;
+        }
+    }
+
     // --- Listing Helpers ---
 
     // Helper to combine lists, avoiding duplicates
@@ -1415,13 +1531,21 @@ public class RecordsFragment extends BaseFragment implements
             return items;
         }
         
-        // Scan FadCam directory
-        File fadCamDir = new File(recordsDir, Constants.RECORDING_DIRECTORY);
-        items.addAll(scanDirectory(fadCamDir, "FadCam"));
-        
-        // Scan FadRec directory
-        File fadRecDir = new File(recordsDir, Constants.RECORDING_DIRECTORY_FADREC);
-        items.addAll(scanDirectory(fadRecDir, "FadRec"));
+        File baseDir = new File(recordsDir, Constants.RECORDING_DIRECTORY);
+        if (!baseDir.exists() || !baseDir.isDirectory()) {
+            Log.i(TAG, "LOG_GET_INTERNAL: Base directory does not exist yet: " + baseDir.getAbsolutePath());
+            return items;
+        }
+
+        // Preferred folder-based categorization.
+        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_CAMERA), VideoItem.Category.CAMERA);
+        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_DUAL), VideoItem.Category.DUAL);
+        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_SCREEN), VideoItem.Category.SCREEN);
+        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_FADITOR), VideoItem.Category.FADITOR);
+        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_STREAM), VideoItem.Category.STREAM);
+
+        // Backward compatibility: include legacy root-level files under FadCam.
+        scanLegacyRootInternal(items, baseDir);
         
         Log.i(TAG, "LOG_GET_INTERNAL: Found " + items.size() + " total internal records. END.");
         return items;
@@ -1430,45 +1554,59 @@ public class RecordsFragment extends BaseFragment implements
     /**
      * Helper method to scan a directory for video files.
      */
-    private List<VideoItem> scanDirectory(File directory, String dirName) {
-        List<VideoItem> items = new ArrayList<>();
-        Log.d(TAG, "LOG_GET_INTERNAL: Checking directory: " + directory.getAbsolutePath());
-
-        if (directory.exists() && directory.isDirectory()) {
-            Log.d(TAG, "LOG_GET_INTERNAL: Directory exists. Listing files.");
-            File[] files = directory.listFiles();
-            if (files != null) {
-                Log.d(TAG, "LOG_GET_INTERNAL: Found " + files.length + " files/dirs in " + dirName + " storage.");
-                for (File file : files) {
-                    if (file.isFile() && file.getName().endsWith("." + Constants.RECORDING_FILE_EXTENSION)
-                            && !file.getName().startsWith("temp_")) {
-                        long lastModifiedMeta = file.lastModified();
-                        long timestampFromFile = Utils.parseTimestampFromFilename(file.getName());
-                        long finalTimestamp = lastModifiedMeta;
-
-                        if (lastModifiedMeta <= 0 && timestampFromFile > 0) {
-                            finalTimestamp = timestampFromFile;
-                        } else if (lastModifiedMeta <= 0 && timestampFromFile <= 0) {
-                            finalTimestamp = System.currentTimeMillis();
-                        }
-                        Uri uri = Uri.fromFile(file);
-                        VideoItem newItem = new VideoItem(uri, file.getName(), file.length(), finalTimestamp);
-                        newItem.isTemporary = false;
-                        newItem.isNew = Utils.isVideoConsideredNew(finalTimestamp);
-                        items.add(newItem);
-                        Log.v(TAG, "LOG_GET_INTERNAL: Added internal item: " + file.getName());
-                    } else {
-                        Log.v(TAG, "LOG_GET_INTERNAL: Skipped item (not a valid video file or is temp): "
-                                + file.getName());
-                    }
-                }
-            } else {
-                Log.w(TAG, "LOG_GET_INTERNAL: Directory listFiles returned null for " + dirName);
-            }
-        } else {
-            Log.i(TAG, "LOG_GET_INTERNAL: Directory does not exist yet: " + directory.getAbsolutePath());
+    private void scanCategoryDirectoryInternal(List<VideoItem> out, File directory, VideoItem.Category category) {
+        Log.d(TAG, "LOG_GET_INTERNAL: Checking category dir: " + directory.getAbsolutePath() + " (" + category + ")");
+        if (!directory.exists() || !directory.isDirectory()) {
+            return;
         }
-        return items;
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (!file.isFile()) {
+                continue;
+            }
+            String name = file.getName();
+            if (!isSupportedVideoFile(name) || name.startsWith("temp_")) {
+                continue;
+            }
+            long lastModifiedMeta = file.lastModified();
+            long timestampFromFile = Utils.parseTimestampFromFilename(name);
+            long finalTimestamp = lastModifiedMeta > 0
+                    ? lastModifiedMeta
+                    : (timestampFromFile > 0 ? timestampFromFile : System.currentTimeMillis());
+            VideoItem newItem = new VideoItem(Uri.fromFile(file), name, file.length(), finalTimestamp, category);
+            newItem.isTemporary = false;
+            newItem.isNew = Utils.isVideoConsideredNew(finalTimestamp);
+            out.add(newItem);
+        }
+    }
+
+    private void scanLegacyRootInternal(List<VideoItem> out, File baseDir) {
+        File[] files = baseDir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (!file.isFile()) {
+                continue;
+            }
+            String name = file.getName();
+            if (!isSupportedVideoFile(name) || name.startsWith("temp_")) {
+                continue;
+            }
+            VideoItem.Category inferred = inferCategoryFromLegacyName(name);
+            long lastModifiedMeta = file.lastModified();
+            long timestampFromFile = Utils.parseTimestampFromFilename(name);
+            long finalTimestamp = lastModifiedMeta > 0
+                    ? lastModifiedMeta
+                    : (timestampFromFile > 0 ? timestampFromFile : System.currentTimeMillis());
+            VideoItem item = new VideoItem(Uri.fromFile(file), name, file.length(), finalTimestamp, inferred);
+            item.isTemporary = false;
+            item.isNew = Utils.isVideoConsideredNew(finalTimestamp);
+            out.add(item);
+        }
     }
 
     private List<VideoItem> getSafRecordsList(Uri treeUri) {
@@ -1493,89 +1631,39 @@ public class RecordsFragment extends BaseFragment implements
         }
         Log.d(TAG, "LOG_GET_SAF: SAF Directory " + targetDir.getName() + " is accessible. Listing files.");
 
-        DocumentFile[] files = targetDir.listFiles();
-        Log.d(TAG, "LOG_GET_SAF: Found " + files.length + " files/dirs in SAF location.");
+        List<SafCandidate> bucketedFiles = new ArrayList<>();
+        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_CAMERA, VideoItem.Category.CAMERA);
+        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_DUAL, VideoItem.Category.DUAL);
+        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_SCREEN, VideoItem.Category.SCREEN);
+        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_FADITOR, VideoItem.Category.FADITOR);
+        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_STREAM, VideoItem.Category.STREAM);
 
-        // Progressive processing: process files in chunks to avoid blocking
-        final int CHUNK_SIZE = 10; // Process 10 files at a time
-        int totalFiles = files.length;
-
-        for (int i = 0; i < totalFiles; i += CHUNK_SIZE) {
-            int endIndex = Math.min(i + CHUNK_SIZE, totalFiles);
-
-            // Process chunk
-            for (int j = i; j < endIndex; j++) {
-                DocumentFile docFile = files[j];
-                if (docFile == null || !docFile.isFile()) {
-                    Log.d(TAG, "LOG_GET_SAF: Skipped item (not a file or null): "
-                            + (docFile != null ? docFile.getName() : "null"));
+        // Backward compatibility: include root files and infer category by filename prefix.
+        DocumentFile[] rootFiles = targetDir.listFiles();
+        if (rootFiles != null) {
+            for (DocumentFile rootFile : rootFiles) {
+                if (rootFile == null || !rootFile.isFile()) {
                     continue;
                 }
-
-                String fileName = docFile.getName();
-                String mimeType = docFile.getType();
-
-                if (fileName != null && mimeType != null && mimeType.startsWith("video/")) {
-                    if (fileName.endsWith(Constants.RECORDING_FILE_EXTENSION)) {
-                        if (fileName.startsWith("temp_")) {
-                            Log.d(TAG, "LOG_GET_SAF: Found temporary SAF video: " + fileName);
-                            VideoItem tempVideoItem = new VideoItem(
-                                    docFile.getUri(),
-                                    fileName,
-                                    docFile.length(),
-                                    docFile.lastModified());
-                            tempVideoItem.isTemporary = true;
-                            tempVideoItem.isNew = false;
-                            // Check if this temp file is currently being processed
-                            if (currentlyProcessingUris.contains(docFile.getUri())) {
-                                tempVideoItem.isProcessingUri = true;
-                                Log.d(TAG,
-                                        "LOG_GET_SAF: Temporary SAF video " + fileName + " is marked as processing.");
-                            }
-                            safVideoItems.add(tempVideoItem);
-                        } else if (fileName.startsWith(Constants.RECORDING_DIRECTORY + "_")) {
-                            Log.d(TAG, "LOG_GET_SAF: Added SAF item: " + fileName);
-                            VideoItem newItem = new VideoItem(
-                                    docFile.getUri(),
-                                    fileName,
-                                    docFile.length(),
-                                    docFile.lastModified());
-                            newItem.isTemporary = false;
-                            newItem.isNew = Utils.isVideoConsideredNew(docFile.lastModified());
-                            safVideoItems.add(newItem);
-                        } else {
-                            // Log other video files that don't match temp or standard FadCam prefix but are
-                            // video type
-                            Log.d(TAG, "LOG_GET_SAF: Added OTHER video item (non-FadCam, non-temp): " + fileName);
-                            VideoItem newItem = new VideoItem(
-                                    docFile.getUri(),
-                                    fileName,
-                                    docFile.length(),
-                                    docFile.lastModified());
-                            newItem.isTemporary = false;
-                            newItem.isNew = Utils.isVideoConsideredNew(docFile.lastModified());
-                            safVideoItems.add(newItem);
-                        }
-                    } else {
-                        Log.d(TAG, "LOG_GET_SAF: Skipped item (not a video file with correct extension): " + fileName
-                                + " | type: " + mimeType);
-                    }
-                } else {
-                    Log.d(TAG, "LOG_GET_SAF: Skipped item (not a valid video file or is temp): " + fileName
-                            + " | isFile: " + docFile.isFile() + " | type: " + mimeType);
-                }
+                bucketedFiles.add(new SafCandidate(rootFile, VideoItem.Category.UNKNOWN));
             }
+        }
 
-            // Progressive callback: update UI with current progress
+        final int CHUNK_SIZE = 12;
+        int totalFiles = bucketedFiles.size();
+        for (int i = 0; i < totalFiles; i += CHUNK_SIZE) {
+            int endIndex = Math.min(i + CHUNK_SIZE, totalFiles);
+            for (int j = i; j < endIndex; j++) {
+                SafCandidate candidate = bucketedFiles.get(j);
+                addSafVideoItem(safVideoItems, candidate.file, candidate.category);
+            }
             if (callback != null && !safVideoItems.isEmpty()) {
-                int progress = Math.round(((float) endIndex / totalFiles) * 100);
+                int progress = totalFiles == 0 ? 100 : Math.round(((float) endIndex / totalFiles) * 100);
                 callback.onProgress(new ArrayList<>(safVideoItems), progress, endIndex < totalFiles);
             }
-
-            // Small delay between chunks to prevent overwhelming the system
             if (endIndex < totalFiles) {
                 try {
-                    Thread.sleep(10); // 10ms pause between chunks
+                    Thread.sleep(10);
                 } catch (InterruptedException e) {
                     Log.w(TAG, "LOG_GET_SAF: Progressive loading interrupted");
                     break;
@@ -1844,7 +1932,10 @@ public class RecordsFragment extends BaseFragment implements
         if (isInSelectionMode) {
             int count = selectedUris.size();
             titleText.setText(count > 0 ? count + " selected" : "Select items");
-            fabDeleteSelected.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+            showBatchFabAnimated();
+            if (filterChecklistButton != null) {
+                filterChecklistButton.setTextColor(resolveThemeColor(R.attr.colorToggle));
+            }
             // FAB removed
             // Show left-side close button and hide more-options
             if (closeButton != null) {
@@ -1855,24 +1946,15 @@ public class RecordsFragment extends BaseFragment implements
             if (menuButton != null) {
                 menuButton.setVisibility(View.GONE);
             }
-            if (selectAllContainer != null && selectAllCheck != null) {
-                selectAllContainer.setVisibility(View.VISIBLE);
-                boolean allSelected = !videoItems.isEmpty() && selectedUris.size() == videoItems.size();
-                int tint = allSelected ? resolveThemeColor(R.attr.colorToggle) : android.graphics.Color.WHITE;
-                selectAllCheck.setImageTintList(android.content.res.ColorStateList.valueOf(tint));
-                if (allSelected) {
-                    selectAllCheck.setScaleX(1f);
-                    selectAllCheck.setScaleY(1f);
-                    selectAllCheck.setAlpha(1f);
-                } else {
-                    selectAllCheck.setScaleX(0f);
-                    selectAllCheck.setScaleY(0f);
-                    selectAllCheck.setAlpha(0f);
-                }
+            if (selectAllContainer != null) {
+                selectAllContainer.setVisibility(View.GONE);
             }
         } else {
             titleText.setText(originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title));
-            fabDeleteSelected.setVisibility(View.GONE);
+            hideBatchFabAnimated();
+            if (filterChecklistButton != null) {
+                filterChecklistButton.setTextColor(0xFF666666);
+            }
             // FAB removed
             // Restore more-options icon and hide close button
             if (menuButton != null) {
@@ -1884,16 +1966,728 @@ public class RecordsFragment extends BaseFragment implements
             if (closeButton != null) {
                 closeButton.setVisibility(View.GONE);
             }
-            if (selectAllContainer != null && selectAllCheck != null) {
+            if (selectAllContainer != null) {
                 selectAllContainer.setVisibility(View.GONE);
-                selectAllCheck
-                        .setImageTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE));
             }
         }
+        updateSelectionActionRow();
         // Refresh the options menu (to show/hide "More Options")
         if (getActivity() != null) {
             getActivity().invalidateOptionsMenu();
         }
+    }
+
+    private void showBatchFabAnimated() {
+        if (fabDeleteSelected == null) return;
+        if (fabDeleteSelected.getVisibility() == View.VISIBLE && fabDeleteSelected.getAlpha() >= 0.99f) {
+            return;
+        }
+        fabDeleteSelected.setVisibility(View.VISIBLE);
+        fabDeleteSelected.setAlpha(0f);
+        fabDeleteSelected.setScaleX(0.88f);
+        fabDeleteSelected.setScaleY(0.88f);
+        fabDeleteSelected.setTranslationY(dpToPx(16));
+        fabDeleteSelected.extend();
+        fabDeleteSelected.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .translationY(0f)
+                .setDuration(220)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                .start();
+    }
+
+    private void hideBatchFabAnimated() {
+        if (fabDeleteSelected == null) return;
+        if (fabDeleteSelected.getVisibility() != View.VISIBLE) return;
+        fabDeleteSelected.animate()
+                .alpha(0f)
+                .scaleX(0.9f)
+                .scaleY(0.9f)
+                .translationY(dpToPx(14))
+                .setDuration(170)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                .withEndAction(() -> {
+                    if (fabDeleteSelected != null) {
+                        fabDeleteSelected.setVisibility(View.GONE);
+                        fabDeleteSelected.setAlpha(1f);
+                        fabDeleteSelected.setScaleX(1f);
+                        fabDeleteSelected.setScaleY(1f);
+                        fabDeleteSelected.setTranslationY(0f);
+                    }
+                })
+                .start();
+    }
+
+    private void setupFilterUi() {
+        styleFilterChips();
+        if (chipFilterAll != null) {
+            chipFilterAll.setOnClickListener(v -> setActiveFilter(VideoItem.Category.ALL));
+        }
+        if (chipFilterCamera != null) {
+            chipFilterCamera.setOnClickListener(v -> setActiveFilter(VideoItem.Category.CAMERA));
+        }
+        if (chipFilterDual != null) {
+            chipFilterDual.setOnClickListener(v -> setActiveFilter(VideoItem.Category.DUAL));
+        }
+        if (chipFilterScreen != null) {
+            chipFilterScreen.setOnClickListener(v -> setActiveFilter(VideoItem.Category.SCREEN));
+        }
+        if (chipFilterFaditor != null) {
+            chipFilterFaditor.setOnClickListener(v -> setActiveFilter(VideoItem.Category.FADITOR));
+        }
+        if (chipFilterStream != null) {
+            chipFilterStream.setOnClickListener(v -> setActiveFilter(VideoItem.Category.STREAM));
+        }
+        if (filterChecklistButton != null) {
+            filterChecklistButton.setOnClickListener(v -> {
+                if (isInSelectionMode) {
+                    exitSelectionMode();
+                } else {
+                    enterSelectionMode();
+                }
+            });
+        }
+        updateFilterChipLabels();
+        updateFilterChipUi();
+        updateFilterHelperText();
+    }
+
+    private void setupSelectionActionsUi() {
+        if (btnActionSelectAll != null) {
+            btnActionSelectAll.setOnClickListener(v -> toggleSelectAllVisibleItems());
+        }
+        if (btnActionBatchSave != null) {
+            btnActionBatchSave.setOnClickListener(v -> Toast.makeText(requireContext(),
+                    getString(R.string.records_batch_coming_soon), Toast.LENGTH_SHORT).show());
+        }
+        if (btnActionBatchFaditor != null) {
+            btnActionBatchFaditor.setOnClickListener(v -> Toast.makeText(requireContext(),
+                    getString(R.string.records_batch_coming_soon), Toast.LENGTH_SHORT).show());
+        }
+        if (btnActionBatchDelete != null) {
+            btnActionBatchDelete.setOnClickListener(v -> {
+                if (selectedUris.isEmpty()) {
+                    Toast.makeText(requireContext(), getString(R.string.records_batch_select_items_first), Toast.LENGTH_SHORT)
+                            .show();
+                    return;
+                }
+                confirmDeleteSelected();
+            });
+        }
+        updateSelectionActionRow();
+    }
+
+    private void setActiveFilter(@NonNull VideoItem.Category filter) {
+        if (activeFilter == filter) return;
+        activeFilter = filter;
+        // Prevent hidden selections when the visible set changes.
+        if (isInSelectionMode) {
+            exitSelectionMode();
+        }
+        applyActiveFilterToUi();
+    }
+
+    private void applyActiveFilterToUi() {
+        List<VideoItem> filteredItems = new ArrayList<>();
+        for (VideoItem item : allLoadedItems) {
+            if (activeFilter == VideoItem.Category.ALL || item.category == activeFilter) {
+                filteredItems.add(item);
+            }
+        }
+        videoItems.clear();
+        videoItems.addAll(filteredItems);
+        if (recordsAdapter != null) {
+            recordsAdapter.updateRecords(videoItems);
+        }
+        updateFilterChipLabels();
+        updateFilterChipUi();
+        updateFilterHelperText();
+        updateUiVisibility();
+        updateSelectionActionRow();
+    }
+
+    private void updateFilterChipUi() {
+        if (chipFilterAll != null) chipFilterAll.setChecked(activeFilter == VideoItem.Category.ALL);
+        if (chipFilterCamera != null) chipFilterCamera.setChecked(activeFilter == VideoItem.Category.CAMERA);
+        if (chipFilterDual != null) chipFilterDual.setChecked(activeFilter == VideoItem.Category.DUAL);
+        if (chipFilterScreen != null) chipFilterScreen.setChecked(activeFilter == VideoItem.Category.SCREEN);
+        if (chipFilterFaditor != null) chipFilterFaditor.setChecked(activeFilter == VideoItem.Category.FADITOR);
+        if (chipFilterStream != null) chipFilterStream.setChecked(activeFilter == VideoItem.Category.STREAM);
+    }
+
+    private void styleFilterChips() {
+        applyChipIcon(chipFilterAll, R.drawable.ic_list);
+        applyChipIcon(chipFilterCamera, R.drawable.ic_camera);
+        applyChipIcon(chipFilterDual, R.drawable.ic_cam_switch);
+        applyChipIcon(chipFilterScreen, R.drawable.screen_recorder);
+        applyChipIcon(chipFilterFaditor, R.drawable.ic_edit_cut);
+        applyChipIcon(chipFilterStream, R.drawable.ic_wifi);
+        styleFilterChip(chipFilterAll);
+        styleFilterChip(chipFilterCamera);
+        styleFilterChip(chipFilterDual);
+        styleFilterChip(chipFilterScreen);
+        styleFilterChip(chipFilterFaditor);
+        styleFilterChip(chipFilterStream);
+    }
+
+    private void applyChipIcon(@Nullable Chip chip, int drawableRes) {
+        if (chip == null) return;
+        chip.setChipIconResource(drawableRes);
+        chip.setChipIconVisible(true);
+        chip.setIconStartPadding(dpToPx(2));
+        chip.setChipIconSize(dpToPx(14));
+    }
+
+    private void styleFilterChip(@Nullable Chip chip) {
+        if (chip == null || getContext() == null) return;
+        int checkedBg = resolveThemeColor(R.attr.colorButton);
+        int uncheckedBg = resolveThemeColor(R.attr.colorDialog);
+        int stroke = resolveThemeColor(R.attr.colorToggle);
+        int checkedText = isDarkColor(checkedBg) ? Color.WHITE : Color.BLACK;
+        int uncheckedText = isDarkColor(uncheckedBg) ? Color.WHITE : Color.BLACK;
+        int[][] states = new int[][]{
+                new int[]{android.R.attr.state_checked},
+                new int[]{}
+        };
+        chip.setChipBackgroundColor(new ColorStateList(states, new int[]{checkedBg, uncheckedBg}));
+        chip.setTextColor(new ColorStateList(states, new int[]{checkedText, uncheckedText}));
+        chip.setChipIconTint(new ColorStateList(states, new int[]{checkedText, uncheckedText}));
+        chip.setChipStrokeColor(ColorStateList.valueOf(stroke));
+        chip.setChipStrokeWidth(dpToPx(1));
+        chip.setEnsureMinTouchTargetSize(false);
+    }
+
+    private boolean isDarkColor(int color) {
+        double luminance = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) / 255;
+        return luminance < 0.55;
+    }
+
+    private float dpToPx(int dp) {
+        return dp * getResources().getDisplayMetrics().density;
+    }
+
+    private int getCategoryCount(@NonNull VideoItem.Category category) {
+        if (category == VideoItem.Category.ALL) return allLoadedItems.size();
+        int count = 0;
+        for (VideoItem item : allLoadedItems) {
+            if (item.category == category) count++;
+        }
+        return count;
+    }
+
+    private void updateFilterChipLabels() {
+        int all = getCategoryCount(VideoItem.Category.ALL);
+        int camera = getCategoryCount(VideoItem.Category.CAMERA);
+        int dual = getCategoryCount(VideoItem.Category.DUAL);
+        int screen = getCategoryCount(VideoItem.Category.SCREEN);
+        int faditor = getCategoryCount(VideoItem.Category.FADITOR);
+        int stream = getCategoryCount(VideoItem.Category.STREAM);
+
+        setChipLabelWithCount(chipFilterAll, R.string.records_filter_all, all);
+        setChipLabelWithCount(chipFilterCamera, R.string.records_filter_camera, camera);
+        setChipLabelWithCount(chipFilterDual, R.string.records_filter_dual, dual);
+        setChipLabelWithCount(chipFilterScreen, R.string.records_filter_screen, screen);
+        setChipLabelWithCount(chipFilterFaditor, R.string.records_filter_faditor, faditor);
+        setChipLabelWithCount(chipFilterStream, R.string.records_filter_stream, stream);
+
+        reorderFilterChipsByCount(camera, dual, screen, faditor, stream);
+    }
+
+    private void setChipLabelWithCount(@Nullable Chip chip, int baseLabelRes, int count) {
+        if (chip == null) return;
+        chip.setText(getString(baseLabelRes) + " " + count);
+    }
+
+    private void reorderFilterChipsByCount(int camera, int dual, int screen, int faditor, int stream) {
+        if (chipGroupRecordsFilter == null || chipFilterAll == null) return;
+        List<ChipOrderItem> ordered = new ArrayList<>();
+        ordered.add(new ChipOrderItem(chipFilterCamera, camera));
+        ordered.add(new ChipOrderItem(chipFilterDual, dual));
+        ordered.add(new ChipOrderItem(chipFilterScreen, screen));
+        ordered.add(new ChipOrderItem(chipFilterFaditor, faditor));
+        ordered.add(new ChipOrderItem(chipFilterStream, stream));
+        Collections.sort(ordered, (a, b) -> Integer.compare(b.count, a.count));
+
+        chipGroupRecordsFilter.removeAllViews();
+        chipGroupRecordsFilter.addView(chipFilterAll);
+        for (ChipOrderItem item : ordered) {
+            if (item.chip != null) {
+                chipGroupRecordsFilter.addView(item.chip);
+            }
+        }
+        chipGroupRecordsFilter.check(getChipIdForActiveFilter(activeFilter));
+    }
+
+    private int getChipIdForActiveFilter(@NonNull VideoItem.Category filter) {
+        switch (filter) {
+            case CAMERA:
+                return R.id.chip_filter_camera;
+            case DUAL:
+                return R.id.chip_filter_dual;
+            case SCREEN:
+                return R.id.chip_filter_screen;
+            case FADITOR:
+                return R.id.chip_filter_faditor;
+            case STREAM:
+                return R.id.chip_filter_stream;
+            case UNKNOWN:
+            case ALL:
+            default:
+                return R.id.chip_filter_all;
+        }
+    }
+
+    private static final class ChipOrderItem {
+        final Chip chip;
+        final int count;
+
+        ChipOrderItem(Chip chip, int count) {
+            this.chip = chip;
+            this.count = count;
+        }
+    }
+
+    private List<VideoItem> normalizeVideoCategories(@NonNull List<VideoItem> input) {
+        List<VideoItem> normalized = new ArrayList<>(input.size());
+        for (VideoItem item : input) {
+            if (item == null || item.uri == null) {
+                continue;
+            }
+            VideoItem.Category category = item.category;
+            if (category == null || category == VideoItem.Category.UNKNOWN) {
+                category = inferCategoryForVideoItem(item);
+            }
+            VideoItem copy = new VideoItem(item.uri, item.displayName, item.size, item.lastModified, category);
+            copy.isTemporary = item.isTemporary;
+            copy.isNew = item.isNew;
+            copy.isProcessingUri = item.isProcessingUri;
+            copy.isSkeleton = item.isSkeleton;
+            normalized.add(copy);
+        }
+        return normalized;
+    }
+
+    private VideoItem.Category inferCategoryForVideoItem(@NonNull VideoItem item) {
+        String uri = item.uri.toString();
+        if (uri.contains("/" + Constants.RECORDING_SUBDIR_CAMERA + "/")
+                || uri.contains("%2F" + Constants.RECORDING_SUBDIR_CAMERA + "%2F")) {
+            return VideoItem.Category.CAMERA;
+        }
+        if (uri.contains("/" + Constants.RECORDING_SUBDIR_DUAL + "/")
+                || uri.contains("%2F" + Constants.RECORDING_SUBDIR_DUAL + "%2F")) {
+            return VideoItem.Category.DUAL;
+        }
+        if (uri.contains("/" + Constants.RECORDING_SUBDIR_SCREEN + "/")
+                || uri.contains("%2F" + Constants.RECORDING_SUBDIR_SCREEN + "%2F")) {
+            return VideoItem.Category.SCREEN;
+        }
+        if (uri.contains("/" + Constants.RECORDING_SUBDIR_FADITOR + "/")
+                || uri.contains("%2F" + Constants.RECORDING_SUBDIR_FADITOR + "%2F")) {
+            return VideoItem.Category.FADITOR;
+        }
+        if (uri.contains("/" + Constants.RECORDING_SUBDIR_STREAM + "/")
+                || uri.contains("%2F" + Constants.RECORDING_SUBDIR_STREAM + "%2F")) {
+            return VideoItem.Category.STREAM;
+        }
+        return inferCategoryFromLegacyName(item.displayName);
+    }
+
+    private void updateFilterHelperText() {
+        if (filterHelperText == null) return;
+        if (activeFilter == VideoItem.Category.ALL) {
+            filterHelperText.setVisibility(View.GONE);
+            filterHelperText.setText("");
+            return;
+        }
+        int textRes;
+        switch (activeFilter) {
+            case CAMERA:
+                textRes = R.string.records_filter_helper_camera;
+                break;
+            case DUAL:
+                textRes = R.string.records_filter_helper_dual;
+                break;
+            case SCREEN:
+                textRes = R.string.records_filter_helper_screen;
+                break;
+            case FADITOR:
+                textRes = R.string.records_filter_helper_faditor;
+                break;
+            case STREAM:
+                textRes = R.string.records_filter_helper_stream;
+                break;
+            case UNKNOWN:
+            case ALL:
+            default:
+                filterHelperText.setVisibility(View.GONE);
+                filterHelperText.setText("");
+                return;
+        }
+        String helper = getString(textRes)
+                + " • "
+                + getString(R.string.records_location_format, getStorageLocationLabel(), getCategoryFolderLabel(activeFilter));
+        filterHelperText.setText(helper);
+        filterHelperText.setVisibility(View.VISIBLE);
+    }
+
+    private String getStorageLocationLabel() {
+        if (getContext() == null || sharedPreferencesManager == null) {
+            return "Internal/" + Constants.RECORDING_DIRECTORY;
+        }
+        String customUri = sharedPreferencesManager.getCustomStorageUri();
+        if (customUri == null || customUri.trim().isEmpty()) {
+            return "Internal/" + Constants.RECORDING_DIRECTORY;
+        }
+        try {
+            Uri uri = Uri.parse(customUri);
+            DocumentFile dir = DocumentFile.fromTreeUri(requireContext(), uri);
+            if (dir != null && dir.getName() != null && !dir.getName().trim().isEmpty()) {
+                return dir.getName();
+            }
+        } catch (Exception ignored) {
+        }
+        return "Custom";
+    }
+
+    private String getCategoryFolderLabel(@NonNull VideoItem.Category category) {
+        switch (category) {
+            case CAMERA:
+                return Constants.RECORDING_SUBDIR_CAMERA;
+            case DUAL:
+                return Constants.RECORDING_SUBDIR_DUAL;
+            case SCREEN:
+                return Constants.RECORDING_SUBDIR_SCREEN;
+            case FADITOR:
+                return Constants.RECORDING_SUBDIR_FADITOR;
+            case STREAM:
+                return Constants.RECORDING_SUBDIR_STREAM;
+            case ALL:
+            case UNKNOWN:
+            default:
+                return Constants.RECORDING_DIRECTORY;
+        }
+    }
+
+    private void updateSelectionActionRow() {
+        if (selectionActionsRow != null) selectionActionsRow.setVisibility(View.GONE);
+    }
+
+    private void toggleSelectAllVisibleItems() {
+        if (!isInSelectionMode) return;
+        boolean allSelected = !videoItems.isEmpty() && selectedUris.size() == videoItems.size();
+        selectedUris.clear();
+        if (!allSelected) {
+            for (VideoItem item : videoItems) {
+                if (item != null && item.uri != null) {
+                    selectedUris.add(item.uri);
+                }
+            }
+        }
+        if (recordsAdapter != null) {
+            recordsAdapter.setSelectionModeActive(true, selectedUris);
+        }
+        updateUiForSelectionMode();
+    }
+
+    private void showBatchActionsSheet() {
+        if (!isAdded() || getContext() == null || getActivity() == null) return;
+        if (!(getActivity() instanceof FragmentActivity)) return;
+
+        int selectedCount = selectedUris.size();
+        String suffix = selectedCount > 0 ? " (" + selectedCount + ")" : "";
+        boolean hasSelection = selectedCount > 0;
+
+        ArrayList<OptionItem> items = new ArrayList<>();
+        boolean allSelected = !videoItems.isEmpty() && selectedUris.size() == videoItems.size();
+        items.add(new OptionItem(
+                "batch_select_all",
+                getString(allSelected ? R.string.records_batch_deselect_all : R.string.records_batch_select_all) + suffix,
+                getString(R.string.records_batch_select_all_desc),
+                null, null, null, null, null, "select_all"));
+        items.add(new OptionItem(
+                "batch_save_gallery",
+                getString(R.string.records_batch_save) + suffix,
+                getString(R.string.records_batch_save_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "download"));
+        items.add(new OptionItem(
+                "batch_faditor_actions",
+                getString(R.string.records_batch_faditor) + suffix,
+                getString(R.string.records_batch_faditor_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "auto_awesome"));
+        items.add(new OptionItem(
+                "batch_delete",
+                getString(R.string.records_batch_delete) + suffix,
+                getString(R.string.records_batch_delete_desc),
+                null, null, null, null, null, "delete"));
+
+        FragmentActivity activity = (FragmentActivity) getActivity();
+        String resultKey = "records_batch_actions";
+        activity.getSupportFragmentManager().setFragmentResultListener(resultKey, activity, (requestKey, bundle) -> {
+            if (bundle == null) return;
+            String id = bundle.getString(PickerBottomSheetFragment.BUNDLE_SELECTED_ID);
+            if (id == null) return;
+            switch (id) {
+                case "batch_select_all":
+                    toggleSelectAllVisibleItems();
+                    break;
+                case "batch_save_gallery":
+                    if (selectedUris.isEmpty()) {
+                        Toast.makeText(requireContext(), getString(R.string.records_batch_select_items_first), Toast.LENGTH_SHORT).show();
+                    } else {
+                        showBatchSaveOptionsSheet();
+                    }
+                    break;
+                case "batch_faditor_actions":
+                    if (selectedUris.isEmpty()) {
+                        Toast.makeText(requireContext(), getString(R.string.records_batch_select_items_first), Toast.LENGTH_SHORT).show();
+                    } else {
+                        showBatchFaditorOptionsSheet();
+                    }
+                    break;
+                case "batch_delete":
+                    if (selectedUris.isEmpty()) {
+                        Toast.makeText(requireContext(), getString(R.string.records_batch_select_items_first), Toast.LENGTH_SHORT).show();
+                    } else {
+                        confirmDeleteSelected();
+                    }
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        PickerBottomSheetFragment sheet = PickerBottomSheetFragment.newInstanceGradient(
+                getString(R.string.records_batch_actions_title),
+                items,
+                null,
+                resultKey,
+                null,
+                true
+        );
+        Bundle args = sheet.getArguments();
+        if (args != null) args.putBoolean(PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        sheet.show(activity.getSupportFragmentManager(), "records_batch_actions_sheet");
+    }
+
+    private void showBatchSaveOptionsSheet() {
+        if (!isAdded() || getContext() == null || getActivity() == null) return;
+        if (!(getActivity() instanceof FragmentActivity)) return;
+
+        String destinationLabel = getGalleryDestinationLabel();
+        ArrayList<OptionItem> items = new ArrayList<>();
+        items.add(new OptionItem(
+                "save_copy",
+                getString(R.string.video_menu_save_copy),
+                getString(R.string.records_batch_save_copy_helper, destinationLabel),
+                null, null, null, null, null, "content_copy"));
+        items.add(new OptionItem(
+                "save_move",
+                getString(R.string.video_menu_save_move),
+                getString(R.string.records_batch_save_move_helper, destinationLabel),
+                null, null, null, null, null, "drive_file_move"));
+        items.add(new OptionItem(
+                "save_export_custom_location",
+                getString(R.string.records_batch_save_custom_location),
+                getString(R.string.records_batch_save_custom_location_desc),
+                null, null, null, null, null, "folder_open"));
+
+        FragmentActivity activity = (FragmentActivity) getActivity();
+        String resultKey = "records_batch_save_options";
+        activity.getSupportFragmentManager().setFragmentResultListener(resultKey, activity, (requestKey, bundle) -> {
+            if (bundle == null) return;
+            String id = bundle.getString(PickerBottomSheetFragment.BUNDLE_SELECTED_ID);
+            if (id == null) return;
+            if ("save_copy".equals(id)) {
+                queueBatchSaveToGallery(false);
+            } else if ("save_move".equals(id)) {
+                queueBatchSaveToGallery(true);
+            } else if ("save_export_custom_location".equals(id)) {
+                if (customExportTreePickerLauncher != null) {
+                    pendingCustomExportUris = new ArrayList<>(selectedUris);
+                    customExportTreePickerLauncher.launch(null);
+                }
+            }
+        });
+
+        PickerBottomSheetFragment sheet = PickerBottomSheetFragment.newInstanceGradient(
+                getString(R.string.video_menu_save_copy_or_move_title),
+                items,
+                "save_copy",
+                resultKey,
+                null,
+                true
+        );
+        Bundle args = sheet.getArguments();
+        if (args != null) args.putBoolean(PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        sheet.show(activity.getSupportFragmentManager(), "records_batch_save_sheet");
+    }
+
+    private void showBatchFaditorOptionsSheet() {
+        if (!isAdded() || getContext() == null || getActivity() == null) return;
+        if (!(getActivity() instanceof FragmentActivity)) return;
+
+        ArrayList<OptionItem> items = new ArrayList<>();
+        items.add(new OptionItem(
+                "faditor_export_standard_mp4",
+                getString(R.string.records_batch_faditor_export_standard),
+                getString(R.string.records_batch_faditor_export_standard_desc),
+                null, null, null, null, null, "movie_edit"));
+        items.add(new OptionItem(
+                "faditor_merge_selected",
+                getString(R.string.records_batch_faditor_merge),
+                getString(R.string.records_batch_faditor_merge_desc),
+                null, null, null, null, null, "merge_type"));
+
+        FragmentActivity activity = (FragmentActivity) getActivity();
+        String resultKey = "records_batch_faditor_options";
+        activity.getSupportFragmentManager().setFragmentResultListener(resultKey, activity, (requestKey, bundle) -> {
+            if (bundle == null) return;
+            String id = bundle.getString(PickerBottomSheetFragment.BUNDLE_SELECTED_ID);
+            if ("faditor_export_standard_mp4".equals(id)) {
+                startBatchMediaAction(Constants.INTENT_ACTION_BATCH_EXPORT_STANDARD_MP4);
+            } else if ("faditor_merge_selected".equals(id)) {
+                startBatchMediaAction(Constants.INTENT_ACTION_BATCH_MERGE_VIDEOS);
+            }
+        });
+
+        PickerBottomSheetFragment sheet = PickerBottomSheetFragment.newInstanceGradient(
+                getString(R.string.records_batch_faditor_sheet_title),
+                items,
+                null,
+                resultKey,
+                null,
+                true
+        );
+        Bundle args = sheet.getArguments();
+        if (args != null) args.putBoolean(PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        sheet.show(activity.getSupportFragmentManager(), "records_batch_faditor_sheet");
+    }
+
+    private void startBatchMediaAction(@NonNull String action) {
+        if (selectedUris.isEmpty() || getContext() == null) {
+            Toast.makeText(requireContext(), getString(R.string.records_batch_select_items_first), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(requireContext(), com.fadcam.service.BatchMediaActionService.class);
+        intent.setAction(action);
+        ArrayList<String> uriStrings = new ArrayList<>();
+        for (Uri uri : selectedUris) {
+            uriStrings.add(uri.toString());
+        }
+        intent.putStringArrayListExtra(Constants.EXTRA_BATCH_INPUT_URIS, uriStrings);
+        intent.putExtra(Constants.EXTRA_BATCH_OUTPUT_MODE, Constants.BATCH_OUTPUT_MODE_DEFAULT_FADITOR);
+        ContextCompat.startForegroundService(requireContext(), intent);
+        Toast.makeText(requireContext(), getString(R.string.records_batch_faditor_queued, uriStrings.size()), Toast.LENGTH_SHORT).show();
+    }
+
+    @NonNull
+    private String getGalleryDestinationLabel() {
+        return "Downloads/" + Constants.RECORDING_DIRECTORY;
+    }
+
+    private void queueBatchSaveToGallery(boolean moveFiles) {
+        if (selectedUris.isEmpty() || getContext() == null) {
+            Toast.makeText(requireContext(), getString(R.string.records_batch_select_items_first), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int queued = 0;
+        for (Uri uri : new ArrayList<>(selectedUris)) {
+            VideoItem item = findVideoItemByUri(allLoadedItems, uri);
+            String name = (item != null && item.displayName != null) ? item.displayName : "video.mp4";
+            if (moveFiles) {
+                com.fadcam.service.FileOperationService.startMoveToGallery(requireContext(), uri, name, name);
+            } else {
+                com.fadcam.service.FileOperationService.startCopyToGallery(requireContext(), uri, name, name);
+            }
+            queued++;
+        }
+        Toast.makeText(requireContext(),
+                getString(R.string.records_batch_save_queued, queued),
+                Toast.LENGTH_SHORT).show();
+
+        if (moveFiles) {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                com.fadcam.utils.VideoSessionCache.invalidateOnNextAccess(sharedPreferencesManager);
+                loadRecordsList();
+            }, 1800);
+        }
+    }
+
+    private void exportSelectedToCustomTree(@NonNull Uri treeUri) {
+        if (pendingCustomExportUris == null || pendingCustomExportUris.isEmpty()) {
+            return;
+        }
+        if (getContext() == null) return;
+        final List<Uri> urisToExport = new ArrayList<>(pendingCustomExportUris);
+        pendingCustomExportUris.clear();
+        Toast.makeText(requireContext(), getString(R.string.records_batch_custom_export_started, urisToExport.size()),
+                Toast.LENGTH_SHORT).show();
+        executorService.submit(() -> {
+            int success = 0;
+            int failed = 0;
+            DocumentFile targetDir = DocumentFile.fromTreeUri(requireContext(), treeUri);
+            if (targetDir == null || !targetDir.isDirectory() || !targetDir.canWrite()) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> Toast.makeText(requireContext(),
+                            getString(R.string.records_batch_custom_export_invalid_folder), Toast.LENGTH_LONG).show());
+                }
+                return;
+            }
+            for (Uri uri : urisToExport) {
+                try {
+                    VideoItem item = findVideoItemByUri(allLoadedItems, uri);
+                    String name = item != null && item.displayName != null ? item.displayName : "video.mp4";
+                    DocumentFile out = createUniqueSafFile(targetDir, name);
+                    if (out == null) {
+                        failed++;
+                        continue;
+                    }
+                    try (java.io.InputStream in = requireContext().getContentResolver().openInputStream(uri);
+                         java.io.OutputStream os = requireContext().getContentResolver().openOutputStream(out.getUri(), "w")) {
+                        if (in == null || os == null) {
+                            failed++;
+                            continue;
+                        }
+                        byte[] buffer = new byte[16 * 1024];
+                        int len;
+                        while ((len = in.read(buffer)) > 0) {
+                            os.write(buffer, 0, len);
+                        }
+                        os.flush();
+                        success++;
+                    }
+                } catch (Exception e) {
+                    failed++;
+                }
+            }
+            final int successFinal = success;
+            final int failedFinal = failed;
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> Toast.makeText(requireContext(),
+                        getString(R.string.records_batch_custom_export_done, successFinal, failedFinal),
+                        Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    @Nullable
+    private DocumentFile createUniqueSafFile(@NonNull DocumentFile targetDir, @NonNull String originalName) {
+        String base = originalName;
+        String ext = "";
+        int dot = originalName.lastIndexOf('.');
+        if (dot > 0) {
+            base = originalName.substring(0, dot);
+            ext = originalName.substring(dot);
+        }
+        String candidate = originalName;
+        int suffix = 1;
+        while (targetDir.findFile(candidate) != null) {
+            candidate = base + " (" + suffix + ")" + ext;
+            suffix++;
+        }
+        return targetDir.createFile("video/mp4", candidate);
     }
     // --- Deletion Logic ---
 
@@ -2823,17 +3617,18 @@ public class RecordsFragment extends BaseFragment implements
             Log.d(TAG, "CACHE HIT: Using " + cachedVideos.size() + " cached videos (from memory or disk)");
 
             // Sort cached videos
-            sortItems(cachedVideos, currentSortOption);
+            List<VideoItem> normalizedCached = normalizeVideoCategories(cachedVideos);
+            sortItems(normalizedCached, currentSortOption);
 
             // Show skeleton first, then replace
-            int estimatedCount = cachedVideos.size();
+            int estimatedCount = normalizedCached.size();
             if (recordsAdapter == null || !recordsAdapter.isSkeletonMode()) {
                 Log.d(TAG, "Showing " + estimatedCount + " skeleton items for cache hit");
                 showSkeletonLoading(estimatedCount);
             }
 
             // Replace skeleton with cached data immediately
-            replaceSkeletonsWithData(cachedVideos);
+            replaceSkeletonsWithData(normalizedCached);
 
             isLoading = false;
             return;
@@ -2992,23 +3787,16 @@ public class RecordsFragment extends BaseFragment implements
         getActivity().runOnUiThread(() -> {
             if (isPartial) {
                 // For partial updates (e.g., just temp videos), we want to show them right away
-                videoItems.clear();
-                videoItems.addAll(newVideos);
-
-                if (recordsAdapter != null) {
-                    recordsAdapter.updateRecords(videoItems);
-                    if (recyclerView != null)
-                        recyclerView.setVisibility(View.VISIBLE);
-                }
+                allLoadedItems.clear();
+                allLoadedItems.addAll(normalizeVideoCategories(newVideos));
+                applyActiveFilterToUi();
+                if (recyclerView != null) recyclerView.setVisibility(View.VISIBLE);
                 // Don't hide loading indicator yet for partial updates
             } else {
                 // For complete updates, replace everything
-                videoItems.clear();
-                videoItems.addAll(newVideos);
-
-                if (recordsAdapter != null) {
-                    recordsAdapter.updateRecords(videoItems);
-                }
+                allLoadedItems.clear();
+                allLoadedItems.addAll(normalizeVideoCategories(newVideos));
+                applyActiveFilterToUi();
 
                 updateUiVisibility();
                 if (loadingIndicator != null) {
@@ -3025,6 +3813,84 @@ public class RecordsFragment extends BaseFragment implements
             isLoading = false;
             isInitialLoad = false;
         });
+    }
+
+    private boolean isSupportedVideoFile(@Nullable String fileName) {
+        if (fileName == null) return false;
+        String lower = fileName.toLowerCase();
+        String expectedExt = "." + Constants.RECORDING_FILE_EXTENSION.toLowerCase();
+        return lower.endsWith(expectedExt);
+    }
+
+    private VideoItem.Category inferCategoryFromLegacyName(@Nullable String fileName) {
+        if (fileName == null) return VideoItem.Category.UNKNOWN;
+        if (fileName.startsWith(Constants.RECORDING_DIRECTORY + "_")) return VideoItem.Category.CAMERA;
+        if (fileName.startsWith("DualCam_")) return VideoItem.Category.DUAL;
+        if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADREC)) return VideoItem.Category.SCREEN;
+        if (fileName.startsWith("Faditor_")) return VideoItem.Category.FADITOR;
+        if (fileName.startsWith("Stream_")) return VideoItem.Category.STREAM;
+        return VideoItem.Category.UNKNOWN;
+    }
+
+    private void addSafCategoryFiles(
+            @NonNull List<SafCandidate> out,
+            @NonNull DocumentFile baseDir,
+            @NonNull String childFolderName,
+            @NonNull VideoItem.Category category
+    ) {
+        DocumentFile childDir = RecordingStoragePaths.findOrCreateChildDirectory(baseDir, childFolderName, false);
+        if (childDir == null || !childDir.isDirectory() || !childDir.canRead()) {
+            return;
+        }
+        DocumentFile[] files = childDir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (DocumentFile file : files) {
+            if (file != null && file.isFile()) {
+                out.add(new SafCandidate(file, category));
+            }
+        }
+    }
+
+    private void addSafVideoItem(
+            @NonNull List<VideoItem> out,
+            @NonNull DocumentFile docFile,
+            @NonNull VideoItem.Category explicitCategory
+    ) {
+        String fileName = docFile.getName();
+        if (!isSupportedVideoFile(fileName)) {
+            return;
+        }
+        if (fileName != null && fileName.startsWith("temp_")) {
+            VideoItem tempVideoItem = new VideoItem(
+                    docFile.getUri(),
+                    fileName,
+                    docFile.length(),
+                    docFile.lastModified(),
+                    VideoItem.Category.UNKNOWN);
+            tempVideoItem.isTemporary = true;
+            tempVideoItem.isNew = false;
+            if (currentlyProcessingUris.contains(docFile.getUri())) {
+                tempVideoItem.isProcessingUri = true;
+            }
+            out.add(tempVideoItem);
+            return;
+        }
+
+        VideoItem.Category category = explicitCategory != VideoItem.Category.UNKNOWN
+                ? explicitCategory
+                : inferCategoryFromLegacyName(fileName);
+        long lastModified = docFile.lastModified();
+        VideoItem item = new VideoItem(
+                docFile.getUri(),
+                fileName,
+                docFile.length(),
+                lastModified,
+                category);
+        item.isTemporary = false;
+        item.isNew = Utils.isVideoConsideredNew(lastModified);
+        out.add(item);
     }
 
     // functionality -----------

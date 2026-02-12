@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools" android:targetSdkVersion="35">
+    xmlns:tools="http://schemas.android.com/tools">
 
 
     <!-- For Android 13+ -->
@@ -24,6 +24,7 @@
 
     <!-- Optional hardware features -->
     <uses-feature android:name="android.hardware.sensor.high_sampling_rate" android:required="false" />
+    <uses-feature android:name="android.hardware.type.watch" android:required="false" />
 
     <!-- For Android 12 and below -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
@@ -50,12 +51,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Camera feature declarations -->
-    <uses-feature android:name="android.hardware.camera"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.any" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-feature android:name="android.hardware.camera.capability.manual_post_processing" android:required="false" />
-    <uses-feature android:name="android.hardware.microphone" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -237,6 +238,12 @@
         </activity-alias>
 
         <activity android:name=".ui.VideoPlayerActivity" android:theme="@style/Base.Theme.FadCam" />
+        <activity
+            android:name=".ui.FullscreenPreviewActivity"
+            android:theme="@style/Base.Theme.FadCam"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:screenOrientation="unspecified"
+            android:exported="false" />
         <activity android:name=".ui.WebViewActivity" />
         <activity android:name=".ui.CloudAccountActivity" 
             android:theme="@style/Base.Theme.FadCam" 
@@ -271,6 +278,9 @@
 
         <!-- File operation service for background copy/move/delete operations -->
         <service android:name=".service.FileOperationService" android:exported="false" android:foregroundServiceType="dataSync" />
+
+        <!-- Batch media action service for Records automation flows -->
+        <service android:name=".service.BatchMediaActionService" android:exported="false" android:foregroundServiceType="dataSync" />
 
         <!-- Faditor export service for background video export -->
         <service android:name=".ui.faditor.export.ExportService" android:exported="false" android:foregroundServiceType="dataSync" />
