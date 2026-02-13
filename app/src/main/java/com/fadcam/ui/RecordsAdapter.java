@@ -43,6 +43,7 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.request.RequestOptions;
 import com.fadcam.utils.ShimmerEffectHelper;
+import com.fadcam.utils.RuntimeCompat;
 import com.fadcam.Constants;
 import com.fadcam.R;
 // Ensure VideoItem import is correct
@@ -85,6 +86,8 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
     // Keep the cache for thumbnails but optimize it
     private final SparseArray<String> loadedThumbnailCache = new SparseArray<>();
     private static final int THUMBNAIL_SIZE = 200; // Standard size for all thumbnails
+    private static final int SAFE_THUMBNAIL_SIZE = 140;
+    private static final int SAFE_SCROLL_THUMBNAIL_SIZE = 80;
     private Set<Uri> currentlyProcessingUris = new HashSet<>(); // Track processing URIs within adapter instance (passed
                                                                 // from fragment)
     // Bounded LRU caches to avoid unbounded memory usage
@@ -118,6 +121,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
     private final SharedPreferencesManager sharedPreferencesManager;
     private final RecordActionListener actionListener; // Add the listener interface
     private final Context context;
+    private final boolean safeMediaProbeMode;
     private List<VideoItem> records; // Now holds VideoItem objects
     private final OnVideoClickListener clickListener;
     private final OnVideoLongClickListener longClickListener;
@@ -147,6 +151,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
             RecordActionListener actionListener) {
 
         this.context = Objects.requireNonNull(context, "Context cannot be null for RecordsAdapter");
+        this.safeMediaProbeMode = RuntimeCompat.shouldUseSafeMediaProbe(this.context);
         this.records = new ArrayList<>(records); // Use a mutable copy
         this.executorService = Objects.requireNonNull(executorService, "ExecutorService cannot be null");
         this.sharedPreferencesManager = Objects.requireNonNull(sharedPreferencesManager,
@@ -212,6 +217,10 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
                     new android.content.IntentFilter("com.fadcam.ACTION_PLAYBACK_POSITION_UPDATED"));
         } catch (Exception ignored) {
         }
+        Log.i(TAG, "init safe_media_probe=" + safeMediaProbeMode
+                + ", sdk=" + Build.VERSION.SDK_INT
+                + ", watch=" + RuntimeCompat.isWatchDevice(this.context)
+                + ", lowRam=" + RuntimeCompat.isLowRamDevice(this.context));
     }
 
 
@@ -276,6 +285,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         final Uri videoUri = videoItem.uri;
         final String displayName = videoItem.displayName != null ? videoItem.displayName : "Unnamed Video";
         final String uriString = videoUri.toString();
+        final boolean isImage = videoItem.mediaType == VideoItem.MediaType.IMAGE;
 
         // --- 2. Determine Item States ---
         final boolean isCurrentlySelected = this.currentSelectedUris.contains(videoUri);
@@ -351,39 +361,46 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
 
         // Optimize time-consuming operations using lightweight caching
         if (holder.textViewFileTime != null) {
-            // Check if we already have the duration cached
-            String cachedDuration = loadedThumbnailCache.get(position);
-            if (cachedDuration != null) {
-                holder.textViewFileTime.setText(cachedDuration);
+            if (isImage) {
+                holder.textViewFileTime.setText("");
+                holder.textViewFileTime.setVisibility(View.GONE);
             } else {
-                // Show a placeholder while loading
-                holder.textViewFileTime.setText("--:--");
-
-                // Calculate duration on background thread - this is one of the main causes of
-                // lag
-                executorService.execute(() -> {
-                    // Add a small delay for newly recorded videos to ensure file is fully written
-                    if (videoItem.isNew) {
-                        try {
-                            Thread.sleep(500); // 500ms delay for new videos
-                            Log.d(TAG, "Added delay for new video duration calculation: " + videoItem.displayName);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
+                holder.textViewFileTime.setVisibility(View.VISIBLE);
+                // Check if we already have the duration cached
+                String cachedDuration = loadedThumbnailCache.get(position);
+                if (cachedDuration != null) {
+                    holder.textViewFileTime.setText(cachedDuration);
+                } else {
+                    // Show a placeholder while loading
+                    holder.textViewFileTime.setText("--:--");
+                    if (!(safeMediaProbeMode && isScrolling)) {
+                        // Calculate duration on background thread - this is one of the main causes of
+                        // lag
+                        executorService.execute(() -> {
+                        // Add a small delay for newly recorded videos to ensure file is fully written
+                        if (videoItem.isNew) {
+                            try {
+                                Thread.sleep(500); // 500ms delay for new videos
+                                Log.d(TAG, "Added delay for new video duration calculation: " + videoItem.displayName);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
                         }
+
+                        long duration = getVideoDuration(videoUri);
+                        String formattedDuration = formatVideoDuration(duration);
+                        loadedThumbnailCache.put(position, formattedDuration);
+
+                        // Update UI on main thread
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            // Make sure the view holder is still showing the same item before updating
+                            if (holder.getAdapterPosition() == position && holder.textViewFileTime != null) {
+                                holder.textViewFileTime.setText(formattedDuration);
+                            }
+                        });
+                        });
                     }
-
-                    long duration = getVideoDuration(videoUri);
-                    String formattedDuration = formatVideoDuration(duration);
-                    loadedThumbnailCache.put(position, formattedDuration);
-
-                    // Update UI on main thread
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        // Make sure the view holder is still showing the same item before updating
-                        if (holder.getAdapterPosition() == position && holder.textViewFileTime != null) {
-                            holder.textViewFileTime.setText(formattedDuration);
-                        }
-                    });
-                });
+                }
             }
         }
 
@@ -400,43 +417,53 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
             View progressBg = holder.itemView.findViewById(R.id.thumbnail_progress_bg);
             View progressFill = holder.itemView.findViewById(R.id.thumbnail_progress_fill);
             if (progressBg != null && progressFill != null) {
-                progressFill.setVisibility(View.GONE);
-                final String key = videoUri.toString();
-                // Try caches first
-                Long cachedSaved = savedPositionCache.get(key);
-                Long cachedDur = durationCache.get(key);
-                if (cachedSaved != null && cachedDur != null) {
-                    applyProgressToView(progressBg, progressFill, cachedSaved, cachedDur);
+                if (isImage) {
+                    progressBg.setVisibility(View.GONE);
+                    progressFill.setVisibility(View.GONE);
                 } else {
-                    // Submit one background task to compute missing values
-                    executorService.execute(() -> {
-                        try {
-                            long savedMs = cachedSaved != null ? cachedSaved
-                                    : sharedPreferencesManager.getSavedPlaybackPositionMsWithFilenameFallback(key,
-                                            getFileName(videoUri));
-                            long durationMs = cachedDur != null ? cachedDur : getVideoDuration(videoUri);
-                            // Cache results for future bindings (synchronized because LinkedHashMap isn't
-                            // thread-safe)
-                            synchronized (durationCache) {
-                                if (durationMs > 0) {
-                                    durationCache.put(key, durationMs);
-                                    // schedule persist (debounced)
-                                    mainHandler.removeCallbacks(persistDurationTask);
-                                    mainHandler.postDelayed(persistDurationTask, 2000);
-                                }
-                            }
-                            synchronized (savedPositionCache) {
-                                if (savedMs > 0)
-                                    savedPositionCache.put(key, savedMs);
-                            }
-                            final long fSaved = savedMs;
-                            final long fDur = durationMs;
-                            mainHandler.post(() -> applyProgressToView(progressBg, progressFill, fSaved, fDur));
-                        } catch (Exception e) {
-                            Log.w(TAG, "Error computing thumbnail progress", e);
-                            mainHandler.post(() -> progressFill.setVisibility(View.GONE));
+                    progressBg.setVisibility(View.VISIBLE);
+                    progressFill.setVisibility(View.GONE);
+                    final String key = videoUri.toString();
+                    // Try caches first
+                    Long cachedSaved = savedPositionCache.get(key);
+                    Long cachedDur = durationCache.get(key);
+                    if (cachedSaved != null && cachedDur != null) {
+                        applyProgressToView(progressBg, progressFill, cachedSaved, cachedDur);
+                    } else {
+                        if (safeMediaProbeMode && isScrolling) {
+                            progressFill.setVisibility(View.GONE);
+                            return;
                         }
-                    });
+                        // Submit one background task to compute missing values
+                        executorService.execute(() -> {
+                            try {
+                                long savedMs = cachedSaved != null ? cachedSaved
+                                        : sharedPreferencesManager.getSavedPlaybackPositionMsWithFilenameFallback(key,
+                                                getFileName(videoUri));
+                                long durationMs = cachedDur != null ? cachedDur : getVideoDuration(videoUri);
+                                // Cache results for future bindings (synchronized because LinkedHashMap isn't
+                                // thread-safe)
+                                synchronized (durationCache) {
+                                    if (durationMs > 0) {
+                                        durationCache.put(key, durationMs);
+                                        // schedule persist (debounced)
+                                        mainHandler.removeCallbacks(persistDurationTask);
+                                        mainHandler.postDelayed(persistDurationTask, 2000);
+                                    }
+                                }
+                                synchronized (savedPositionCache) {
+                                    if (savedMs > 0)
+                                        savedPositionCache.put(key, savedMs);
+                                }
+                                final long fSaved = savedMs;
+                                final long fDur = durationMs;
+                                mainHandler.post(() -> applyProgressToView(progressBg, progressFill, fSaved, fDur));
+                            } catch (Exception e) {
+                                Log.w(TAG, "Error computing thumbnail progress", e);
+                                mainHandler.post(() -> progressFill.setVisibility(View.GONE));
+                            }
+                        });
+                    }
                 }
             }
         } catch (Exception ignored) {
@@ -456,6 +483,13 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         if (holder.textViewStatusBadge != null && context != null) {
             if (isProcessing) {
                 holder.textViewStatusBadge.setVisibility(View.GONE); // Hide all badges during processing
+            } else if (isImage) {
+                int badgeRes = getImageBadgeLabelRes(videoItem);
+                holder.textViewStatusBadge.setText(context.getString(badgeRes).toUpperCase(Locale.US));
+                holder.textViewStatusBadge
+                        .setBackground(ContextCompat.getDrawable(context, R.drawable.badge_bg_gray));
+                holder.textViewStatusBadge.setTextColor(ContextCompat.getColor(context, R.color.white));
+                holder.textViewStatusBadge.setVisibility(View.VISIBLE);
             } else if (showNewBadge) {
                 // Show NEW badge
                 holder.textViewStatusBadge.setText("NEW");
@@ -540,6 +574,23 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         }
 
     } // End onBindViewHolder
+
+    private int getImageBadgeLabelRes(@NonNull VideoItem videoItem) {
+        VideoItem.ShotSubtype subtype = videoItem.shotSubtype == null
+                ? VideoItem.ShotSubtype.UNKNOWN
+                : videoItem.shotSubtype;
+        switch (subtype) {
+            case SELFIE:
+                return R.string.media_type_photo_selfie;
+            case FADREC:
+                return R.string.media_type_photo_fadrec;
+            case BACK:
+            case UNKNOWN:
+            case ALL:
+            default:
+                return R.string.media_type_photo_back;
+        }
+    }
 
     @Override
     public int getItemCount() {
@@ -753,7 +804,12 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         }
 
         // Lower resolution during scrolling for performance
-        int thumbnailSize = isScrolling ? 100 : THUMBNAIL_SIZE;
+        int thumbnailSize;
+        if (safeMediaProbeMode) {
+            thumbnailSize = isScrolling ? SAFE_SCROLL_THUMBNAIL_SIZE : SAFE_THUMBNAIL_SIZE;
+        } else {
+            thumbnailSize = isScrolling ? 100 : THUMBNAIL_SIZE;
+        }
 
         // Create optimized request options with different strategies based on scrolling
         RequestOptions options = new RequestOptions()
@@ -969,6 +1025,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
      */
     private void showVideoActionsSheet(RecordViewHolder holder, VideoItem videoItem) {
         Context ctx = holder.itemView.getContext();
+        boolean isImage = videoItem != null && videoItem.mediaType == VideoItem.MediaType.IMAGE;
         if (!(ctx instanceof FragmentActivity)) {
             // Fallback to popup if we don't have a FragmentActivity context
             PopupMenu popup = setupPopupMenu(holder, videoItem);
@@ -999,19 +1056,25 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
         items.add(OptionItem.withLigature("action_rename", ctx.getString(R.string.video_menu_rename),
                 "drive_file_rename_outline"));
         items.add(OptionItem.withLigature("action_info", ctx.getString(R.string.video_menu_info), "info"));
-        items.add(OptionItem.withLigature("action_upload_youtube", ctx.getString(R.string.video_menu_upload_youtube),
-                "play_circle"));
-        items.add(OptionItem.withLigature("action_upload_drive", ctx.getString(R.string.video_menu_upload_drive),
-                "cloud_upload"));
-        items.add(OptionItem.withLigature("action_open_with", ctx.getString(R.string.video_menu_open_with),
-                "open_in_new"));
+        if (!isImage) {
+            items.add(OptionItem.withLigature("action_upload_youtube", ctx.getString(R.string.video_menu_upload_youtube),
+                    "play_circle"));
+            items.add(OptionItem.withLigature("action_upload_drive", ctx.getString(R.string.video_menu_upload_drive),
+                    "cloud_upload"));
+            items.add(OptionItem.withLigature("action_open_with", ctx.getString(R.string.video_menu_open_with),
+                    "open_in_new"));
+        }
         // New: Upload to FadDrive (coming soon) — badge only, no helper line
-        items.add(OptionItem.withLigatureBadge("action_upload_faddrive",
-                ctx.getString(R.string.video_menu_upload_faddrive, "Upload to FadDrive"), "cloud",
-                ctx.getString(R.string.remote_coming_soon_badge), R.drawable.badge_background_green, true, null));
+        if (!isImage) {
+            items.add(OptionItem.withLigatureBadge("action_upload_faddrive",
+                    ctx.getString(R.string.video_menu_upload_faddrive, "Upload to FadDrive"), "cloud",
+                    ctx.getString(R.string.remote_coming_soon_badge), R.drawable.badge_background_green, true, null));
+        }
         // Edit with Faditor Mini
-        items.add(OptionItem.withLigature("action_edit_faditorx", ctx.getString(R.string.edit_with_faditorx),
-                "content_cut"));
+        if (!isImage) {
+            items.add(OptionItem.withLigature("action_edit_faditorx", ctx.getString(R.string.edit_with_faditorx),
+                    "content_cut"));
+        }
         items.add(OptionItem.withLigature("action_delete", ctx.getString(R.string.video_menu_del), "delete"));
 
         String resultKey = "video_actions:"
@@ -1157,6 +1220,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
 
     private PopupMenu setupPopupMenu(RecordViewHolder holder, VideoItem videoItem) {
         Context context = holder.itemView.getContext();
+        boolean isImage = videoItem != null && videoItem.mediaType == VideoItem.MediaType.IMAGE;
         int popupMenuStyle = 0;
         // Dynamically select the correct style for the current theme
         SharedPreferencesManager spm = SharedPreferencesManager.getInstance(context);
@@ -1172,6 +1236,11 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
                 ? new PopupMenu(context, holder.menuButtonContainer, 0, 0, popupMenuStyle)
                 : new PopupMenu(context, holder.menuButtonContainer);
         popup.getMenuInflater().inflate(R.menu.video_item_menu, popup.getMenu());
+        if (isImage) {
+            popup.getMenu().removeItem(R.id.action_edit_faditorx);
+            popup.getMenu().removeItem(R.id.action_upload_youtube);
+            popup.getMenu().removeItem(R.id.action_upload_drive);
+        }
 
         // Set text color for all menu items
         int colorMenuText;
@@ -2128,6 +2197,12 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
             return 0;
         }
         
+        if (safeMediaProbeMode) {
+            Log.d(TAG, "probe_mode=safe_mmr uri=" + videoUri);
+            return getVideoDurationWithMmr(videoUri, "safe_mmr");
+        }
+
+        Log.d(TAG, "probe_mode=ffprobe uri=" + videoUri);
         // Get file path for FFprobe - try multiple approaches for content:// URIs
         String filePath = getFFprobePathForUri(videoUri);
         
@@ -2147,7 +2222,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
                         return durationMs;
                     }
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 Log.e(TAG, "Error getting duration from FFprobe for path: " + filePath, e);
             }
         }
@@ -2173,12 +2248,15 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
                         pfd.close();
                     }
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 Log.w(TAG, "FFprobe FD-based duration failed for: " + videoUri, e);
             }
         }
-        
-        // Fallback: Use MediaMetadataRetriever (proper Android API for content:// URIs)
+
+        return getVideoDurationWithMmr(videoUri, "ffprobe_fallback_mmr");
+    }
+
+    private long getVideoDurationWithMmr(@NonNull Uri videoUri, @NonNull String source) {
         android.media.MediaMetadataRetriever retriever = null;
         try {
             retriever = new android.media.MediaMetadataRetriever();
@@ -2186,11 +2264,11 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
             String durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION);
             if (durationStr != null) {
                 long durationMs = Long.parseLong(durationStr);
-                Log.d(TAG, "Duration from MediaMetadataRetriever fallback: " + durationMs + "ms");
+                Log.d(TAG, "duration_source=" + source + " durationMs=" + durationMs + " uri=" + videoUri);
                 return durationMs;
             }
-        } catch (Exception e) {
-            Log.w(TAG, "MediaMetadataRetriever fallback failed for URI: " + videoUri, e);
+        } catch (Throwable e) {
+            Log.w(TAG, "duration_source=" + source + " failed uri=" + videoUri, e);
         } finally {
             if (retriever != null) {
                 try {
@@ -2200,7 +2278,6 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecordsAdapter.RecordVi
                 }
             }
         }
-        
         return 0;
     }
     

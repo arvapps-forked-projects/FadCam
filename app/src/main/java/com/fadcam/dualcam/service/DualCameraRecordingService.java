@@ -1,6 +1,7 @@
 package com.fadcam.dualcam.service;
 
 import android.Manifest;
+import android.app.PendingIntent;
 import android.app.Notification;
 import android.app.Service;
 import android.content.Context;
@@ -41,6 +42,7 @@ import com.fadcam.dualcam.DualCameraConfig;
 import com.fadcam.dualcam.DualCameraState;
 import com.fadcam.opengl.GLRecordingPipeline;
 import com.fadcam.opengl.WatermarkInfoProvider;
+import com.fadcam.utils.PhotoStorageHelper;
 import com.fadcam.utils.RecordingStoragePaths;
 
 import java.io.File;
@@ -239,6 +241,10 @@ public class DualCameraRecordingService extends Service {
 
             case Constants.INTENT_ACTION_SET_ZOOM_RATIO:
                 handleSetZoomRatio(intent);
+                break;
+
+            case Constants.INTENT_ACTION_CAPTURE_PHOTO:
+                handleCapturePhoto();
                 break;
 
             default:
@@ -595,6 +601,44 @@ public class DualCameraRecordingService extends Service {
         } catch (CameraAccessException e) {
             Log.e(TAG, "Tap-to-focus failed", e);
         }
+    }
+
+    private void handleCapturePhoto() {
+        if (recordingPipeline == null || (state != DualCameraState.RECORDING && state != DualCameraState.PAUSED)) {
+            mainHandler.post(() -> Toast.makeText(getApplicationContext(),
+                    R.string.photo_capture_preview_unavailable, Toast.LENGTH_SHORT).show());
+            return;
+        }
+        recordingPipeline.capturePhotoFrame(bitmap -> {
+            if (bitmap == null) {
+                mainHandler.post(() -> Toast.makeText(getApplicationContext(),
+                        R.string.photo_capture_failed, Toast.LENGTH_SHORT).show());
+                return;
+            }
+            if (backgroundHandler == null) {
+                bitmap.recycle();
+                return;
+            }
+            backgroundHandler.post(() -> {
+                Uri savedUri = PhotoStorageHelper.saveJpegBitmap(
+                        getApplicationContext(),
+                        bitmap,
+                        false,
+                        PhotoStorageHelper.ShotSource.BACK);
+                bitmap.recycle();
+                if (savedUri != null) {
+                    Intent recordingCompleteIntent = new Intent(Constants.ACTION_RECORDING_COMPLETE);
+                    recordingCompleteIntent.putExtra(Constants.EXTRA_RECORDING_SUCCESS, true);
+                    recordingCompleteIntent.putExtra(Constants.EXTRA_RECORDING_URI_STRING, savedUri.toString());
+                    sendBroadcast(recordingCompleteIntent);
+                    mainHandler.post(() -> Toast.makeText(getApplicationContext(),
+                            R.string.photo_capture_saved, Toast.LENGTH_SHORT).show());
+                } else {
+                    mainHandler.post(() -> Toast.makeText(getApplicationContext(),
+                            R.string.photo_capture_failed, Toast.LENGTH_SHORT).show());
+                }
+            });
+        });
     }
 
     /**
@@ -1259,8 +1303,11 @@ public class DualCameraRecordingService extends Service {
                     return null;
                 }
 
-                DocumentFile treeDoc = RecordingStoragePaths.getSafCategoryDir(
-                        this, treeUriString, RecordingStoragePaths.Category.DUAL, true);
+                DocumentFile treeDoc = RecordingStoragePaths.getSafCameraSourceDir(
+                        this,
+                        treeUriString,
+                        RecordingStoragePaths.CameraSource.DUAL,
+                        true);
                 if (treeDoc == null || !treeDoc.exists() || !treeDoc.canWrite()) {
                     Log.e(TAG, "Cannot write to custom storage location");
                     return null;
@@ -1284,8 +1331,8 @@ public class DualCameraRecordingService extends Service {
             }
         } else {
             // Internal mode — write directly to recording directory
-            File videoDir = RecordingStoragePaths.getInternalCategoryDir(
-                    this, RecordingStoragePaths.Category.DUAL, true);
+            File videoDir = RecordingStoragePaths.getInternalCameraSourceDir(
+                    this, RecordingStoragePaths.CameraSource.DUAL, true);
             if (videoDir == null) {
                 Log.e(TAG, "Cannot create recording directory for dual camera");
                 return null;
@@ -1299,12 +1346,22 @@ public class DualCameraRecordingService extends Service {
 
     /** Starts the foreground notification (same channel as RecordingService). */
     private void startForegroundNotification() {
+        Intent stopIntent = new Intent(this, DualCameraRecordingService.class);
+        stopIntent.setAction(Constants.INTENT_ACTION_STOP_DUAL_RECORDING);
+        PendingIntent stopPendingIntent = PendingIntent.getService(
+                this,
+                2020,
+                stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_icon)
                 .setContentTitle(getString(R.string.notification_video_recording))
                 .setContentText("Dual camera recording…")
                 .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW);
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .addAction(R.drawable.ic_stop, getString(R.string.stop_recording), stopPendingIntent);
 
         Notification notification = builder.build();
 

@@ -329,11 +329,28 @@ public class RecordsFragment extends BaseFragment implements
     private CharSequence originalToolbarTitle;
     private Chip chipFilterAll;
     private Chip chipFilterCamera;
-    private Chip chipFilterDual;
     private Chip chipFilterScreen;
     private Chip chipFilterFaditor;
     private Chip chipFilterStream;
+    private Chip chipFilterShot;
     private ChipGroup chipGroupRecordsFilter;
+    private View cameraFilterRow;
+    private ChipGroup chipGroupCameraFilter;
+    private Chip chipCameraAll;
+    private Chip chipCameraBack;
+    private Chip chipCameraFront;
+    private Chip chipCameraDual;
+    private View faditorFilterRow;
+    private ChipGroup chipGroupFaditorFilter;
+    private Chip chipFaditorAll;
+    private Chip chipFaditorConverted;
+    private Chip chipFaditorMerge;
+    private View shotFilterRow;
+    private ChipGroup chipGroupShotFilter;
+    private Chip chipShotAll;
+    private Chip chipShotBack;
+    private Chip chipShotSelfie;
+    private Chip chipShotFadrec;
     private TextView filterHelperText;
     private TextView filterChecklistButton;
     private View selectionActionsRow;
@@ -342,6 +359,9 @@ public class RecordsFragment extends BaseFragment implements
     private TextView btnActionBatchFaditor;
     private TextView btnActionBatchDelete;
     private VideoItem.Category activeFilter = VideoItem.Category.ALL;
+    private VideoItem.CameraSubtype activeCameraSubtype = VideoItem.CameraSubtype.ALL;
+    private VideoItem.FaditorSubtype activeFaditorSubtype = VideoItem.FaditorSubtype.ALL;
+    private VideoItem.ShotSubtype activeShotSubtype = VideoItem.ShotSubtype.ALL;
     private ActivityResultLauncher<Uri> customExportTreePickerLauncher;
     private List<Uri> pendingCustomExportUris = new ArrayList<>();
     private BroadcastReceiver batchMediaCompletedReceiver;
@@ -842,11 +862,28 @@ public class RecordsFragment extends BaseFragment implements
         selectAllCheck = view.findViewById(R.id.action_select_all_check);
         chipFilterAll = view.findViewById(R.id.chip_filter_all);
         chipFilterCamera = view.findViewById(R.id.chip_filter_camera);
-        chipFilterDual = view.findViewById(R.id.chip_filter_dual);
         chipFilterScreen = view.findViewById(R.id.chip_filter_screen);
         chipFilterFaditor = view.findViewById(R.id.chip_filter_faditor);
         chipFilterStream = view.findViewById(R.id.chip_filter_stream);
+        chipFilterShot = view.findViewById(R.id.chip_filter_shot);
         chipGroupRecordsFilter = view.findViewById(R.id.chip_group_records_filter);
+        cameraFilterRow = view.findViewById(R.id.records_camera_filter_row);
+        chipGroupCameraFilter = view.findViewById(R.id.chip_group_camera_filter);
+        chipCameraAll = view.findViewById(R.id.chip_camera_all);
+        chipCameraBack = view.findViewById(R.id.chip_camera_back);
+        chipCameraFront = view.findViewById(R.id.chip_camera_front);
+        chipCameraDual = view.findViewById(R.id.chip_camera_dual);
+        faditorFilterRow = view.findViewById(R.id.records_faditor_filter_row);
+        chipGroupFaditorFilter = view.findViewById(R.id.chip_group_faditor_filter);
+        chipFaditorAll = view.findViewById(R.id.chip_faditor_all);
+        chipFaditorConverted = view.findViewById(R.id.chip_faditor_converted);
+        chipFaditorMerge = view.findViewById(R.id.chip_faditor_merge);
+        shotFilterRow = view.findViewById(R.id.records_shot_filter_row);
+        chipGroupShotFilter = view.findViewById(R.id.chip_group_shot_filter);
+        chipShotAll = view.findViewById(R.id.chip_shot_all);
+        chipShotBack = view.findViewById(R.id.chip_shot_back);
+        chipShotSelfie = view.findViewById(R.id.chip_shot_selfie);
+        chipShotFadrec = view.findViewById(R.id.chip_shot_fadrec);
         filterHelperText = view.findViewById(R.id.filter_helper_text);
         filterChecklistButton = view.findViewById(R.id.btn_filter_checklist);
         selectionActionsRow = view.findViewById(R.id.selection_actions_row);
@@ -1080,6 +1117,7 @@ public class RecordsFragment extends BaseFragment implements
     @Override
     public void onResume() {
         super.onResume();
+        Log.d(TAG, "lifecycle onResume: activeFilter=" + activeFilter + ", loadedItems=" + allLoadedItems.size());
         Log.i(TAG, "LOG_LIFECYCLE: onResume called.");
 
         // Check if an external event (e.g. Faditor export) requested a refresh
@@ -1165,6 +1203,9 @@ public class RecordsFragment extends BaseFragment implements
      */
     public void onFragmentBecameVisible() {
         Log.d(TAG, "onFragmentBecameVisible: Fragment is now visible to user");
+        boolean shouldLoadData = (videoItems == null || videoItems.isEmpty()) && !isLoading;
+        Log.d(TAG, "visibility_event: shouldLoadData=" + shouldLoadData + ", currentCount="
+                + (videoItems == null ? 0 : videoItems.size()));
 
         // Check if we need to load data for the first time
         if ((videoItems == null || videoItems.isEmpty()) && !isLoading) {
@@ -1495,10 +1536,48 @@ public class RecordsFragment extends BaseFragment implements
     private static final class SafCandidate {
         final DocumentFile file;
         final VideoItem.Category category;
+        final VideoItem.ShotSubtype shotSubtype;
+        final VideoItem.CameraSubtype cameraSubtype;
+        final VideoItem.FaditorSubtype faditorSubtype;
 
         SafCandidate(@NonNull DocumentFile file, @NonNull VideoItem.Category category) {
+            this(
+                    file,
+                    category,
+                    VideoItem.ShotSubtype.UNKNOWN,
+                    VideoItem.CameraSubtype.UNKNOWN,
+                    VideoItem.FaditorSubtype.UNKNOWN);
+        }
+
+        SafCandidate(
+                @NonNull DocumentFile file,
+                @NonNull VideoItem.Category category,
+                @NonNull VideoItem.ShotSubtype shotSubtype
+        ) {
+            this(file, category, shotSubtype, VideoItem.CameraSubtype.UNKNOWN, VideoItem.FaditorSubtype.UNKNOWN);
+        }
+
+        SafCandidate(
+                @NonNull DocumentFile file,
+                @NonNull VideoItem.Category category,
+                @NonNull VideoItem.ShotSubtype shotSubtype,
+                @NonNull VideoItem.CameraSubtype cameraSubtype
+        ) {
+            this(file, category, shotSubtype, cameraSubtype, VideoItem.FaditorSubtype.UNKNOWN);
+        }
+
+        SafCandidate(
+                @NonNull DocumentFile file,
+                @NonNull VideoItem.Category category,
+                @NonNull VideoItem.ShotSubtype shotSubtype,
+                @NonNull VideoItem.CameraSubtype cameraSubtype,
+                @NonNull VideoItem.FaditorSubtype faditorSubtype
+        ) {
             this.file = file;
             this.category = category;
+            this.shotSubtype = shotSubtype;
+            this.cameraSubtype = cameraSubtype;
+            this.faditorSubtype = faditorSubtype;
         }
     }
 
@@ -1539,10 +1618,12 @@ public class RecordsFragment extends BaseFragment implements
 
         // Preferred folder-based categorization.
         scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_CAMERA), VideoItem.Category.CAMERA);
-        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_DUAL), VideoItem.Category.DUAL);
+        // Legacy dual root folder support (mapped under CAMERA category)
+        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_DUAL), VideoItem.Category.CAMERA);
         scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_SCREEN), VideoItem.Category.SCREEN);
         scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_FADITOR), VideoItem.Category.FADITOR);
         scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_STREAM), VideoItem.Category.STREAM);
+        scanCategoryDirectoryInternal(items, new File(baseDir, Constants.RECORDING_SUBDIR_SHOT), VideoItem.Category.SHOT);
 
         // Backward compatibility: include legacy root-level files under FadCam.
         scanLegacyRootInternal(items, baseDir);
@@ -1559,28 +1640,173 @@ public class RecordsFragment extends BaseFragment implements
         if (!directory.exists() || !directory.isDirectory()) {
             return;
         }
-        File[] files = directory.listFiles();
-        if (files == null) {
+        if (category == VideoItem.Category.SHOT) {
+            scanShotDirectoryInternal(out, directory);
             return;
         }
-        for (File file : files) {
-            if (!file.isFile()) {
-                continue;
-            }
-            String name = file.getName();
-            if (!isSupportedVideoFile(name) || name.startsWith("temp_")) {
-                continue;
-            }
-            long lastModifiedMeta = file.lastModified();
-            long timestampFromFile = Utils.parseTimestampFromFilename(name);
-            long finalTimestamp = lastModifiedMeta > 0
-                    ? lastModifiedMeta
-                    : (timestampFromFile > 0 ? timestampFromFile : System.currentTimeMillis());
-            VideoItem newItem = new VideoItem(Uri.fromFile(file), name, file.length(), finalTimestamp, category);
-            newItem.isTemporary = false;
-            newItem.isNew = Utils.isVideoConsideredNew(finalTimestamp);
-            out.add(newItem);
+        if (category == VideoItem.Category.CAMERA) {
+            scanCameraDirectoryInternal(out, directory);
+            return;
         }
+        if (category == VideoItem.Category.FADITOR) {
+            scanFaditorDirectoryInternal(out, directory);
+            return;
+        }
+        File[] files = directory.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (!file.isFile()) continue;
+            VideoItem item = buildVideoItemFromInternalFile(
+                    file,
+                    category,
+                    VideoItem.ShotSubtype.UNKNOWN,
+                    VideoItem.CameraSubtype.UNKNOWN,
+                    VideoItem.FaditorSubtype.UNKNOWN);
+            if (item != null) out.add(item);
+        }
+    }
+
+    private void scanFaditorDirectoryInternal(@NonNull List<VideoItem> out, @NonNull File faditorRoot) {
+        File[] children = faditorRoot.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child == null) continue;
+            if (child.isFile()) {
+                VideoItem item = buildVideoItemFromInternalFile(
+                        child,
+                        VideoItem.Category.FADITOR,
+                        VideoItem.ShotSubtype.UNKNOWN,
+                        VideoItem.CameraSubtype.UNKNOWN,
+                        inferFaditorSubtypeFromName(child.getName()));
+                if (item != null) out.add(item);
+                continue;
+            }
+            if (!child.isDirectory()) continue;
+            VideoItem.FaditorSubtype subtype = inferFaditorSubtypeFromFolder(child.getName());
+            File[] nested = child.listFiles();
+            if (nested == null) continue;
+            for (File nestedFile : nested) {
+                if (nestedFile != null && nestedFile.isFile()) {
+                    VideoItem item = buildVideoItemFromInternalFile(
+                            nestedFile,
+                            VideoItem.Category.FADITOR,
+                            VideoItem.ShotSubtype.UNKNOWN,
+                            VideoItem.CameraSubtype.UNKNOWN,
+                            subtype);
+                    if (item != null) out.add(item);
+                }
+            }
+        }
+    }
+
+    private void scanCameraDirectoryInternal(@NonNull List<VideoItem> out, @NonNull File cameraRoot) {
+        File[] children = cameraRoot.listFiles();
+        if (children == null) return;
+
+        for (File child : children) {
+            if (child == null) continue;
+            if (child.isFile()) {
+                VideoItem item = buildVideoItemFromInternalFile(
+                        child,
+                        VideoItem.Category.CAMERA,
+                        VideoItem.ShotSubtype.UNKNOWN,
+                        inferCameraSubtypeFromName(child.getName()),
+                        VideoItem.FaditorSubtype.UNKNOWN);
+                if (item != null) out.add(item);
+                continue;
+            }
+            if (!child.isDirectory()) continue;
+            VideoItem.CameraSubtype subtype = inferCameraSubtypeFromFolder(child.getName());
+            File[] nested = child.listFiles();
+            if (nested == null) continue;
+            for (File nestedFile : nested) {
+                if (nestedFile != null && nestedFile.isFile()) {
+                    VideoItem item = buildVideoItemFromInternalFile(
+                            nestedFile,
+                            VideoItem.Category.CAMERA,
+                            VideoItem.ShotSubtype.UNKNOWN,
+                            subtype,
+                            VideoItem.FaditorSubtype.UNKNOWN);
+                    if (item != null) out.add(item);
+                }
+            }
+        }
+    }
+
+    private void scanShotDirectoryInternal(@NonNull List<VideoItem> out, @NonNull File shotRoot) {
+        File[] children = shotRoot.listFiles();
+        if (children == null) return;
+
+        for (File child : children) {
+            if (child == null) continue;
+            if (child.isFile()) {
+                VideoItem item = buildVideoItemFromInternalFile(
+                        child,
+                        VideoItem.Category.SHOT,
+                        inferShotSubtypeFromName(child.getName()),
+                        VideoItem.CameraSubtype.UNKNOWN,
+                        VideoItem.FaditorSubtype.UNKNOWN);
+                if (item != null) out.add(item);
+                continue;
+            }
+            if (!child.isDirectory()) continue;
+            VideoItem.ShotSubtype subtype = inferShotSubtypeFromFolder(child.getName());
+            File[] nested = child.listFiles();
+            if (nested == null) continue;
+            for (File nestedFile : nested) {
+                if (nestedFile != null && nestedFile.isFile()) {
+                    VideoItem item = buildVideoItemFromInternalFile(
+                            nestedFile,
+                            VideoItem.Category.SHOT,
+                            subtype,
+                            VideoItem.CameraSubtype.UNKNOWN,
+                            VideoItem.FaditorSubtype.UNKNOWN);
+                    if (item != null) out.add(item);
+                }
+            }
+        }
+    }
+
+    @Nullable
+    private VideoItem buildVideoItemFromInternalFile(
+            @NonNull File file,
+            @NonNull VideoItem.Category category,
+            @NonNull VideoItem.ShotSubtype explicitShotSubtype,
+            @NonNull VideoItem.CameraSubtype explicitCameraSubtype,
+            @NonNull VideoItem.FaditorSubtype explicitFaditorSubtype
+    ) {
+        String name = file.getName();
+        VideoItem.MediaType mediaType = inferMediaTypeFromName(name);
+        if (mediaType == null || name.startsWith("temp_")) {
+            return null;
+        }
+        long lastModifiedMeta = file.lastModified();
+        long timestampFromFile = Utils.parseTimestampFromFilename(name);
+        long finalTimestamp = lastModifiedMeta > 0
+                ? lastModifiedMeta
+                : (timestampFromFile > 0 ? timestampFromFile : System.currentTimeMillis());
+        VideoItem.ShotSubtype shotSubtype = category == VideoItem.Category.SHOT
+                ? resolveShotSubtype(explicitShotSubtype, name)
+                : VideoItem.ShotSubtype.UNKNOWN;
+        VideoItem.CameraSubtype cameraSubtype = category == VideoItem.Category.CAMERA
+                ? resolveCameraSubtype(explicitCameraSubtype, name)
+                : VideoItem.CameraSubtype.UNKNOWN;
+        VideoItem.FaditorSubtype faditorSubtype = category == VideoItem.Category.FADITOR
+                ? resolveFaditorSubtype(explicitFaditorSubtype, name)
+                : VideoItem.FaditorSubtype.UNKNOWN;
+        VideoItem newItem = new VideoItem(
+                Uri.fromFile(file),
+                name,
+                file.length(),
+                finalTimestamp,
+                category,
+                mediaType,
+                shotSubtype,
+                cameraSubtype,
+                faditorSubtype);
+        newItem.isTemporary = false;
+        newItem.isNew = Utils.isVideoConsideredNew(finalTimestamp);
+        return newItem;
     }
 
     private void scanLegacyRootInternal(List<VideoItem> out, File baseDir) {
@@ -1593,7 +1819,8 @@ public class RecordsFragment extends BaseFragment implements
                 continue;
             }
             String name = file.getName();
-            if (!isSupportedVideoFile(name) || name.startsWith("temp_")) {
+            VideoItem.MediaType mediaType = inferMediaTypeFromName(name);
+            if (mediaType == null || name.startsWith("temp_")) {
                 continue;
             }
             VideoItem.Category inferred = inferCategoryFromLegacyName(name);
@@ -1602,7 +1829,22 @@ public class RecordsFragment extends BaseFragment implements
             long finalTimestamp = lastModifiedMeta > 0
                     ? lastModifiedMeta
                     : (timestampFromFile > 0 ? timestampFromFile : System.currentTimeMillis());
-            VideoItem item = new VideoItem(Uri.fromFile(file), name, file.length(), finalTimestamp, inferred);
+            VideoItem item = new VideoItem(
+                    Uri.fromFile(file),
+                    name,
+                    file.length(),
+                    finalTimestamp,
+                    inferred,
+                    mediaType,
+                    inferred == VideoItem.Category.SHOT
+                            ? resolveShotSubtype(VideoItem.ShotSubtype.UNKNOWN, name)
+                            : VideoItem.ShotSubtype.UNKNOWN,
+                    inferred == VideoItem.Category.CAMERA
+                            ? resolveCameraSubtype(VideoItem.CameraSubtype.UNKNOWN, name)
+                            : VideoItem.CameraSubtype.UNKNOWN,
+                    inferred == VideoItem.Category.FADITOR
+                            ? resolveFaditorSubtype(VideoItem.FaditorSubtype.UNKNOWN, name)
+                            : VideoItem.FaditorSubtype.UNKNOWN);
             item.isTemporary = false;
             item.isNew = Utils.isVideoConsideredNew(finalTimestamp);
             out.add(item);
@@ -1633,10 +1875,12 @@ public class RecordsFragment extends BaseFragment implements
 
         List<SafCandidate> bucketedFiles = new ArrayList<>();
         addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_CAMERA, VideoItem.Category.CAMERA);
-        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_DUAL, VideoItem.Category.DUAL);
+        // Legacy dual root folder support (mapped under CAMERA category)
+        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_DUAL, VideoItem.Category.CAMERA);
         addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_SCREEN, VideoItem.Category.SCREEN);
         addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_FADITOR, VideoItem.Category.FADITOR);
         addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_STREAM, VideoItem.Category.STREAM);
+        addSafCategoryFiles(bucketedFiles, targetDir, Constants.RECORDING_SUBDIR_SHOT, VideoItem.Category.SHOT);
 
         // Backward compatibility: include root files and infer category by filename prefix.
         DocumentFile[] rootFiles = targetDir.listFiles();
@@ -1655,7 +1899,13 @@ public class RecordsFragment extends BaseFragment implements
             int endIndex = Math.min(i + CHUNK_SIZE, totalFiles);
             for (int j = i; j < endIndex; j++) {
                 SafCandidate candidate = bucketedFiles.get(j);
-                addSafVideoItem(safVideoItems, candidate.file, candidate.category);
+                addSafMediaItem(
+                        safVideoItems,
+                        candidate.file,
+                        candidate.category,
+                        candidate.shotSubtype,
+                        candidate.cameraSubtype,
+                        candidate.faditorSubtype);
             }
             if (callback != null && !safVideoItems.isEmpty()) {
                 int progress = totalFiles == 0 ? 100 : Math.round(((float) endIndex / totalFiles) * 100);
@@ -1735,8 +1985,8 @@ public class RecordsFragment extends BaseFragment implements
             Log.d(TAG, "Fragment onVideoClick: Toggling selection for " + videoItem.displayName);
             toggleSelection(videoItem.uri); // Toggle the item
         } else {
-            // Mode INACTIVE: Click plays video
-            Log.d(TAG, "Fragment onVideoClick: Playing video " + videoItem.displayName);
+            // Mode INACTIVE: Click opens media
+            Log.d(TAG, "Fragment onVideoClick: Opening media " + videoItem.displayName);
             String uriString = videoItem.uri.toString();
             sharedPreferencesManager.addOpenedVideoUri(uriString);
             if (recordsAdapter != null) {
@@ -1744,14 +1994,16 @@ public class RecordsFragment extends BaseFragment implements
                 if (pos != -1)
                     recordsAdapter.notifyItemChanged(pos);
             }
-            Intent intent = new Intent(getActivity(), VideoPlayerActivity.class);
+            Intent intent = videoItem.mediaType == VideoItem.MediaType.IMAGE
+                    ? new Intent(getActivity(), ImageViewerActivity.class)
+                    : new Intent(getActivity(), VideoPlayerActivity.class);
             intent.setData(videoItem.uri);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             try {
                 startActivity(intent);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to start player", e);
-                Toast.makeText(getContext(), "Error opening video", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Error opening media", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -2028,9 +2280,6 @@ public class RecordsFragment extends BaseFragment implements
         if (chipFilterCamera != null) {
             chipFilterCamera.setOnClickListener(v -> setActiveFilter(VideoItem.Category.CAMERA));
         }
-        if (chipFilterDual != null) {
-            chipFilterDual.setOnClickListener(v -> setActiveFilter(VideoItem.Category.DUAL));
-        }
         if (chipFilterScreen != null) {
             chipFilterScreen.setOnClickListener(v -> setActiveFilter(VideoItem.Category.SCREEN));
         }
@@ -2039,6 +2288,42 @@ public class RecordsFragment extends BaseFragment implements
         }
         if (chipFilterStream != null) {
             chipFilterStream.setOnClickListener(v -> setActiveFilter(VideoItem.Category.STREAM));
+        }
+        if (chipFilterShot != null) {
+            chipFilterShot.setOnClickListener(v -> setActiveFilter(VideoItem.Category.SHOT));
+        }
+        if (chipCameraAll != null) {
+            chipCameraAll.setOnClickListener(v -> setActiveCameraSubtype(VideoItem.CameraSubtype.ALL));
+        }
+        if (chipCameraBack != null) {
+            chipCameraBack.setOnClickListener(v -> setActiveCameraSubtype(VideoItem.CameraSubtype.BACK));
+        }
+        if (chipCameraFront != null) {
+            chipCameraFront.setOnClickListener(v -> setActiveCameraSubtype(VideoItem.CameraSubtype.FRONT));
+        }
+        if (chipCameraDual != null) {
+            chipCameraDual.setOnClickListener(v -> setActiveCameraSubtype(VideoItem.CameraSubtype.DUAL));
+        }
+        if (chipFaditorAll != null) {
+            chipFaditorAll.setOnClickListener(v -> setActiveFaditorSubtype(VideoItem.FaditorSubtype.ALL));
+        }
+        if (chipFaditorConverted != null) {
+            chipFaditorConverted.setOnClickListener(v -> setActiveFaditorSubtype(VideoItem.FaditorSubtype.CONVERTED));
+        }
+        if (chipFaditorMerge != null) {
+            chipFaditorMerge.setOnClickListener(v -> setActiveFaditorSubtype(VideoItem.FaditorSubtype.MERGE));
+        }
+        if (chipShotAll != null) {
+            chipShotAll.setOnClickListener(v -> setActiveShotSubtype(VideoItem.ShotSubtype.ALL));
+        }
+        if (chipShotBack != null) {
+            chipShotBack.setOnClickListener(v -> setActiveShotSubtype(VideoItem.ShotSubtype.BACK));
+        }
+        if (chipShotSelfie != null) {
+            chipShotSelfie.setOnClickListener(v -> setActiveShotSubtype(VideoItem.ShotSubtype.SELFIE));
+        }
+        if (chipShotFadrec != null) {
+            chipShotFadrec.setOnClickListener(v -> setActiveShotSubtype(VideoItem.ShotSubtype.FADREC));
         }
         if (filterChecklistButton != null) {
             filterChecklistButton.setOnClickListener(v -> {
@@ -2051,6 +2336,15 @@ public class RecordsFragment extends BaseFragment implements
         }
         updateFilterChipLabels();
         updateFilterChipUi();
+        updateCameraFilterRowVisibility();
+        updateCameraFilterChipLabels();
+        updateCameraFilterChipUi();
+        updateFaditorFilterRowVisibility();
+        updateFaditorFilterChipLabels();
+        updateFaditorFilterChipUi();
+        updateShotFilterRowVisibility();
+        updateShotFilterChipLabels();
+        updateShotFilterChipUi();
         updateFilterHelperText();
     }
 
@@ -2082,7 +2376,43 @@ public class RecordsFragment extends BaseFragment implements
     private void setActiveFilter(@NonNull VideoItem.Category filter) {
         if (activeFilter == filter) return;
         activeFilter = filter;
+        if (activeFilter != VideoItem.Category.CAMERA) {
+            activeCameraSubtype = VideoItem.CameraSubtype.ALL;
+        }
+        if (activeFilter != VideoItem.Category.FADITOR) {
+            activeFaditorSubtype = VideoItem.FaditorSubtype.ALL;
+        }
+        if (activeFilter != VideoItem.Category.SHOT) {
+            activeShotSubtype = VideoItem.ShotSubtype.ALL;
+        }
         // Prevent hidden selections when the visible set changes.
+        if (isInSelectionMode) {
+            exitSelectionMode();
+        }
+        applyActiveFilterToUi();
+    }
+
+    private void setActiveCameraSubtype(@NonNull VideoItem.CameraSubtype cameraSubtype) {
+        if (activeCameraSubtype == cameraSubtype) return;
+        activeCameraSubtype = cameraSubtype;
+        if (isInSelectionMode) {
+            exitSelectionMode();
+        }
+        applyActiveFilterToUi();
+    }
+
+    private void setActiveShotSubtype(@NonNull VideoItem.ShotSubtype shotSubtype) {
+        if (activeShotSubtype == shotSubtype) return;
+        activeShotSubtype = shotSubtype;
+        if (isInSelectionMode) {
+            exitSelectionMode();
+        }
+        applyActiveFilterToUi();
+    }
+
+    private void setActiveFaditorSubtype(@NonNull VideoItem.FaditorSubtype faditorSubtype) {
+        if (activeFaditorSubtype == faditorSubtype) return;
+        activeFaditorSubtype = faditorSubtype;
         if (isInSelectionMode) {
             exitSelectionMode();
         }
@@ -2093,6 +2423,15 @@ public class RecordsFragment extends BaseFragment implements
         List<VideoItem> filteredItems = new ArrayList<>();
         for (VideoItem item : allLoadedItems) {
             if (activeFilter == VideoItem.Category.ALL || item.category == activeFilter) {
+                if (activeFilter == VideoItem.Category.CAMERA && !matchesCameraSubtype(item, activeCameraSubtype)) {
+                    continue;
+                }
+                if (activeFilter == VideoItem.Category.FADITOR && !matchesFaditorSubtype(item, activeFaditorSubtype)) {
+                    continue;
+                }
+                if (activeFilter == VideoItem.Category.SHOT && !matchesShotSubtype(item, activeShotSubtype)) {
+                    continue;
+                }
                 filteredItems.add(item);
             }
         }
@@ -2103,6 +2442,15 @@ public class RecordsFragment extends BaseFragment implements
         }
         updateFilterChipLabels();
         updateFilterChipUi();
+        updateCameraFilterRowVisibility();
+        updateCameraFilterChipLabels();
+        updateCameraFilterChipUi();
+        updateFaditorFilterRowVisibility();
+        updateFaditorFilterChipLabels();
+        updateFaditorFilterChipUi();
+        updateShotFilterRowVisibility();
+        updateShotFilterChipLabels();
+        updateShotFilterChipUi();
         updateFilterHelperText();
         updateUiVisibility();
         updateSelectionActionRow();
@@ -2111,25 +2459,119 @@ public class RecordsFragment extends BaseFragment implements
     private void updateFilterChipUi() {
         if (chipFilterAll != null) chipFilterAll.setChecked(activeFilter == VideoItem.Category.ALL);
         if (chipFilterCamera != null) chipFilterCamera.setChecked(activeFilter == VideoItem.Category.CAMERA);
-        if (chipFilterDual != null) chipFilterDual.setChecked(activeFilter == VideoItem.Category.DUAL);
         if (chipFilterScreen != null) chipFilterScreen.setChecked(activeFilter == VideoItem.Category.SCREEN);
         if (chipFilterFaditor != null) chipFilterFaditor.setChecked(activeFilter == VideoItem.Category.FADITOR);
         if (chipFilterStream != null) chipFilterStream.setChecked(activeFilter == VideoItem.Category.STREAM);
+        if (chipFilterShot != null) chipFilterShot.setChecked(activeFilter == VideoItem.Category.SHOT);
+    }
+
+    private void updateCameraFilterRowVisibility() {
+        if (cameraFilterRow == null) return;
+        cameraFilterRow.setVisibility(activeFilter == VideoItem.Category.CAMERA ? View.VISIBLE : View.GONE);
+    }
+
+    private void updateFaditorFilterRowVisibility() {
+        if (faditorFilterRow == null) return;
+        faditorFilterRow.setVisibility(activeFilter == VideoItem.Category.FADITOR ? View.VISIBLE : View.GONE);
+    }
+
+    private void updateCameraFilterChipUi() {
+        if (chipCameraAll != null) chipCameraAll.setChecked(activeCameraSubtype == VideoItem.CameraSubtype.ALL);
+        if (chipCameraBack != null) chipCameraBack.setChecked(activeCameraSubtype == VideoItem.CameraSubtype.BACK);
+        if (chipCameraFront != null) chipCameraFront.setChecked(activeCameraSubtype == VideoItem.CameraSubtype.FRONT);
+        if (chipCameraDual != null) chipCameraDual.setChecked(activeCameraSubtype == VideoItem.CameraSubtype.DUAL);
+    }
+
+    private boolean matchesCameraSubtype(@NonNull VideoItem item, @NonNull VideoItem.CameraSubtype filterSubtype) {
+        if (item.category != VideoItem.Category.CAMERA && item.category != VideoItem.Category.DUAL) return false;
+        if (filterSubtype == VideoItem.CameraSubtype.ALL) return true;
+        VideoItem.CameraSubtype itemSubtype = item.cameraSubtype == null
+                ? VideoItem.CameraSubtype.UNKNOWN
+                : item.cameraSubtype;
+        if (itemSubtype == VideoItem.CameraSubtype.UNKNOWN) {
+            itemSubtype = VideoItem.CameraSubtype.BACK;
+        }
+        return itemSubtype == filterSubtype;
+    }
+
+    private void updateFaditorFilterChipUi() {
+        if (chipFaditorAll != null) chipFaditorAll.setChecked(activeFaditorSubtype == VideoItem.FaditorSubtype.ALL);
+        if (chipFaditorConverted != null)
+            chipFaditorConverted.setChecked(activeFaditorSubtype == VideoItem.FaditorSubtype.CONVERTED);
+        if (chipFaditorMerge != null) chipFaditorMerge.setChecked(activeFaditorSubtype == VideoItem.FaditorSubtype.MERGE);
+    }
+
+    private boolean matchesFaditorSubtype(@NonNull VideoItem item, @NonNull VideoItem.FaditorSubtype filterSubtype) {
+        if (item.category != VideoItem.Category.FADITOR) return false;
+        if (filterSubtype == VideoItem.FaditorSubtype.ALL) return true;
+        VideoItem.FaditorSubtype itemSubtype = item.faditorSubtype == null
+                ? VideoItem.FaditorSubtype.UNKNOWN
+                : item.faditorSubtype;
+        if (itemSubtype == VideoItem.FaditorSubtype.UNKNOWN) {
+            itemSubtype = VideoItem.FaditorSubtype.OTHER;
+        }
+        return itemSubtype == filterSubtype;
+    }
+
+    private void updateShotFilterRowVisibility() {
+        if (shotFilterRow == null) return;
+        shotFilterRow.setVisibility(activeFilter == VideoItem.Category.SHOT ? View.VISIBLE : View.GONE);
+    }
+
+    private void updateShotFilterChipUi() {
+        if (chipShotAll != null) chipShotAll.setChecked(activeShotSubtype == VideoItem.ShotSubtype.ALL);
+        if (chipShotBack != null) chipShotBack.setChecked(activeShotSubtype == VideoItem.ShotSubtype.BACK);
+        if (chipShotSelfie != null) chipShotSelfie.setChecked(activeShotSubtype == VideoItem.ShotSubtype.SELFIE);
+        if (chipShotFadrec != null) chipShotFadrec.setChecked(activeShotSubtype == VideoItem.ShotSubtype.FADREC);
+    }
+
+    private boolean matchesShotSubtype(@NonNull VideoItem item, @NonNull VideoItem.ShotSubtype filterSubtype) {
+        if (item.category != VideoItem.Category.SHOT) return false;
+        if (filterSubtype == VideoItem.ShotSubtype.ALL) return true;
+        VideoItem.ShotSubtype itemSubtype = item.shotSubtype == null
+                ? VideoItem.ShotSubtype.UNKNOWN
+                : item.shotSubtype;
+        if (itemSubtype == VideoItem.ShotSubtype.UNKNOWN) {
+            itemSubtype = VideoItem.ShotSubtype.BACK; // legacy fallback
+        }
+        return itemSubtype == filterSubtype;
     }
 
     private void styleFilterChips() {
         applyChipIcon(chipFilterAll, R.drawable.ic_list);
-        applyChipIcon(chipFilterCamera, R.drawable.ic_camera);
-        applyChipIcon(chipFilterDual, R.drawable.ic_cam_switch);
+        applyChipIcon(chipFilterCamera, R.drawable.ic_chip_videocam);
         applyChipIcon(chipFilterScreen, R.drawable.screen_recorder);
         applyChipIcon(chipFilterFaditor, R.drawable.ic_edit_cut);
         applyChipIcon(chipFilterStream, R.drawable.ic_wifi);
+        applyChipIcon(chipFilterShot, R.drawable.ic_chip_add_a_photo);
+        applyChipIcon(chipCameraAll, R.drawable.ic_list);
+        applyChipIcon(chipCameraBack, R.drawable.ic_chip_video_camera_back);
+        applyChipIcon(chipCameraFront, R.drawable.ic_chip_video_camera_front);
+        applyChipIcon(chipCameraDual, R.drawable.ic_chip_switch_camera);
+        applyChipIcon(chipFaditorAll, R.drawable.ic_list);
+        applyChipIcon(chipFaditorConverted, R.drawable.ic_update);
+        applyChipIcon(chipFaditorMerge, R.drawable.ic_split_file);
+        applyChipIcon(chipShotAll, R.drawable.ic_list);
+        applyChipIcon(chipShotBack, R.drawable.ic_chip_photo_camera);
+        applyChipIcon(chipShotSelfie, R.drawable.ic_chip_photo_camera_front);
+        applyChipIcon(chipShotFadrec, R.drawable.ic_chip_mobile_camera);
         styleFilterChip(chipFilterAll);
         styleFilterChip(chipFilterCamera);
-        styleFilterChip(chipFilterDual);
         styleFilterChip(chipFilterScreen);
         styleFilterChip(chipFilterFaditor);
         styleFilterChip(chipFilterStream);
+        styleFilterChip(chipFilterShot);
+        styleFilterChip(chipCameraAll);
+        styleFilterChip(chipCameraBack);
+        styleFilterChip(chipCameraFront);
+        styleFilterChip(chipCameraDual);
+        styleFilterChip(chipFaditorAll);
+        styleFilterChip(chipFaditorConverted);
+        styleFilterChip(chipFaditorMerge);
+        styleFilterChip(chipShotAll);
+        styleFilterChip(chipShotBack);
+        styleFilterChip(chipShotSelfie);
+        styleFilterChip(chipShotFadrec);
     }
 
     private void applyChipIcon(@Nullable Chip chip, int drawableRes) {
@@ -2137,7 +2579,7 @@ public class RecordsFragment extends BaseFragment implements
         chip.setChipIconResource(drawableRes);
         chip.setChipIconVisible(true);
         chip.setIconStartPadding(dpToPx(2));
-        chip.setChipIconSize(dpToPx(14));
+        chip.setChipIconSize(dpToPx(16));
     }
 
     private void styleFilterChip(@Nullable Chip chip) {
@@ -2172,7 +2614,13 @@ public class RecordsFragment extends BaseFragment implements
         if (category == VideoItem.Category.ALL) return allLoadedItems.size();
         int count = 0;
         for (VideoItem item : allLoadedItems) {
-            if (item.category == category) count++;
+            if (category == VideoItem.Category.CAMERA) {
+                if (item.category == VideoItem.Category.CAMERA || item.category == VideoItem.Category.DUAL) {
+                    count++;
+                }
+            } else if (item.category == category) {
+                count++;
+            }
         }
         return count;
     }
@@ -2180,19 +2628,52 @@ public class RecordsFragment extends BaseFragment implements
     private void updateFilterChipLabels() {
         int all = getCategoryCount(VideoItem.Category.ALL);
         int camera = getCategoryCount(VideoItem.Category.CAMERA);
-        int dual = getCategoryCount(VideoItem.Category.DUAL);
         int screen = getCategoryCount(VideoItem.Category.SCREEN);
         int faditor = getCategoryCount(VideoItem.Category.FADITOR);
         int stream = getCategoryCount(VideoItem.Category.STREAM);
+        int shot = getCategoryCount(VideoItem.Category.SHOT);
 
         setChipLabelWithCount(chipFilterAll, R.string.records_filter_all, all);
         setChipLabelWithCount(chipFilterCamera, R.string.records_filter_camera, camera);
-        setChipLabelWithCount(chipFilterDual, R.string.records_filter_dual, dual);
         setChipLabelWithCount(chipFilterScreen, R.string.records_filter_screen, screen);
         setChipLabelWithCount(chipFilterFaditor, R.string.records_filter_faditor, faditor);
         setChipLabelWithCount(chipFilterStream, R.string.records_filter_stream, stream);
+        setChipLabelWithCount(chipFilterShot, R.string.records_filter_shot, shot);
 
-        reorderFilterChipsByCount(camera, dual, screen, faditor, stream);
+        reorderFilterChipsByCount(camera, screen, faditor, stream, shot);
+    }
+
+    private void updateCameraFilterChipLabels() {
+        int all = getCameraSubtypeCount(VideoItem.CameraSubtype.ALL);
+        int back = getCameraSubtypeCount(VideoItem.CameraSubtype.BACK);
+        int front = getCameraSubtypeCount(VideoItem.CameraSubtype.FRONT);
+        int dual = getCameraSubtypeCount(VideoItem.CameraSubtype.DUAL);
+
+        setChipLabelWithCount(chipCameraAll, R.string.records_filter_camera_all, all);
+        setChipLabelWithCount(chipCameraBack, R.string.records_filter_camera_back, back);
+        setChipLabelWithCount(chipCameraFront, R.string.records_filter_camera_front, front);
+        setChipLabelWithCount(chipCameraDual, R.string.records_filter_camera_dual, dual);
+    }
+
+    private void updateShotFilterChipLabels() {
+        int all = getShotSubtypeCount(VideoItem.ShotSubtype.ALL);
+        int back = getShotSubtypeCount(VideoItem.ShotSubtype.BACK);
+        int selfie = getShotSubtypeCount(VideoItem.ShotSubtype.SELFIE);
+        int fadrec = getShotSubtypeCount(VideoItem.ShotSubtype.FADREC);
+
+        setChipLabelWithCount(chipShotAll, R.string.records_filter_shot_all, all);
+        setChipLabelWithCount(chipShotBack, R.string.records_filter_shot_back, back);
+        setChipLabelWithCount(chipShotSelfie, R.string.records_filter_shot_selfie, selfie);
+        setChipLabelWithCount(chipShotFadrec, R.string.records_filter_shot_fadrec, fadrec);
+    }
+
+    private void updateFaditorFilterChipLabels() {
+        int all = getFaditorSubtypeCount(VideoItem.FaditorSubtype.ALL);
+        int converted = getFaditorSubtypeCount(VideoItem.FaditorSubtype.CONVERTED);
+        int merge = getFaditorSubtypeCount(VideoItem.FaditorSubtype.MERGE);
+        setChipLabelWithCount(chipFaditorAll, R.string.records_filter_faditor_all, all);
+        setChipLabelWithCount(chipFaditorConverted, R.string.records_filter_faditor_converted, converted);
+        setChipLabelWithCount(chipFaditorMerge, R.string.records_filter_faditor_merge, merge);
     }
 
     private void setChipLabelWithCount(@Nullable Chip chip, int baseLabelRes, int count) {
@@ -2200,14 +2681,47 @@ public class RecordsFragment extends BaseFragment implements
         chip.setText(getString(baseLabelRes) + " " + count);
     }
 
-    private void reorderFilterChipsByCount(int camera, int dual, int screen, int faditor, int stream) {
+    private int getShotSubtypeCount(@NonNull VideoItem.ShotSubtype subtype) {
+        int count = 0;
+        for (VideoItem item : allLoadedItems) {
+            if (item.category != VideoItem.Category.SHOT) continue;
+            if (matchesShotSubtype(item, subtype)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int getCameraSubtypeCount(@NonNull VideoItem.CameraSubtype subtype) {
+        int count = 0;
+        for (VideoItem item : allLoadedItems) {
+            if (item.category != VideoItem.Category.CAMERA && item.category != VideoItem.Category.DUAL) continue;
+            if (matchesCameraSubtype(item, subtype)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int getFaditorSubtypeCount(@NonNull VideoItem.FaditorSubtype subtype) {
+        int count = 0;
+        for (VideoItem item : allLoadedItems) {
+            if (item.category != VideoItem.Category.FADITOR) continue;
+            if (matchesFaditorSubtype(item, subtype)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private void reorderFilterChipsByCount(int camera, int screen, int faditor, int stream, int shot) {
         if (chipGroupRecordsFilter == null || chipFilterAll == null) return;
         List<ChipOrderItem> ordered = new ArrayList<>();
         ordered.add(new ChipOrderItem(chipFilterCamera, camera));
-        ordered.add(new ChipOrderItem(chipFilterDual, dual));
         ordered.add(new ChipOrderItem(chipFilterScreen, screen));
         ordered.add(new ChipOrderItem(chipFilterFaditor, faditor));
         ordered.add(new ChipOrderItem(chipFilterStream, stream));
+        ordered.add(new ChipOrderItem(chipFilterShot, shot));
         Collections.sort(ordered, (a, b) -> Integer.compare(b.count, a.count));
 
         chipGroupRecordsFilter.removeAllViews();
@@ -2224,14 +2738,14 @@ public class RecordsFragment extends BaseFragment implements
         switch (filter) {
             case CAMERA:
                 return R.id.chip_filter_camera;
-            case DUAL:
-                return R.id.chip_filter_dual;
             case SCREEN:
                 return R.id.chip_filter_screen;
             case FADITOR:
                 return R.id.chip_filter_faditor;
             case STREAM:
                 return R.id.chip_filter_stream;
+            case SHOT:
+                return R.id.chip_filter_shot;
             case UNKNOWN:
             case ALL:
             default:
@@ -2259,7 +2773,35 @@ public class RecordsFragment extends BaseFragment implements
             if (category == null || category == VideoItem.Category.UNKNOWN) {
                 category = inferCategoryForVideoItem(item);
             }
-            VideoItem copy = new VideoItem(item.uri, item.displayName, item.size, item.lastModified, category);
+            VideoItem.ShotSubtype shotSubtype = item.shotSubtype;
+            if (category == VideoItem.Category.SHOT) {
+                shotSubtype = resolveShotSubtypeFromItem(item);
+            } else {
+                shotSubtype = VideoItem.ShotSubtype.UNKNOWN;
+            }
+            VideoItem.CameraSubtype cameraSubtype = item.cameraSubtype;
+            if (category == VideoItem.Category.CAMERA || category == VideoItem.Category.DUAL) {
+                cameraSubtype = resolveCameraSubtypeFromItem(item);
+                category = VideoItem.Category.CAMERA;
+            } else {
+                cameraSubtype = VideoItem.CameraSubtype.UNKNOWN;
+            }
+            VideoItem.FaditorSubtype faditorSubtype = item.faditorSubtype;
+            if (category == VideoItem.Category.FADITOR) {
+                faditorSubtype = resolveFaditorSubtypeFromItem(item);
+            } else {
+                faditorSubtype = VideoItem.FaditorSubtype.UNKNOWN;
+            }
+            VideoItem copy = new VideoItem(
+                    item.uri,
+                    item.displayName,
+                    item.size,
+                    item.lastModified,
+                    category,
+                    resolveMediaTypeFromItem(item),
+                    shotSubtype,
+                    cameraSubtype,
+                    faditorSubtype);
             copy.isTemporary = item.isTemporary;
             copy.isNew = item.isNew;
             copy.isProcessingUri = item.isProcessingUri;
@@ -2267,6 +2809,15 @@ public class RecordsFragment extends BaseFragment implements
             normalized.add(copy);
         }
         return normalized;
+    }
+
+    @NonNull
+    private VideoItem.MediaType resolveMediaTypeFromItem(@NonNull VideoItem item) {
+        VideoItem.MediaType inferred = inferMediaTypeFromName(item.displayName);
+        if (inferred == null && item.uri != null) {
+            inferred = inferMediaTypeFromName(item.uri.toString());
+        }
+        return inferred != null ? inferred : (item.mediaType != null ? item.mediaType : VideoItem.MediaType.VIDEO);
     }
 
     private VideoItem.Category inferCategoryForVideoItem(@NonNull VideoItem item) {
@@ -2277,7 +2828,7 @@ public class RecordsFragment extends BaseFragment implements
         }
         if (uri.contains("/" + Constants.RECORDING_SUBDIR_DUAL + "/")
                 || uri.contains("%2F" + Constants.RECORDING_SUBDIR_DUAL + "%2F")) {
-            return VideoItem.Category.DUAL;
+            return VideoItem.Category.CAMERA;
         }
         if (uri.contains("/" + Constants.RECORDING_SUBDIR_SCREEN + "/")
                 || uri.contains("%2F" + Constants.RECORDING_SUBDIR_SCREEN + "%2F")) {
@@ -2291,6 +2842,10 @@ public class RecordsFragment extends BaseFragment implements
                 || uri.contains("%2F" + Constants.RECORDING_SUBDIR_STREAM + "%2F")) {
             return VideoItem.Category.STREAM;
         }
+        if (uri.contains("/" + Constants.RECORDING_SUBDIR_SHOT + "/")
+                || uri.contains("%2F" + Constants.RECORDING_SUBDIR_SHOT + "%2F")) {
+            return VideoItem.Category.SHOT;
+        }
         return inferCategoryFromLegacyName(item.displayName);
     }
 
@@ -2301,22 +2856,65 @@ public class RecordsFragment extends BaseFragment implements
             filterHelperText.setText("");
             return;
         }
-        int textRes;
+        String helper;
         switch (activeFilter) {
             case CAMERA:
-                textRes = R.string.records_filter_helper_camera;
-                break;
-            case DUAL:
-                textRes = R.string.records_filter_helper_dual;
+                switch (activeCameraSubtype) {
+                    case BACK:
+                        helper = getString(R.string.records_filter_helper_camera_back);
+                        break;
+                    case FRONT:
+                        helper = getString(R.string.records_filter_helper_camera_front);
+                        break;
+                    case DUAL:
+                        helper = getString(R.string.records_filter_helper_camera_dual);
+                        break;
+                    case UNKNOWN:
+                    case ALL:
+                    default:
+                        helper = getString(R.string.records_filter_helper_camera_all);
+                        break;
+                }
                 break;
             case SCREEN:
-                textRes = R.string.records_filter_helper_screen;
+                helper = getString(R.string.records_filter_helper_screen);
                 break;
             case FADITOR:
-                textRes = R.string.records_filter_helper_faditor;
+                switch (activeFaditorSubtype) {
+                    case CONVERTED:
+                        helper = getString(R.string.records_filter_helper_faditor_converted);
+                        break;
+                    case MERGE:
+                        helper = getString(R.string.records_filter_helper_faditor_merge);
+                        break;
+                    case OTHER:
+                    case UNKNOWN:
+                    case ALL:
+                    default:
+                        helper = getString(R.string.records_filter_helper_faditor_all);
+                        break;
+                }
                 break;
             case STREAM:
-                textRes = R.string.records_filter_helper_stream;
+                helper = getString(R.string.records_filter_helper_stream);
+                break;
+            case SHOT:
+                switch (activeShotSubtype) {
+                    case BACK:
+                        helper = getString(R.string.records_filter_helper_shot_back);
+                        break;
+                    case SELFIE:
+                        helper = getString(R.string.records_filter_helper_shot_selfie);
+                        break;
+                    case FADREC:
+                        helper = getString(R.string.records_filter_helper_shot_fadrec);
+                        break;
+                    case UNKNOWN:
+                    case ALL:
+                    default:
+                        helper = getString(R.string.records_filter_helper_shot_all);
+                        break;
+                }
                 break;
             case UNKNOWN:
             case ALL:
@@ -2325,8 +2923,7 @@ public class RecordsFragment extends BaseFragment implements
                 filterHelperText.setText("");
                 return;
         }
-        String helper = getString(textRes)
-                + " • "
+        helper = helper + " • "
                 + getString(R.string.records_location_format, getStorageLocationLabel(), getCategoryFolderLabel(activeFilter));
         filterHelperText.setText(helper);
         filterHelperText.setVisibility(View.VISIBLE);
@@ -2354,15 +2951,39 @@ public class RecordsFragment extends BaseFragment implements
     private String getCategoryFolderLabel(@NonNull VideoItem.Category category) {
         switch (category) {
             case CAMERA:
+                if (activeCameraSubtype == VideoItem.CameraSubtype.BACK) {
+                    return Constants.RECORDING_SUBDIR_CAMERA + "/" + Constants.RECORDING_SUBDIR_CAMERA_BACK;
+                }
+                if (activeCameraSubtype == VideoItem.CameraSubtype.FRONT) {
+                    return Constants.RECORDING_SUBDIR_CAMERA + "/" + Constants.RECORDING_SUBDIR_CAMERA_FRONT;
+                }
+                if (activeCameraSubtype == VideoItem.CameraSubtype.DUAL) {
+                    return Constants.RECORDING_SUBDIR_CAMERA + "/" + Constants.RECORDING_SUBDIR_CAMERA_DUAL;
+                }
                 return Constants.RECORDING_SUBDIR_CAMERA;
-            case DUAL:
-                return Constants.RECORDING_SUBDIR_DUAL;
             case SCREEN:
                 return Constants.RECORDING_SUBDIR_SCREEN;
             case FADITOR:
+                if (activeFaditorSubtype == VideoItem.FaditorSubtype.CONVERTED) {
+                    return Constants.RECORDING_SUBDIR_FADITOR + "/" + Constants.RECORDING_SUBDIR_FADITOR_CONVERTED;
+                }
+                if (activeFaditorSubtype == VideoItem.FaditorSubtype.MERGE) {
+                    return Constants.RECORDING_SUBDIR_FADITOR + "/" + Constants.RECORDING_SUBDIR_FADITOR_MERGE;
+                }
                 return Constants.RECORDING_SUBDIR_FADITOR;
             case STREAM:
                 return Constants.RECORDING_SUBDIR_STREAM;
+            case SHOT:
+                if (activeShotSubtype == VideoItem.ShotSubtype.SELFIE) {
+                    return Constants.RECORDING_SUBDIR_SHOT + "/" + Constants.RECORDING_SUBDIR_SHOT_SELFIE;
+                }
+                if (activeShotSubtype == VideoItem.ShotSubtype.FADREC) {
+                    return Constants.RECORDING_SUBDIR_SHOT + "/" + Constants.RECORDING_SUBDIR_SHOT_FADREC;
+                }
+                if (activeShotSubtype == VideoItem.ShotSubtype.BACK) {
+                    return Constants.RECORDING_SUBDIR_SHOT + "/" + Constants.RECORDING_SUBDIR_SHOT_BACK;
+                }
+                return Constants.RECORDING_SUBDIR_SHOT;
             case ALL:
             case UNKNOWN:
             default:
@@ -3596,6 +4217,8 @@ public class RecordsFragment extends BaseFragment implements
      */
     @SuppressLint("NotifyDataSetChanged")
     private void loadRecordsList() {
+        Log.d(TAG, "loadRecordsList: start, storageMode=" + sharedPreferencesManager.getStorageMode()
+                + ", activeFilter=" + activeFilter);
         Log.i(TAG, "loadRecordsList: Starting optimized progressive loading");
 
         // -----------
@@ -3816,20 +4439,246 @@ public class RecordsFragment extends BaseFragment implements
     }
 
     private boolean isSupportedVideoFile(@Nullable String fileName) {
-        if (fileName == null) return false;
+        return inferMediaTypeFromName(fileName) == VideoItem.MediaType.VIDEO;
+    }
+
+    @Nullable
+    private VideoItem.MediaType inferMediaTypeFromName(@Nullable String fileName) {
+        if (fileName == null) return null;
         String lower = fileName.toLowerCase();
         String expectedExt = "." + Constants.RECORDING_FILE_EXTENSION.toLowerCase();
-        return lower.endsWith(expectedExt);
+        if (lower.endsWith(expectedExt)) {
+            return VideoItem.MediaType.VIDEO;
+        }
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".webp")) {
+            return VideoItem.MediaType.IMAGE;
+        }
+        return null;
+    }
+
+    @NonNull
+    private VideoItem.ShotSubtype inferShotSubtypeFromFolder(@Nullable String folderName) {
+        if (folderName == null) return VideoItem.ShotSubtype.UNKNOWN;
+        if (Constants.RECORDING_SUBDIR_SHOT_SELFIE.equalsIgnoreCase(folderName)) {
+            return VideoItem.ShotSubtype.SELFIE;
+        }
+        if (Constants.RECORDING_SUBDIR_SHOT_FADREC.equalsIgnoreCase(folderName)) {
+            return VideoItem.ShotSubtype.FADREC;
+        }
+        if (Constants.RECORDING_SUBDIR_SHOT_BACK.equalsIgnoreCase(folderName)) {
+            return VideoItem.ShotSubtype.BACK;
+        }
+        return VideoItem.ShotSubtype.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.ShotSubtype inferShotSubtypeFromName(@Nullable String fileName) {
+        if (fileName == null) return VideoItem.ShotSubtype.UNKNOWN;
+        if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADSHOT + "Selfie_")) {
+            return VideoItem.ShotSubtype.SELFIE;
+        }
+        if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADSHOT + "FadRec_")) {
+            return VideoItem.ShotSubtype.FADREC;
+        }
+        if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADSHOT + "Back_")) {
+            return VideoItem.ShotSubtype.BACK;
+        }
+        return VideoItem.ShotSubtype.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.ShotSubtype resolveShotSubtype(
+            @NonNull VideoItem.ShotSubtype explicitSubtype,
+            @Nullable String fileName
+    ) {
+        if (explicitSubtype != VideoItem.ShotSubtype.UNKNOWN) {
+            return explicitSubtype;
+        }
+        VideoItem.ShotSubtype byName = inferShotSubtypeFromName(fileName);
+        if (byName != VideoItem.ShotSubtype.UNKNOWN) {
+            return byName;
+        }
+        return VideoItem.ShotSubtype.BACK;
+    }
+
+    @NonNull
+    private VideoItem.ShotSubtype resolveShotSubtypeFromItem(@NonNull VideoItem item) {
+        if (item.shotSubtype != null && item.shotSubtype != VideoItem.ShotSubtype.UNKNOWN) {
+            return item.shotSubtype;
+        }
+        VideoItem.ShotSubtype byUri = inferShotSubtypeFromUri(item.uri);
+        if (byUri != VideoItem.ShotSubtype.UNKNOWN) {
+            return byUri;
+        }
+        return resolveShotSubtype(VideoItem.ShotSubtype.UNKNOWN, item.displayName);
+    }
+
+    @NonNull
+    private VideoItem.ShotSubtype inferShotSubtypeFromUri(@Nullable Uri uri) {
+        if (uri == null) return VideoItem.ShotSubtype.UNKNOWN;
+        String value = uri.toString();
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_SHOT + "/" + Constants.RECORDING_SUBDIR_SHOT_SELFIE + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_SHOT + "%2F" + Constants.RECORDING_SUBDIR_SHOT_SELFIE + "%2F")) {
+            return VideoItem.ShotSubtype.SELFIE;
+        }
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_SHOT + "/" + Constants.RECORDING_SUBDIR_SHOT_FADREC + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_SHOT + "%2F" + Constants.RECORDING_SUBDIR_SHOT_FADREC + "%2F")) {
+            return VideoItem.ShotSubtype.FADREC;
+        }
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_SHOT + "/" + Constants.RECORDING_SUBDIR_SHOT_BACK + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_SHOT + "%2F" + Constants.RECORDING_SUBDIR_SHOT_BACK + "%2F")) {
+            return VideoItem.ShotSubtype.BACK;
+        }
+        return VideoItem.ShotSubtype.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.CameraSubtype inferCameraSubtypeFromFolder(@Nullable String folderName) {
+        if (folderName == null) return VideoItem.CameraSubtype.UNKNOWN;
+        if (Constants.RECORDING_SUBDIR_CAMERA_FRONT.equalsIgnoreCase(folderName)) {
+            return VideoItem.CameraSubtype.FRONT;
+        }
+        if (Constants.RECORDING_SUBDIR_CAMERA_DUAL.equalsIgnoreCase(folderName)) {
+            return VideoItem.CameraSubtype.DUAL;
+        }
+        if (Constants.RECORDING_SUBDIR_CAMERA_BACK.equalsIgnoreCase(folderName)) {
+            return VideoItem.CameraSubtype.BACK;
+        }
+        return VideoItem.CameraSubtype.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.CameraSubtype inferCameraSubtypeFromName(@Nullable String fileName) {
+        if (fileName == null) return VideoItem.CameraSubtype.UNKNOWN;
+        if (fileName.startsWith("DualCam_")) {
+            return VideoItem.CameraSubtype.DUAL;
+        }
+        return VideoItem.CameraSubtype.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.CameraSubtype resolveCameraSubtype(
+            @NonNull VideoItem.CameraSubtype explicitSubtype,
+            @Nullable String fileName
+    ) {
+        if (explicitSubtype != VideoItem.CameraSubtype.UNKNOWN) {
+            return explicitSubtype;
+        }
+        VideoItem.CameraSubtype byName = inferCameraSubtypeFromName(fileName);
+        if (byName != VideoItem.CameraSubtype.UNKNOWN) {
+            return byName;
+        }
+        return VideoItem.CameraSubtype.BACK;
+    }
+
+    @NonNull
+    private VideoItem.CameraSubtype resolveCameraSubtypeFromItem(@NonNull VideoItem item) {
+        if (item.cameraSubtype != null && item.cameraSubtype != VideoItem.CameraSubtype.UNKNOWN) {
+            return item.cameraSubtype;
+        }
+        VideoItem.CameraSubtype byUri = inferCameraSubtypeFromUri(item.uri);
+        if (byUri != VideoItem.CameraSubtype.UNKNOWN) {
+            return byUri;
+        }
+        return resolveCameraSubtype(VideoItem.CameraSubtype.UNKNOWN, item.displayName);
+    }
+
+    @NonNull
+    private VideoItem.CameraSubtype inferCameraSubtypeFromUri(@Nullable Uri uri) {
+        if (uri == null) return VideoItem.CameraSubtype.UNKNOWN;
+        String value = uri.toString();
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_CAMERA + "/" + Constants.RECORDING_SUBDIR_CAMERA_FRONT + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_CAMERA + "%2F" + Constants.RECORDING_SUBDIR_CAMERA_FRONT + "%2F")) {
+            return VideoItem.CameraSubtype.FRONT;
+        }
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_CAMERA + "/" + Constants.RECORDING_SUBDIR_CAMERA_DUAL + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_CAMERA + "%2F" + Constants.RECORDING_SUBDIR_CAMERA_DUAL + "%2F")
+                || value.contains("/" + Constants.RECORDING_SUBDIR_DUAL + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_DUAL + "%2F")) {
+            return VideoItem.CameraSubtype.DUAL;
+        }
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_CAMERA + "/" + Constants.RECORDING_SUBDIR_CAMERA_BACK + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_CAMERA + "%2F" + Constants.RECORDING_SUBDIR_CAMERA_BACK + "%2F")) {
+            return VideoItem.CameraSubtype.BACK;
+        }
+        return VideoItem.CameraSubtype.UNKNOWN;
     }
 
     private VideoItem.Category inferCategoryFromLegacyName(@Nullable String fileName) {
         if (fileName == null) return VideoItem.Category.UNKNOWN;
         if (fileName.startsWith(Constants.RECORDING_DIRECTORY + "_")) return VideoItem.Category.CAMERA;
-        if (fileName.startsWith("DualCam_")) return VideoItem.Category.DUAL;
+        if (fileName.startsWith("DualCam_")) return VideoItem.Category.CAMERA;
         if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADREC)) return VideoItem.Category.SCREEN;
         if (fileName.startsWith("Faditor_")) return VideoItem.Category.FADITOR;
         if (fileName.startsWith("Stream_")) return VideoItem.Category.STREAM;
+        if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADSHOT)) return VideoItem.Category.SHOT;
         return VideoItem.Category.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.FaditorSubtype inferFaditorSubtypeFromFolder(@Nullable String folderName) {
+        if (folderName == null) return VideoItem.FaditorSubtype.UNKNOWN;
+        if (Constants.RECORDING_SUBDIR_FADITOR_CONVERTED.equalsIgnoreCase(folderName)) {
+            return VideoItem.FaditorSubtype.CONVERTED;
+        }
+        if (Constants.RECORDING_SUBDIR_FADITOR_MERGE.equalsIgnoreCase(folderName)) {
+            return VideoItem.FaditorSubtype.MERGE;
+        }
+        return VideoItem.FaditorSubtype.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.FaditorSubtype inferFaditorSubtypeFromName(@Nullable String fileName) {
+        if (fileName == null) return VideoItem.FaditorSubtype.UNKNOWN;
+        if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADITOR_STANDARD)) {
+            return VideoItem.FaditorSubtype.CONVERTED;
+        }
+        if (fileName.startsWith(Constants.RECORDING_FILE_PREFIX_FADITOR_MERGE)) {
+            return VideoItem.FaditorSubtype.MERGE;
+        }
+        return VideoItem.FaditorSubtype.UNKNOWN;
+    }
+
+    @NonNull
+    private VideoItem.FaditorSubtype resolveFaditorSubtype(
+            @NonNull VideoItem.FaditorSubtype explicitSubtype,
+            @Nullable String fileName
+    ) {
+        if (explicitSubtype != VideoItem.FaditorSubtype.UNKNOWN) {
+            return explicitSubtype;
+        }
+        VideoItem.FaditorSubtype byName = inferFaditorSubtypeFromName(fileName);
+        if (byName != VideoItem.FaditorSubtype.UNKNOWN) {
+            return byName;
+        }
+        return VideoItem.FaditorSubtype.OTHER;
+    }
+
+    @NonNull
+    private VideoItem.FaditorSubtype resolveFaditorSubtypeFromItem(@NonNull VideoItem item) {
+        if (item.faditorSubtype != null && item.faditorSubtype != VideoItem.FaditorSubtype.UNKNOWN) {
+            return item.faditorSubtype;
+        }
+        VideoItem.FaditorSubtype byUri = inferFaditorSubtypeFromUri(item.uri);
+        if (byUri != VideoItem.FaditorSubtype.UNKNOWN) {
+            return byUri;
+        }
+        return resolveFaditorSubtype(VideoItem.FaditorSubtype.UNKNOWN, item.displayName);
+    }
+
+    @NonNull
+    private VideoItem.FaditorSubtype inferFaditorSubtypeFromUri(@Nullable Uri uri) {
+        if (uri == null) return VideoItem.FaditorSubtype.UNKNOWN;
+        String value = uri.toString();
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_FADITOR + "/" + Constants.RECORDING_SUBDIR_FADITOR_CONVERTED + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_FADITOR + "%2F" + Constants.RECORDING_SUBDIR_FADITOR_CONVERTED + "%2F")) {
+            return VideoItem.FaditorSubtype.CONVERTED;
+        }
+        if (value.contains("/" + Constants.RECORDING_SUBDIR_FADITOR + "/" + Constants.RECORDING_SUBDIR_FADITOR_MERGE + "/")
+                || value.contains("%2F" + Constants.RECORDING_SUBDIR_FADITOR + "%2F" + Constants.RECORDING_SUBDIR_FADITOR_MERGE + "%2F")) {
+            return VideoItem.FaditorSubtype.MERGE;
+        }
+        return VideoItem.FaditorSubtype.UNKNOWN;
     }
 
     private void addSafCategoryFiles(
@@ -3840,6 +4689,18 @@ public class RecordsFragment extends BaseFragment implements
     ) {
         DocumentFile childDir = RecordingStoragePaths.findOrCreateChildDirectory(baseDir, childFolderName, false);
         if (childDir == null || !childDir.isDirectory() || !childDir.canRead()) {
+            return;
+        }
+        if (category == VideoItem.Category.CAMERA) {
+            addSafCameraFiles(out, childDir);
+            return;
+        }
+        if (category == VideoItem.Category.SHOT) {
+            addSafShotFiles(out, childDir);
+            return;
+        }
+        if (category == VideoItem.Category.FADITOR) {
+            addSafFaditorFiles(out, childDir);
             return;
         }
         DocumentFile[] files = childDir.listFiles();
@@ -3853,22 +4714,111 @@ public class RecordsFragment extends BaseFragment implements
         }
     }
 
-    private void addSafVideoItem(
+    private void addSafCameraFiles(@NonNull List<SafCandidate> out, @NonNull DocumentFile cameraRoot) {
+        DocumentFile[] entries = cameraRoot.listFiles();
+        if (entries == null) return;
+        for (DocumentFile entry : entries) {
+            if (entry == null) continue;
+            if (entry.isFile()) {
+                out.add(new SafCandidate(
+                        entry,
+                        VideoItem.Category.CAMERA,
+                        VideoItem.ShotSubtype.UNKNOWN,
+                        inferCameraSubtypeFromName(entry.getName())));
+                continue;
+            }
+            if (!entry.isDirectory()) continue;
+            VideoItem.CameraSubtype subtype = inferCameraSubtypeFromFolder(entry.getName());
+            DocumentFile[] nested = entry.listFiles();
+            if (nested == null) continue;
+            for (DocumentFile nestedFile : nested) {
+                if (nestedFile != null && nestedFile.isFile()) {
+                    out.add(new SafCandidate(
+                            nestedFile,
+                            VideoItem.Category.CAMERA,
+                            VideoItem.ShotSubtype.UNKNOWN,
+                            subtype));
+                }
+            }
+        }
+    }
+
+    private void addSafShotFiles(@NonNull List<SafCandidate> out, @NonNull DocumentFile shotRoot) {
+        DocumentFile[] entries = shotRoot.listFiles();
+        if (entries == null) return;
+        for (DocumentFile entry : entries) {
+            if (entry == null) continue;
+            if (entry.isFile()) {
+                out.add(new SafCandidate(entry, VideoItem.Category.SHOT, inferShotSubtypeFromName(entry.getName())));
+                continue;
+            }
+            if (!entry.isDirectory()) continue;
+            VideoItem.ShotSubtype subtype = inferShotSubtypeFromFolder(entry.getName());
+            DocumentFile[] nested = entry.listFiles();
+            if (nested == null) continue;
+            for (DocumentFile nestedFile : nested) {
+                if (nestedFile != null && nestedFile.isFile()) {
+                    out.add(new SafCandidate(nestedFile, VideoItem.Category.SHOT, subtype));
+                }
+            }
+        }
+    }
+
+    private void addSafFaditorFiles(@NonNull List<SafCandidate> out, @NonNull DocumentFile faditorRoot) {
+        DocumentFile[] entries = faditorRoot.listFiles();
+        if (entries == null) return;
+        for (DocumentFile entry : entries) {
+            if (entry == null) continue;
+            if (entry.isFile()) {
+                out.add(new SafCandidate(
+                        entry,
+                        VideoItem.Category.FADITOR,
+                        VideoItem.ShotSubtype.UNKNOWN,
+                        VideoItem.CameraSubtype.UNKNOWN,
+                        inferFaditorSubtypeFromName(entry.getName())));
+                continue;
+            }
+            if (!entry.isDirectory()) continue;
+            VideoItem.FaditorSubtype subtype = inferFaditorSubtypeFromFolder(entry.getName());
+            DocumentFile[] nested = entry.listFiles();
+            if (nested == null) continue;
+            for (DocumentFile nestedFile : nested) {
+                if (nestedFile != null && nestedFile.isFile()) {
+                    out.add(new SafCandidate(
+                            nestedFile,
+                            VideoItem.Category.FADITOR,
+                            VideoItem.ShotSubtype.UNKNOWN,
+                            VideoItem.CameraSubtype.UNKNOWN,
+                            subtype));
+                }
+            }
+        }
+    }
+
+    private void addSafMediaItem(
             @NonNull List<VideoItem> out,
             @NonNull DocumentFile docFile,
-            @NonNull VideoItem.Category explicitCategory
+            @NonNull VideoItem.Category explicitCategory,
+            @NonNull VideoItem.ShotSubtype explicitShotSubtype,
+            @NonNull VideoItem.CameraSubtype explicitCameraSubtype,
+            @NonNull VideoItem.FaditorSubtype explicitFaditorSubtype
     ) {
         String fileName = docFile.getName();
-        if (!isSupportedVideoFile(fileName)) {
+        VideoItem.MediaType mediaType = inferMediaTypeFromName(fileName);
+        if (mediaType == null) {
             return;
         }
-        if (fileName != null && fileName.startsWith("temp_")) {
+        if (fileName != null && fileName.startsWith("temp_") && mediaType == VideoItem.MediaType.VIDEO) {
             VideoItem tempVideoItem = new VideoItem(
                     docFile.getUri(),
                     fileName,
                     docFile.length(),
                     docFile.lastModified(),
-                    VideoItem.Category.UNKNOWN);
+                    VideoItem.Category.UNKNOWN,
+                    VideoItem.MediaType.VIDEO,
+                    VideoItem.ShotSubtype.UNKNOWN,
+                    VideoItem.CameraSubtype.UNKNOWN,
+                    VideoItem.FaditorSubtype.UNKNOWN);
             tempVideoItem.isTemporary = true;
             tempVideoItem.isNew = false;
             if (currentlyProcessingUris.contains(docFile.getUri())) {
@@ -3882,12 +4832,25 @@ public class RecordsFragment extends BaseFragment implements
                 ? explicitCategory
                 : inferCategoryFromLegacyName(fileName);
         long lastModified = docFile.lastModified();
+        VideoItem.ShotSubtype shotSubtype = category == VideoItem.Category.SHOT
+                ? resolveShotSubtype(explicitShotSubtype, fileName)
+                : VideoItem.ShotSubtype.UNKNOWN;
+        VideoItem.CameraSubtype cameraSubtype = category == VideoItem.Category.CAMERA
+                ? resolveCameraSubtype(explicitCameraSubtype, fileName)
+                : VideoItem.CameraSubtype.UNKNOWN;
+        VideoItem.FaditorSubtype faditorSubtype = category == VideoItem.Category.FADITOR
+                ? resolveFaditorSubtype(explicitFaditorSubtype, fileName)
+                : VideoItem.FaditorSubtype.UNKNOWN;
         VideoItem item = new VideoItem(
                 docFile.getUri(),
                 fileName,
                 docFile.length(),
                 lastModified,
-                category);
+                category,
+                mediaType,
+                shotSubtype,
+                cameraSubtype,
+                faditorSubtype);
         item.isTemporary = false;
         item.isNew = Utils.isVideoConsideredNew(lastModified);
         out.add(item);

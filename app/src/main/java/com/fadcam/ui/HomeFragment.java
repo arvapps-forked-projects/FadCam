@@ -85,6 +85,7 @@ import com.fadcam.streaming.RemoteStreamManager;
 import com.fadcam.ui.helpers.HomeFragmentHelper;
 import com.fadcam.utils.DebouncedRunnable;
 import com.fadcam.utils.DeviceHelper;
+import com.fadcam.utils.ServiceStartPolicy;
 import com.fadcam.utils.StorageInfoCache;
 import com.fadcam.utils.VideoStatsCache;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -209,6 +210,8 @@ public class HomeFragment extends BaseFragment {
 
     private View cardPreview;
     private TextView btnFullscreenPreview;
+    private TextView btnCaptureShotPreview;
+    private boolean isLaunchingPhotoCapture = false;
     private Vibrator vibrator;
     private ImageView ivBubbleBackground; // Rotating bubble shape behind camera icon
 
@@ -1596,6 +1599,7 @@ public class HomeFragment extends BaseFragment {
 
         // Start bubble rotation animation when visible (battery optimization)
         startBubbleRotation();
+        isLaunchingPhotoCapture = false;
     }
 
     // Inside HomeFragment.java
@@ -2859,7 +2863,9 @@ public class HomeFragment extends BaseFragment {
         Log.d(TAG, "HomeFragment paused.");
 
         // Stop bubble rotation animation to save battery
-        stopBubbleRotation();
+        if (!isLaunchingPhotoCapture) {
+            stopBubbleRotation();
+        }
 
         if (textureViewSurface != null && !isReturningFromFullscreen) {
             Log.d(TAG, "onPause: Explicitly sending null surface to service");
@@ -3606,11 +3612,11 @@ public class HomeFragment extends BaseFragment {
                 this,
                 (requestKey, bundle) -> {
                     if (bundle == null) return;
+                    if (bundle.containsKey("preview_quick_actions_always_visible")) {
+                        updateFullscreenButtonVisibility();
+                    }
                     if (!bundle.containsKey("preview_enabled")) return;
-                    boolean enabled = bundle.getBoolean(
-                        "preview_enabled",
-                        true
-                    );
+                    boolean enabled = bundle.getBoolean("preview_enabled", true);
 
                     // Remember previous state so we can perform any additional actions when enabling
                     boolean wasEnabled = isPreviewEnabled;
@@ -4841,7 +4847,7 @@ public class HomeFragment extends BaseFragment {
             queryIntent.setAction(
                 Constants.BROADCAST_ON_RECORDING_STATE_REQUEST
             );
-            ContextCompat.startForegroundService(getContext(), queryIntent);
+            ServiceStartPolicy.startRecordingAction(requireContext(), queryIntent);
             // UI should update based on the broadcast from the service
             return; // Don't try to start again if it might be running
         }
@@ -4875,7 +4881,7 @@ public class HomeFragment extends BaseFragment {
             serviceIntent.putExtra("SURFACE", (Surface) null); // Explicitly pass null
         }
 
-        ContextCompat.startForegroundService(getContext(), serviceIntent);
+        ServiceStartPolicy.startRecordingAction(requireContext(), serviceIntent);
         // UI state changes will be handled by broadcast receivers
         // setUIForRecordingActive(); // Move UI update to onRecordingStarted broadcast
         // receiver
@@ -4913,7 +4919,7 @@ public class HomeFragment extends BaseFragment {
 
         Intent intent = new Intent(getContext(), DualCameraRecordingService.class);
         intent.setAction(Constants.INTENT_ACTION_START_DUAL_RECORDING);
-        ContextCompat.startForegroundService(getContext(), intent);
+        ServiceStartPolicy.startRecordingAction(requireContext(), intent);
 
         Log.d(TAG, "startDualRecording: DualCameraRecordingService start initiated.");
     }
@@ -5045,7 +5051,7 @@ public class HomeFragment extends BaseFragment {
             queryIntent.setAction(
                 Constants.BROADCAST_ON_RECORDING_STATE_REQUEST
             );
-            ContextCompat.startForegroundService(getContext(), queryIntent);
+            ServiceStartPolicy.startRecordingAction(requireContext(), queryIntent);
             // UI should update based on the broadcast from the service
             return; // Don't try to start again if it might be running
         }
@@ -5079,7 +5085,7 @@ public class HomeFragment extends BaseFragment {
             serviceIntent.putExtra("SURFACE", (Surface) null); // Explicitly pass null
         }
 
-        ContextCompat.startForegroundService(getContext(), serviceIntent);
+        ServiceStartPolicy.startRecordingAction(requireContext(), serviceIntent);
         // UI state changes will be handled by broadcast receivers
         // setUIForRecordingActive(); // Move UI update to onRecordingStarted broadcast
         // receiver
@@ -7525,23 +7531,21 @@ public class HomeFragment extends BaseFragment {
             }
 
             if (isRecordingOrPaused()) {
+                boolean dualRunning = isMyServiceRunning(DualCameraRecordingService.class);
                 Log.d(
                     TAG,
-                    "Recording active. Sending toggle intent to RecordingService. Current isTorchOn (UI state): " +
+                    "Recording active. Sending toggle intent. dualRunning=" + dualRunning + ", isTorchOn=" +
                     isTorchOn
                 );
                 Intent serviceIntent = new Intent(
                     getContext(),
-                    RecordingService.class
+                    dualRunning ? DualCameraRecordingService.class : RecordingService.class
                 );
                 serviceIntent.setAction(
                     Constants.INTENT_ACTION_TOGGLE_RECORDING_TORCH
                 );
                 try {
-                    ContextCompat.startForegroundService(
-                        getContext(),
-                        serviceIntent
-                    );
+                    ServiceStartPolicy.startRecordingAction(requireContext(), serviceIntent);
                 } catch (Exception e) {
                     Log.e(
                         TAG,
@@ -8159,7 +8163,9 @@ public class HomeFragment extends BaseFragment {
         buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
         cardPreview = view.findViewById(R.id.cardPreview); // Assuming R.id.cardPreview exists
         btnFullscreenPreview = view.findViewById(R.id.btnFullscreenPreview);
+        btnCaptureShotPreview = view.findViewById(R.id.btnCaptureShotPreview);
         setupFullscreenButton();
+        setupCaptureShotButton();
         vibrator = (Vibrator) requireActivity().getSystemService(
             Context.VIBRATOR_SERVICE
         );
@@ -8199,6 +8205,9 @@ public class HomeFragment extends BaseFragment {
      */
     private void startBubbleRotation() {
         if (ivBubbleBackground != null) {
+            if (ivBubbleBackground.getAnimation() != null) {
+                return;
+            }
             android.view.animation.Animation rotateAnimation = 
                 android.view.animation.AnimationUtils.loadAnimation(requireContext(), R.anim.rotate_slow_left);
             ivBubbleBackground.startAnimation(rotateAnimation);
@@ -8238,6 +8247,32 @@ public class HomeFragment extends BaseFragment {
         });
     }
 
+    private void setupCaptureShotButton() {
+        if (btnCaptureShotPreview == null) return;
+        btnCaptureShotPreview.setOnClickListener(v -> captureShotFromCurrentPreview());
+    }
+
+    private void captureShotFromCurrentPreview() {
+        if (!isRecordingOrPaused()) {
+            try {
+                isLaunchingPhotoCapture = true;
+                Intent shotIntent = new Intent(requireContext(), com.fadcam.PhotoCaptureActivity.class);
+                shotIntent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
+                startActivity(shotIntent);
+            } catch (Exception e) {
+                isLaunchingPhotoCapture = false;
+                Toast.makeText(requireContext(), R.string.photo_capture_failed, Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+        Intent intent = new Intent(
+                requireContext(),
+                isDualRecordingActive ? DualCameraRecordingService.class : RecordingService.class
+        );
+        intent.setAction(Constants.INTENT_ACTION_CAPTURE_PHOTO);
+        requireContext().startService(intent);
+    }
+
     /**
      * Activity result launcher for returning from fullscreen preview.
      * Re-sends the HomeFragment TextureView surface to the recording service.
@@ -8274,7 +8309,16 @@ public class HomeFragment extends BaseFragment {
     private void updateFullscreenButtonVisibility() {
         if (btnFullscreenPreview == null) return;
         boolean show = isPreviewEnabled && isRecordingOrPaused();
+        try {
+            if (sharedPreferencesManager != null && sharedPreferencesManager.isPreviewQuickActionsAlwaysVisible()) {
+                show = true;
+            }
+        } catch (Exception ignored) {
+        }
         btnFullscreenPreview.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (btnCaptureShotPreview != null) {
+            btnCaptureShotPreview.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
     }
 
     private boolean isRecordingOrPaused() {

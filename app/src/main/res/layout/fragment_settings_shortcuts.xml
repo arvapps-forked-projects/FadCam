@@ -62,7 +62,7 @@
                 android:layout_marginStart="8dp"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="6dp"
-                android:text="Shortcuts"
+                android:text="@string/shortcuts_video_category"
                 android:textColor="?attr/colorHeading"
                 android:textStyle="bold" />
 
@@ -104,7 +104,7 @@
                         android:id="@+id/icon_start"
                         android:layout_width="56dp"
                         android:layout_height="56dp"
-                        android:src="@drawable/start_shortcut"/>
+                        android:src="@drawable/start_back_shortcut"/>
                     <TextView
                         android:id="@+id/title_start"
                         android:layout_width="wrap_content"
@@ -112,7 +112,7 @@
                         android:layout_marginTop="8dp"
                         android:textColor="@android:color/white"
                         android:textSize="14sp"
-                        android:text="@string/start_recording"/>
+                        android:text="@string/shortcut_start_back"/>
                     <TextView
                         android:id="@+id/subtitle_start"
                         android:layout_width="wrap_content"
@@ -196,6 +196,252 @@
                         android:paddingBottom="2dp"
                         android:visibility="gone"/>
                 </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_horizontal"
+                android:layout_marginTop="2dp">
+
+                <LinearLayout
+                    android:id="@+id/cell_start_front"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal"
+                    android:padding="8dp">
+                    <ImageView
+                        android:id="@+id/icon_start_front"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/start_front_shortcut"/>
+                    <TextView
+                        android:id="@+id/title_start_front"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:textColor="@android:color/white"
+                        android:textSize="14sp"
+                        android:text="@string/shortcut_start_front"/>
+                    <TextView
+                        android:id="@+id/subtitle_start_front"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@android:color/black"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:visibility="gone"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/cell_start_current"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal"
+                    android:padding="8dp">
+                    <ImageView
+                        android:id="@+id/icon_start_current"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/start_current_shortcut"/>
+                    <TextView
+                        android:id="@+id/title_start_current"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:textColor="@android:color/white"
+                        android:textSize="14sp"
+                        android:text="@string/shortcut_start_current"/>
+                    <TextView
+                        android:id="@+id/subtitle_start_current"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@android:color/black"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:visibility="gone"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/cell_start_dual"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal"
+                    android:padding="8dp">
+                    <ImageView
+                        android:id="@+id/icon_start_dual"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/start_dual_shortcut"/>
+                    <TextView
+                        android:id="@+id/title_start_dual"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:textColor="@android:color/white"
+                        android:textSize="14sp"
+                        android:text="@string/shortcut_start_dual"/>
+                    <TextView
+                        android:id="@+id/subtitle_start_dual"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@android:color/black"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp"
+                        android:visibility="gone"/>
+                </LinearLayout>
+
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/heading_shortcuts_picture"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="6dp"
+        android:text="@string/shortcuts_picture_category"
+        android:textColor="?attr/colorHeading"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/shortcuts_picture_group_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/settings_group_card_bg"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_horizontal">
+            <LinearLayout
+                android:id="@+id/cell_photo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:padding="8dp">
+                <ImageView
+                    android:id="@+id/icon_photo"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:src="@drawable/fadshot_shortcut" />
+                <TextView
+                    android:id="@+id/title_photo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:text="@string/shortcut_take_photo" />
+                <TextView
+                    android:id="@+id/subtitle_photo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/black"
+                    android:textSize="12sp"
+                    android:layout_marginTop="4dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:visibility="gone"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/cell_photo_front"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:padding="8dp">
+                <ImageView
+                    android:id="@+id/icon_photo_front"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:src="@drawable/fadshot_front_shortcut" />
+                <TextView
+                    android:id="@+id/title_photo_front"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:text="@string/shortcut_take_photo_front" />
+                <TextView
+                    android:id="@+id/subtitle_photo_front"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/black"
+                    android:textSize="12sp"
+                    android:layout_marginTop="4dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:visibility="gone"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/cell_screenshot"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:padding="8dp">
+                <ImageView
+                    android:id="@+id/icon_screenshot"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:src="@drawable/screen_recorder" />
+                <TextView
+                    android:id="@+id/title_screenshot"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:text="@string/shortcut_take_screenshot" />
+                <TextView
+                    android:id="@+id/subtitle_screenshot"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/black"
+                    android:textSize="12sp"
+                    android:layout_marginTop="4dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:visibility="gone"/>
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

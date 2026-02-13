@@ -282,11 +282,22 @@ public abstract class Constants {
 
     public static final String RECORDING_DIRECTORY = "FadCam";
     public static final String RECORDING_SUBDIR_CAMERA = "Camera";
+    public static final String RECORDING_SUBDIR_CAMERA_BACK = "Back";
+    public static final String RECORDING_SUBDIR_CAMERA_FRONT = "Front";
+    public static final String RECORDING_SUBDIR_CAMERA_DUAL = "Dual";
     public static final String RECORDING_SUBDIR_DUAL = "Dual";
     public static final String RECORDING_SUBDIR_SCREEN = "Screen";
     public static final String RECORDING_SUBDIR_FADITOR = "Faditor";
+    public static final String RECORDING_SUBDIR_FADITOR_CONVERTED = "Converted";
+    public static final String RECORDING_SUBDIR_FADITOR_MERGE = "Merge";
     public static final String RECORDING_SUBDIR_STREAM = "Stream";
+    public static final String RECORDING_SUBDIR_SHOT = "FadShot";
+    public static final String RECORDING_SUBDIR_SHOT_BACK = "Back";
+    public static final String RECORDING_SUBDIR_SHOT_SELFIE = "Selfie";
+    public static final String RECORDING_SUBDIR_SHOT_FADREC = "FadRec";
     public static final String RECORDING_FILE_EXTENSION = "mp4";
+    public static final String RECORDING_IMAGE_EXTENSION = "jpg";
+    public static final String RECORDING_FILE_PREFIX_FADSHOT = "FadShot_";
     public static final String RECORDING_FILE_PREFIX_FADITOR_STANDARD =
         "Faditor_Std_";
     public static final String RECORDING_FILE_PREFIX_FADITOR_MERGE =
@@ -311,6 +322,8 @@ public abstract class Constants {
 
     public static final String INTENT_ACTION_TOGGLE_RECORDING_TORCH =
         "com.fadcam.TOGGLE_RECORDING_TORCH";
+    public static final String INTENT_ACTION_CAPTURE_PHOTO =
+        "com.fadcam.CAPTURE_PHOTO";
     // Broadcast action sent by RecordingService when video processing is done
     public static final String ACTION_RECORDING_COMPLETE =
         "com.fadcam.RECORDING_COMPLETE";
@@ -449,6 +462,9 @@ public abstract class Constants {
     // Fullscreen preview tap-to-focus toggle (when disabled, taps only toggle controls)
     public static final String PREF_FULLSCREEN_TAP_TO_FOCUS_ENABLED =
         "pref_fullscreen_tap_to_focus_enabled";
+    // Show preview quick actions (FadShot + Fullscreen) even when recording is not active.
+    public static final String PREF_PREVIEW_QUICK_ACTIONS_ALWAYS_VISIBLE =
+        "pref_preview_quick_actions_always_visible";
     // Player controller auto-hide timeout in seconds. Controls disappear after this many seconds of inactivity.
     // 0 = never auto-hide (controls stay visible until user toggles).
     public static final String PREF_PLAYER_CONTROLS_TIMEOUT_SECONDS =
@@ -491,5 +507,8 @@ public abstract class Constants {
         "com.fadcam.ON_DUAL_CAMERA_ERROR";
     public static final String BROADCAST_ON_DUAL_CAMERAS_SWAPPED =
         "com.fadcam.ON_DUAL_CAMERAS_SWAPPED";
+    // Accessibility screenshot trigger action (FadRec shortcut).
+    public static final String ACTION_TRIGGER_FADREC_SCREENSHOT =
+        "com.fadcam.ACTION_TRIGGER_FADREC_SCREENSHOT";
     // ── End Dual Camera Constants ──────────────────────────────────────────
 }

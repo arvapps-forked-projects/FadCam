@@ -68,10 +68,34 @@ public class ShortcutsSettingsFragment extends Fragment {
         } catch (Throwable ignored) {
         }
 
-        wireShortcutRow(view, R.id.cell_start, R.id.icon_start, R.drawable.start_shortcut,
-                getString(R.string.start_recording),
-                new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.RecordingStartActivity"),
+        wireShortcutRow(view, R.id.cell_start, R.id.icon_start, R.drawable.start_back_shortcut,
+                getString(R.string.shortcut_start_back),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_BACK),
                 ShortcutsManager.ID_START);
+        wireShortcutRow(view, R.id.cell_start_front, R.id.icon_start_front, R.drawable.start_front_shortcut,
+                getString(R.string.shortcut_start_front),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_FRONT),
+                ShortcutsManager.ID_START_FRONT);
+        wireShortcutRow(view, R.id.cell_start_current, R.id.icon_start_current, R.drawable.start_current_shortcut,
+                getString(R.string.shortcut_start_current),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_CURRENT),
+                ShortcutsManager.ID_START_CURRENT);
+        wireShortcutRow(view, R.id.cell_start_dual, R.id.icon_start_dual, R.drawable.start_dual_shortcut,
+                getString(R.string.shortcut_start_dual),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_DUAL),
+                ShortcutsManager.ID_START_DUAL);
         wireShortcutRow(view, R.id.cell_stop, R.id.icon_stop, R.drawable.stop_shortcut,
                 getString(R.string.stop_recording),
                 new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.RecordingStopActivity"),
@@ -80,6 +104,21 @@ public class ShortcutsSettingsFragment extends Fragment {
                 getString(R.string.torch_shortcut_short_label),
                 new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.TorchToggleActivity"),
                 ShortcutsManager.ID_TORCH);
+        wireShortcutRow(view, R.id.cell_photo, R.id.icon_photo, R.drawable.fadshot_shortcut,
+                getString(R.string.shortcut_take_photo),
+                new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.PhotoCaptureActivity"),
+                ShortcutsManager.ID_SHOT);
+        wireShortcutRow(view, R.id.cell_photo_front, R.id.icon_photo_front, R.drawable.fadshot_front_shortcut,
+                getString(R.string.shortcut_take_photo_front),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.PhotoCaptureActivity")
+                        .putExtra(com.fadcam.PhotoCaptureActivity.EXTRA_SHORTCUT_PHOTO_CAMERA_MODE,
+                                com.fadcam.PhotoCaptureActivity.PHOTO_CAMERA_MODE_FRONT),
+                ShortcutsManager.ID_SHOT_FRONT);
+        wireShortcutRow(view, R.id.cell_screenshot, R.id.icon_screenshot, R.drawable.fadrec_screenshot_shortcut,
+                getString(R.string.shortcut_take_screenshot),
+                new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.ScreenShotCaptureActivity"),
+                ShortcutsManager.ID_SCREENSHOT);
 
         // Unify ripple/click: handle click on parent container only
         View widgetCell = view.findViewById(R.id.cell_widget_clock);
@@ -101,10 +140,22 @@ public class ShortcutsSettingsFragment extends Fragment {
         TextView subtitle = null;
         if (rowId == R.id.cell_start) {
             subtitle = root.findViewById(R.id.subtitle_start);
+        } else if (rowId == R.id.cell_start_front) {
+            subtitle = root.findViewById(R.id.subtitle_start_front);
+        } else if (rowId == R.id.cell_start_current) {
+            subtitle = root.findViewById(R.id.subtitle_start_current);
+        } else if (rowId == R.id.cell_start_dual) {
+            subtitle = root.findViewById(R.id.subtitle_start_dual);
         } else if (rowId == R.id.cell_stop) {
             subtitle = root.findViewById(R.id.subtitle_stop);
         } else if (rowId == R.id.cell_torch) {
             subtitle = root.findViewById(R.id.subtitle_torch);
+        } else if (rowId == R.id.cell_photo) {
+            subtitle = root.findViewById(R.id.subtitle_photo);
+        } else if (rowId == R.id.cell_photo_front) {
+            subtitle = root.findViewById(R.id.subtitle_photo_front);
+        } else if (rowId == R.id.cell_screenshot) {
+            subtitle = root.findViewById(R.id.subtitle_screenshot);
         }
         // Apply custom label/icon if present
         ShortcutsPreferences sp = new ShortcutsPreferences(requireContext());
@@ -114,15 +165,33 @@ public class ShortcutsSettingsFragment extends Fragment {
         if (subtitle != null) {
             // Show a small badge with the canonical action name (no codename/id)
             String badgeText = title; // localized label like Start/Stop/Torch
+            // Special badge text for photo shortcuts
+            if (ShortcutsManager.ID_SHOT.equals(shortcutId)) {
+                badgeText = "FadShot Back";
+            } else if (ShortcutsManager.ID_SHOT_FRONT.equals(shortcutId)) {
+                badgeText = "FadShot Front";
+            }
             subtitle.setText(badgeText);
             subtitle.setVisibility(View.VISIBLE);
             // Apply background badge color based on shortcut
             if (ShortcutsManager.ID_START.equals(shortcutId)) {
+                subtitle.setBackgroundResource(R.drawable.badge_blue);
+            } else if (ShortcutsManager.ID_START_FRONT.equals(shortcutId)) {
+                subtitle.setBackgroundResource(R.drawable.badge_purple);
+            } else if (ShortcutsManager.ID_START_CURRENT.equals(shortcutId)) {
                 subtitle.setBackgroundResource(R.drawable.badge_green);
+            } else if (ShortcutsManager.ID_START_DUAL.equals(shortcutId)) {
+                subtitle.setBackgroundResource(R.drawable.badge_cyan);
             } else if (ShortcutsManager.ID_STOP.equals(shortcutId)) {
                 subtitle.setBackgroundResource(R.drawable.badge_red);
             } else if (ShortcutsManager.ID_TORCH.equals(shortcutId)) {
-                subtitle.setBackgroundResource(R.drawable.badge_amber);
+                subtitle.setBackgroundResource(R.drawable.badge_orange);
+            } else if (ShortcutsManager.ID_SHOT.equals(shortcutId)) {
+                subtitle.setBackgroundResource(R.drawable.badge_white);
+            } else if (ShortcutsManager.ID_SHOT_FRONT.equals(shortcutId)) {
+                subtitle.setBackgroundResource(R.drawable.badge_white);
+            } else if (ShortcutsManager.ID_SCREENSHOT.equals(shortcutId)) {
+                subtitle.setBackgroundResource(R.drawable.badge_orange);
             }
         }
         if (icon != null)
@@ -141,9 +210,21 @@ public class ShortcutsSettingsFragment extends Fragment {
     private int titleIdFor(int rowId) {
         if (rowId == R.id.cell_start)
             return R.id.title_start;
+        if (rowId == R.id.cell_start_front)
+            return R.id.title_start_front;
+        if (rowId == R.id.cell_start_current)
+            return R.id.title_start_current;
+        if (rowId == R.id.cell_start_dual)
+            return R.id.title_start_dual;
         if (rowId == R.id.cell_stop)
             return R.id.title_stop;
-        return R.id.title_torch;
+        if (rowId == R.id.cell_torch)
+            return R.id.title_torch;
+        if (rowId == R.id.cell_photo_front)
+            return R.id.title_photo_front;
+        if (rowId == R.id.cell_screenshot)
+            return R.id.title_screenshot;
+        return R.id.title_photo;
     }
 
     // Removed codename display; using concise badges instead.
@@ -333,8 +414,20 @@ public class ShortcutsSettingsFragment extends Fragment {
     private String getShortcutPurposeLine(String shortcutId) {
         if (ShortcutsManager.ID_START.equals(shortcutId)) {
             return getString(R.string.shortcut_purpose_start);
+        } else if (ShortcutsManager.ID_START_FRONT.equals(shortcutId)) {
+            return getString(R.string.shortcut_purpose_start_front);
+        } else if (ShortcutsManager.ID_START_CURRENT.equals(shortcutId)) {
+            return getString(R.string.shortcut_purpose_start_current);
+        } else if (ShortcutsManager.ID_START_DUAL.equals(shortcutId)) {
+            return getString(R.string.shortcut_purpose_start_dual);
         } else if (ShortcutsManager.ID_STOP.equals(shortcutId)) {
             return getString(R.string.shortcut_purpose_stop);
+        } else if (ShortcutsManager.ID_SHOT.equals(shortcutId)) {
+            return getString(R.string.shortcut_purpose_photo);
+        } else if (ShortcutsManager.ID_SHOT_FRONT.equals(shortcutId)) {
+            return getString(R.string.shortcut_purpose_photo_front);
+        } else if (ShortcutsManager.ID_SCREENSHOT.equals(shortcutId)) {
+            return getString(R.string.shortcut_purpose_screenshot);
         } else {
             return getString(R.string.shortcut_purpose_torch);
         }
@@ -345,10 +438,34 @@ public class ShortcutsSettingsFragment extends Fragment {
         if (view == null)
             return;
         // Start
-        wireShortcutRow(view, R.id.cell_start, R.id.icon_start, R.drawable.start_shortcut,
-                getString(R.string.start_recording),
-                new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.RecordingStartActivity"),
+        wireShortcutRow(view, R.id.cell_start, R.id.icon_start, R.drawable.start_back_shortcut,
+                getString(R.string.shortcut_start_back),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_BACK),
                 ShortcutsManager.ID_START);
+        wireShortcutRow(view, R.id.cell_start_front, R.id.icon_start_front, R.drawable.start_front_shortcut,
+                getString(R.string.shortcut_start_front),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_FRONT),
+                ShortcutsManager.ID_START_FRONT);
+        wireShortcutRow(view, R.id.cell_start_current, R.id.icon_start_current, R.drawable.start_current_shortcut,
+                getString(R.string.shortcut_start_current),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_CURRENT),
+                ShortcutsManager.ID_START_CURRENT);
+        wireShortcutRow(view, R.id.cell_start_dual, R.id.icon_start_dual, R.drawable.start_dual_shortcut,
+                getString(R.string.shortcut_start_dual),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.RecordingStartActivity")
+                        .putExtra(com.fadcam.RecordingStartActivity.EXTRA_SHORTCUT_CAMERA_MODE,
+                                com.fadcam.RecordingStartActivity.CAMERA_MODE_DUAL),
+                ShortcutsManager.ID_START_DUAL);
         // Stop
         wireShortcutRow(view, R.id.cell_stop, R.id.icon_stop, R.drawable.stop_shortcut,
                 getString(R.string.stop_recording),
@@ -359,6 +476,22 @@ public class ShortcutsSettingsFragment extends Fragment {
                 getString(R.string.torch_shortcut_short_label),
                 new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.TorchToggleActivity"),
                 ShortcutsManager.ID_TORCH);
+        // Photo
+        wireShortcutRow(view, R.id.cell_photo, R.id.icon_photo, R.drawable.fadshot_shortcut,
+                getString(R.string.shortcut_take_photo),
+                new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.PhotoCaptureActivity"),
+                ShortcutsManager.ID_SHOT);
+        wireShortcutRow(view, R.id.cell_photo_front, R.id.icon_photo_front, R.drawable.fadshot_front_shortcut,
+                getString(R.string.shortcut_take_photo_front),
+                new Intent(Intent.ACTION_VIEW)
+                        .setClassName(requireContext(), "com.fadcam.PhotoCaptureActivity")
+                        .putExtra(com.fadcam.PhotoCaptureActivity.EXTRA_SHORTCUT_PHOTO_CAMERA_MODE,
+                                com.fadcam.PhotoCaptureActivity.PHOTO_CAMERA_MODE_FRONT),
+                ShortcutsManager.ID_SHOT_FRONT);
+        wireShortcutRow(view, R.id.cell_screenshot, R.id.icon_screenshot, R.drawable.fadrec_screenshot_shortcut,
+                getString(R.string.shortcut_take_screenshot),
+                new Intent(Intent.ACTION_VIEW).setClassName(requireContext(), "com.fadcam.ScreenShotCaptureActivity"),
+                ShortcutsManager.ID_SCREENSHOT);
     }
 
     private void loadShortcutIconInto(ImageView imageView, String shortcutId, int defaultIconRes) {
