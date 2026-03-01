@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -132,6 +133,9 @@ public class RecordingService extends Service {
     private GeotagHelper geotagHelper;
 
     private RecordingState recordingState = RecordingState.NONE;
+    private boolean previewOnlyActive = false;
+    private boolean pendingPreviewOnlyStart = false;
+    private volatile boolean previewSessionConfigInFlight = false;
     private AtomicInteger ffmpegProcessingTaskCount = new AtomicInteger(0);
 
     private boolean isRecordingTorchEnabled = false;
@@ -171,6 +175,9 @@ public class RecordingService extends Service {
     private Integer runtimeExposureCompensation = null;
     private Boolean runtimeAeLock = null;
     private Integer runtimeAfMode = null;
+    private boolean pendingDeferredAeLockEnable = false;
+    private long aeLockConvergenceToken = 0L;
+    private boolean manualAeLockActive = false;
     // Locks per-session output folder so split segments don't jump folders during camera switches.
     private RecordingStoragePaths.CameraSource recordingSessionCameraSource = RecordingStoragePaths.CameraSource.BACK;
     // Motion Lab (advanced, opt-in): sidecar analysis path. No control-flow impact unless explicitly wired later.
@@ -304,15 +311,28 @@ public class RecordingService extends Service {
      * setRepeatingRequest.
      */
     private void applyExposureCompensation(int evIndex) {
+        int clamped = evIndex;
+        if (currentCameraCharacteristics != null) {
+            Range<Integer> range = currentCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+            if (range != null) {
+                clamped = Math.max(range.getLower(), Math.min(range.getUpper(), evIndex));
+            }
+        }
+        // Persist immediately so the next recording session always starts from the latest value.
+        // This also protects against stale saved EV when runtime overrides are cleared.
+        try {
+            if (sharedPreferencesManager != null) {
+                sharedPreferencesManager.setSavedExposureCompensation(clamped);
+            }
+        } catch (Exception ignored) {
+        }
+
         if (currentCameraCharacteristics == null || captureRequestBuilder == null || captureSession == null)
             return;
-        Range<Integer> range = currentCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
-        if (range == null)
-            return;
-        int clamped = Math.max(range.getLower(), Math.min(range.getUpper(), evIndex));
+        final int clampedEv = clamped;
 
         // Track runtime exposure compensation to override saved preferences
-        runtimeExposureCompensation = clamped;
+        runtimeExposureCompensation = clampedEv;
 
         // CRITICAL: Apply exposure through GL pipeline for immediate visual effect
         // Convert EV index to actual EV stops for GL shader
@@ -321,13 +341,13 @@ public class RecordingService extends Service {
             android.util.Rational stepRational = currentCameraCharacteristics
                     .get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
             if (stepRational != null) {
-                evStops = clamped * stepRational.floatValue();
+                evStops = clampedEv * stepRational.floatValue();
             } else {
                 // Fallback: assume 1/3 EV step (common default)
-                evStops = clamped * 0.33f;
+                evStops = clampedEv * 0.33f;
             }
         } catch (Exception e) {
-            evStops = clamped * 0.33f; // Safe fallback
+            evStops = clampedEv * 0.33f; // Safe fallback
         }
 
         // Apply exposure through GL pipeline for immediate visual effect in preview and
@@ -335,7 +355,7 @@ public class RecordingService extends Service {
         if (glRecordingPipeline != null) {
             glRecordingPipeline.setExposureCompensation(evStops);
             Log.d(TAG,
-                    "Applied EV compensation through GL pipeline: index=" + clamped + " -> " + evStops + " EV stops");
+                    "Applied EV compensation through GL pipeline: index=" + clampedEv + " -> " + evStops + " EV stops");
         }
 
         try {
@@ -355,8 +375,8 @@ public class RecordingService extends Service {
                 captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
             }
 
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, clamped);
-            Log.d(TAG, "applyExposureCompensation: setting EV index=" + clamped + " (hadAeLock=" + hadAeLock
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, clampedEv);
+            Log.d(TAG, "applyExposureCompensation: setting EV index=" + clampedEv + " (hadAeLock=" + hadAeLock
                     + ") with AE_MODE_ON");
             // If we're in a constrained high-speed session, we must use setRepeatingBurst
             try {
@@ -377,7 +397,7 @@ public class RecordingService extends Service {
                                         Integer aeMode = result
                                                 .get(android.hardware.camera2.CaptureResult.CONTROL_AE_MODE);
                                         Log.d(TAG, "EV prime capture completed: Applied EV=" + appliedEv +
-                                                ", AE Mode=" + aeMode + ", Target EV=" + clamped);
+                                                ", AE Mode=" + aeMode + ", Target EV=" + clampedEv);
                                     }
 
                                     @Override
@@ -398,11 +418,11 @@ public class RecordingService extends Service {
                                         java.util.List<android.hardware.camera2.CaptureRequest> highSpeedRequests = hs
                                                 .createHighSpeedRequestList(captureRequestBuilder.build());
                                         hs.setRepeatingBurst(highSpeedRequests, null, backgroundHandler);
-                                        Log.d(TAG, "Updated high-speed repeating burst with EV=" + clamped);
+                                        Log.d(TAG, "Updated high-speed repeating burst with EV=" + clampedEv);
                                     } else {
                                         captureSession.setRepeatingRequest(captureRequestBuilder.build(), null,
                                                 backgroundHandler);
-                                        Log.d(TAG, "Updated standard repeating request with EV=" + clamped);
+                                        Log.d(TAG, "Updated standard repeating request with EV=" + clampedEv);
                                     }
                                 } catch (Exception e) {
                                     Log.d(TAG, "Delayed setRepeating failed: " + e.getMessage());
@@ -448,6 +468,13 @@ public class RecordingService extends Service {
      * Toggle AE lock during a running session.
      */
     private void applyAeLock(boolean lock) {
+        try {
+            if (sharedPreferencesManager != null) {
+                sharedPreferencesManager.setSavedAeLock(lock);
+            }
+        } catch (Exception ignored) {
+        }
+
         if (currentCameraCharacteristics == null || captureRequestBuilder == null || captureSession == null)
             return;
         Boolean aeLockSupported = currentCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE);
@@ -456,12 +483,153 @@ public class RecordingService extends Service {
 
         // Track runtime AE lock to override saved preferences
         runtimeAeLock = lock;
+        aeLockConvergenceToken++;
+        final long lockToken = aeLockConvergenceToken;
 
         try {
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, lock);
-            captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+            if (!lock) {
+                if (manualAeLockActive) {
+                    // Return to normal AE pipeline when manual lock is released.
+                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
+                    captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+                    manualAeLockActive = false;
+                    Log.d(TAG, "applyAeLock(false): released manual AE lock and restored AE_MODE_ON");
+                } else {
+                    captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
+                    captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+                }
+                return;
+            }
+
+            if (lock) {
+                // Force EV convergence first, then lock AE. This avoids locking too early on
+                // fresh starts where AE has not yet converged to the requested compensation.
+                int evToUse = (runtimeExposureCompensation != null)
+                        ? runtimeExposureCompensation
+                        : (sharedPreferencesManager != null ? sharedPreferencesManager.getSavedExposureCompensation() : 0);
+                if (currentCameraCharacteristics != null) {
+                    Range<Integer> range = currentCameraCharacteristics
+                            .get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+                    if (range != null) {
+                        evToUse = Math.max(range.getLower(), Math.min(range.getUpper(), evToUse));
+                    }
+                }
+                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
+                captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+                applyExposureCompensation(evToUse);
+                Log.d(TAG, "applyAeLock(true): refreshed EV while unlocked (index=" + evToUse
+                        + "), waiting for AE convergence + exposure stability");
+                attemptAeLockAfterConvergence(evToUse, 0, lockToken, -1L, -1, 0);
+                return;
+            }
         } catch (CameraAccessException | IllegalStateException e) {
             // ignore
+        }
+    }
+
+    private void attemptAeLockAfterConvergence(final int targetEv, final int attempt, final long token,
+            final long prevExposureNs, final int prevIso, final int stableCount) {
+        if (backgroundHandler == null || captureSession == null || captureRequestBuilder == null) {
+            return;
+        }
+        // Cancel stale convergence workflows.
+        if (token != aeLockConvergenceToken) {
+            return;
+        }
+        // Respect current user intent if lock was turned off mid-flight.
+        boolean shouldStillLock = (runtimeAeLock != null)
+                ? runtimeAeLock
+                : (sharedPreferencesManager != null && sharedPreferencesManager.isAeLockedSaved());
+        if (!shouldStillLock) {
+            return;
+        }
+
+        final int maxAttempts = 22; // ~2.6s at 120ms intervals
+        final int stableRequired = 4;
+        try {
+            captureSession.capture(captureRequestBuilder.build(), new CameraCaptureSession.CaptureCallback() {
+                @Override
+                public void onCaptureCompleted(@NonNull CameraCaptureSession session,
+                        @NonNull CaptureRequest request,
+                        @NonNull android.hardware.camera2.TotalCaptureResult result) {
+                    if (token != aeLockConvergenceToken) {
+                        return;
+                    }
+                    Integer aeState = result.get(android.hardware.camera2.CaptureResult.CONTROL_AE_STATE);
+                    Integer appliedEv = result
+                            .get(android.hardware.camera2.CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION);
+                    Long exposureTimeNs = result.get(android.hardware.camera2.CaptureResult.SENSOR_EXPOSURE_TIME);
+                    Integer iso = result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY);
+                    boolean converged = aeState != null && (aeState == android.hardware.camera2.CaptureResult.CONTROL_AE_STATE_CONVERGED
+                            || aeState == android.hardware.camera2.CaptureResult.CONTROL_AE_STATE_FLASH_REQUIRED
+                            || aeState == android.hardware.camera2.CaptureResult.CONTROL_AE_STATE_LOCKED);
+                    boolean evMatched = appliedEv != null && appliedEv == targetEv;
+                    boolean frameStable = false;
+                    if (exposureTimeNs != null && iso != null && prevExposureNs > 0 && prevIso > 0) {
+                        double expDeltaRatio = Math.abs(exposureTimeNs - prevExposureNs)
+                                / (double) Math.max(1L, prevExposureNs);
+                        double isoDeltaRatio = Math.abs(iso - prevIso) / (double) Math.max(1, prevIso);
+                        frameStable = expDeltaRatio < 0.08d && isoDeltaRatio < 0.10d;
+                    }
+                    int nextStableCount = frameStable ? (stableCount + 1) : 0;
+
+                    if ((converged && evMatched && nextStableCount >= stableRequired) || attempt >= maxAttempts) {
+                        try {
+                            if (captureRequestBuilder == null || captureSession == null || token != aeLockConvergenceToken) {
+                                return;
+                            }
+                            boolean manualLocked = tryApplyManualExposureLock(exposureTimeNs, iso);
+                            if (!manualLocked) {
+                                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
+                                captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+                            }
+                            Log.d(TAG, "applyAeLock(true): lock enabled after convergence check. mode="
+                                    + (manualLocked ? "manual_ae_off" : "ae_lock")
+                                    + ", attempt=" + attempt
+                                    + ", aeState=" + aeState + ", appliedEv=" + appliedEv
+                                    + ", stableCount=" + nextStableCount + ", exposureNs=" + exposureTimeNs
+                                    + ", iso=" + iso);
+                        } catch (Exception e) {
+                            Log.w(TAG, "applyAeLock(true): failed to enable lock after convergence check", e);
+                        }
+                        return;
+                    }
+
+                    backgroundHandler.postDelayed(
+                            () -> attemptAeLockAfterConvergence(
+                                    targetEv,
+                                    attempt + 1,
+                                    token,
+                                    exposureTimeNs != null ? exposureTimeNs : prevExposureNs,
+                                    iso != null ? iso : prevIso,
+                                    nextStableCount),
+                            120);
+                }
+
+                @Override
+                public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
+                        @NonNull android.hardware.camera2.CaptureFailure failure) {
+                    if (token != aeLockConvergenceToken || backgroundHandler == null) {
+                        return;
+                    }
+                    if (attempt >= maxAttempts) {
+                        return;
+                    }
+                    backgroundHandler.postDelayed(
+                            () -> attemptAeLockAfterConvergence(targetEv, attempt + 1, token, prevExposureNs, prevIso,
+                                    stableCount),
+                            220);
+                }
+            }, backgroundHandler);
+        } catch (Exception e) {
+            if (attempt >= maxAttempts || backgroundHandler == null || token != aeLockConvergenceToken) {
+                return;
+            }
+            backgroundHandler.postDelayed(
+                    () -> attemptAeLockAfterConvergence(targetEv, attempt + 1, token, prevExposureNs, prevIso,
+                            stableCount),
+                    250);
         }
     }
 
@@ -469,6 +637,13 @@ public class RecordingService extends Service {
      * Change AF mode (e.g., continuous video, off, etc.) when supported.
      */
     private void applyAfMode(int afMode) {
+        try {
+            if (sharedPreferencesManager != null) {
+                sharedPreferencesManager.setSavedAfMode(afMode);
+            }
+        } catch (Exception ignored) {
+        }
+
         if (currentCameraCharacteristics == null || captureRequestBuilder == null || captureSession == null)
             return;
         int[] modes = currentCameraCharacteristics.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
@@ -528,6 +703,14 @@ public class RecordingService extends Service {
         } catch (CameraAccessException | IllegalStateException e) {
             Log.e(TAG, "Failed to apply zoom ratio: " + e.getMessage());
         }
+    }
+
+    private void applyFrontVideoMirror(boolean enabled) {
+        if (glRecordingPipeline == null) {
+            return;
+        }
+        glRecordingPipeline.setFrontVideoMirrorEnabled(enabled);
+        Log.d(TAG, "Applied front video mirror=" + enabled + " to GL pipeline");
     }
 
     /**
@@ -660,9 +843,72 @@ public class RecordingService extends Service {
                     Log.d(TAG, "App foregrounded and recording in progress, pipeline will be re-initialized by UI");
                 }
             }
+            // Preview-only recovery path after external camera contention/background return.
+            if (previewOnlyActive && recordingState == RecordingState.NONE) {
+                if (previewSurface != null && previewSurface.isValid()) {
+                    Log.d(TAG, "ACTION_APP_FOREGROUND: recovering preview-only camera session");
+                    ensurePreviewOnlyGlPipeline();
+                    if (cameraDevice == null) {
+                        openCamera();
+                    } else if (captureSession == null) {
+                        createCameraPreviewSession();
+                    }
+                } else {
+                    pendingPreviewOnlyStart = true;
+                    Log.d(TAG, "ACTION_APP_FOREGROUND: preview-only active but surface missing, waiting for ACTION_CHANGE_SURFACE");
+                }
+            }
             return START_STICKY;
         }
-        if (Constants.INTENT_ACTION_START_RECORDING.equals(action)) {
+        if (Constants.INTENT_ACTION_START_PREVIEW_ONLY.equals(action)) {
+            CameraType selectedType = sharedPreferencesManager.getCameraSelection();
+            if (selectedType != null && selectedType.isDual()) {
+                Log.w(TAG, "Preview-only mode is not supported for Dual PiP");
+                Toast.makeText(this, "Live preview is available only for Front/Back camera", Toast.LENGTH_SHORT).show();
+                return START_STICKY;
+            }
+            if (isWorkingInProgress()) {
+                Log.d(TAG, "Ignoring preview-only start: recording already active");
+                return START_STICKY;
+            }
+            setupSurfaceTexture(intent);
+            if (previewSurface == null || !previewSurface.isValid()) {
+                pendingPreviewOnlyStart = true;
+                previewOnlyActive = false;
+                pendingStartRecording = false;
+                recordingState = RecordingState.NONE;
+                Log.d(TAG, "Preview-only start deferred: preview surface not ready yet");
+                return START_STICKY;
+            }
+            pendingPreviewOnlyStart = false;
+            previewOnlyActive = true;
+            pendingStartRecording = false;
+            recordingState = RecordingState.NONE;
+            ensurePreviewOnlyGlPipeline();
+            openCamera();
+            broadcastOnPreviewOnlyStarted();
+            return START_STICKY;
+        } else if (Constants.INTENT_ACTION_STOP_PREVIEW_ONLY.equals(action)) {
+            boolean wasPreviewOnlyActive = previewOnlyActive;
+            pendingPreviewOnlyStart = false;
+            stopPreviewOnlyMode();
+            if (!wasPreviewOnlyActive) {
+                // Idempotent stop: still notify UI to reconcile any stale local state.
+                broadcastOnPreviewOnlyStopped();
+                if (!isWorkingInProgress()) {
+                    stopSelf();
+                }
+            }
+            return START_STICKY;
+        } else if (Constants.INTENT_ACTION_START_RECORDING.equals(action)) {
+            pendingPreviewOnlyStart = false;
+            if (previewOnlyActive) {
+                Log.d(TAG, "Transitioning from preview-only to recording mode");
+                previewOnlyActive = false;
+                previewSessionConfigInFlight = false;
+                releasePreviewOnlyGlPipeline();
+                broadcastOnPreviewOnlyStopped();
+            }
             // Check for rapid start attempts to prevent service startup issues
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastStartAttemptTime < MIN_START_INTERVAL_MS) {
@@ -803,7 +1049,11 @@ public class RecordingService extends Service {
             if (newCameraTypeStr != null) {
                 try {
                     CameraType newCameraType = CameraType.valueOf(newCameraTypeStr);
-                    switchCameraLive(newCameraType);
+                    if (previewOnlyActive && recordingState == RecordingState.NONE) {
+                        switchCameraPreviewOnly(newCameraType);
+                    } else {
+                        switchCameraLive(newCameraType);
+                    }
                 } catch (IllegalArgumentException e) {
                     Log.e(TAG, "Invalid camera type in switch intent: " + newCameraTypeStr, e);
                     broadcastOnCameraSwitchFailed("Invalid camera type", null);
@@ -816,6 +1066,16 @@ public class RecordingService extends Service {
         } else if (Constants.INTENT_ACTION_CHANGE_SURFACE.equals(action)) {
             // Handle surface changes for preview
             setupSurfaceTexture(intent);
+            if (pendingPreviewOnlyStart && previewSurface != null && previewSurface.isValid() && !isWorkingInProgress()) {
+                Log.d(TAG, "Starting deferred preview-only mode after valid surface arrived");
+                pendingPreviewOnlyStart = false;
+                previewOnlyActive = true;
+                pendingStartRecording = false;
+                recordingState = RecordingState.NONE;
+                ensurePreviewOnlyGlPipeline();
+                openCamera();
+                broadcastOnPreviewOnlyStarted();
+            }
             // NOTE: setupSurfaceTexture already calls glRecordingPipeline.setPreviewSurface()
             // Do NOT call it again here to avoid double-debounce churn
             // surface change when using GL path -----------
@@ -829,9 +1089,15 @@ public class RecordingService extends Service {
             // rendered via EGL in renderer
             // Reconfiguration during active recording may cause driver instability on first
             // run
-            if (glRecordingPipeline == null && (isRecording() || isPaused())) {
-                // Only reconfigure if we're not on GL path (legacy/fallback)
-                createCameraPreviewSession();
+            if (glRecordingPipeline == null && (isRecording() || isPaused() || previewOnlyActive)) {
+                // Avoid session churn in preview-only mode: if we already have an active
+                // capture session and a valid camera, keep the current repeating request.
+                if (previewOnlyActive && (previewSessionConfigInFlight || (captureSession != null && cameraDevice != null))) {
+                    Log.d(TAG, "ACTION_CHANGE_SURFACE: preview-only session already active/in-flight; skipping session recreate");
+                } else {
+                    // Only reconfigure if we're not on GL path (legacy/fallback)
+                    createCameraPreviewSession();
+                }
             }
             // surface change when using GL path -----------
             Log.d(TAG,
@@ -900,6 +1166,13 @@ public class RecordingService extends Service {
                 applyZoomRatio(zoomRatio);
             }
             return START_STICKY;
+        } else if (Constants.INTENT_ACTION_SET_FRONT_VIDEO_MIRROR.equals(action)) {
+            boolean enabled = intent.getBooleanExtra(
+                    Constants.EXTRA_FRONT_VIDEO_MIRROR_ENABLED,
+                    sharedPreferencesManager.isFrontVideoMirrorEnabled());
+            sharedPreferencesManager.setFrontVideoMirrorEnabled(enabled);
+            applyFrontVideoMirror(enabled);
+            return START_STICKY;
         } else if (Constants.INTENT_ACTION_CAPTURE_PHOTO.equals(action)) {
             capturePhotoFromRecording();
             return START_STICKY;
@@ -953,7 +1226,11 @@ public class RecordingService extends Service {
     }
 
     private void capturePhotoFromRecording() {
-        if (glRecordingPipeline == null || (recordingState != RecordingState.IN_PROGRESS && recordingState != RecordingState.PAUSED)) {
+        boolean canCaptureFromSession =
+                recordingState == RecordingState.IN_PROGRESS
+                        || recordingState == RecordingState.PAUSED
+                        || (previewOnlyActive && recordingState == RecordingState.NONE);
+        if (glRecordingPipeline == null || !canCaptureFromSession) {
             mainHandler.post(() -> Toast.makeText(getApplicationContext(),
                     R.string.photo_capture_preview_unavailable, Toast.LENGTH_SHORT).show());
             return;
@@ -975,12 +1252,25 @@ public class RecordingService extends Service {
                 PhotoStorageHelper.ShotSource shotSource = selected == CameraType.FRONT
                         ? PhotoStorageHelper.ShotSource.SELFIE
                         : PhotoStorageHelper.ShotSource.BACK;
+                Bitmap bitmapForSave = bitmap;
+                if (previewOnlyActive && recordingState == RecordingState.NONE) {
+                    Bitmap normalized = normalizePreviewOnlyShotBitmap(bitmapForSave);
+                    if (normalized != null && normalized != bitmapForSave) {
+                        bitmapForSave.recycle();
+                        bitmapForSave = normalized;
+                    }
+                    Bitmap cropped = cropVerticalLetterbox(bitmapForSave);
+                    if (cropped != null && cropped != bitmapForSave) {
+                        bitmapForSave.recycle();
+                        bitmapForSave = cropped;
+                    }
+                }
                 Uri savedUri = PhotoStorageHelper.saveJpegBitmap(
                         getApplicationContext(),
-                        bitmap,
-                        false,
+                        bitmapForSave,
+                        true,
                         shotSource);
-                bitmap.recycle();
+                bitmapForSave.recycle();
                 if (savedUri != null) {
                     Intent updateIntent = new Intent(Constants.ACTION_RECORDING_COMPLETE);
                     updateIntent.putExtra(Constants.EXTRA_RECORDING_SUCCESS, true);
@@ -994,6 +1284,102 @@ public class RecordingService extends Service {
                 }
             });
         });
+    }
+
+    @Nullable
+    private Bitmap normalizePreviewOnlyShotBitmap(@NonNull Bitmap source) {
+        try {
+            Size target = sharedPreferencesManager != null
+                    ? sharedPreferencesManager.getCameraResolution()
+                    : null;
+            int targetW = target != null ? target.getWidth() : 1080;
+            int targetH = target != null ? target.getHeight() : 1920;
+            String orientation = sharedPreferencesManager != null
+                    ? sharedPreferencesManager.getVideoOrientation()
+                    : SharedPreferencesManager.ORIENTATION_PORTRAIT;
+            boolean portrait = SharedPreferencesManager.ORIENTATION_PORTRAIT.equalsIgnoreCase(orientation);
+            if (portrait && targetW > targetH) {
+                int tmp = targetW;
+                targetW = targetH;
+                targetH = tmp;
+            } else if (!portrait && targetH > targetW) {
+                int tmp = targetW;
+                targetW = targetH;
+                targetH = tmp;
+            }
+            int srcW = source.getWidth();
+            int srcH = source.getHeight();
+            if (srcW <= 0 || srcH <= 0 || targetW <= 0 || targetH <= 0) {
+                return source;
+            }
+            float scale = Math.max(targetW / (float) srcW, targetH / (float) srcH);
+            int scaledW = Math.max(1, Math.round(srcW * scale));
+            int scaledH = Math.max(1, Math.round(srcH * scale));
+            Bitmap scaled = (scaledW == srcW && scaledH == srcH)
+                    ? source
+                    : Bitmap.createScaledBitmap(source, scaledW, scaledH, true);
+            int x = Math.max(0, (scaledW - targetW) / 2);
+            int y = Math.max(0, (scaledH - targetH) / 2);
+            int cropW = Math.min(targetW, scaledW);
+            int cropH = Math.min(targetH, scaledH);
+            Bitmap out = Bitmap.createBitmap(scaled, x, y, cropW, cropH);
+            if (scaled != source && scaled != out) {
+                scaled.recycle();
+            }
+            return out;
+        } catch (Exception e) {
+            Log.w(TAG, "normalizePreviewOnlyShotBitmap failed", e);
+            return source;
+        }
+    }
+
+    @Nullable
+    private Bitmap cropVerticalLetterbox(@NonNull Bitmap source) {
+        try {
+            int width = source.getWidth();
+            int height = source.getHeight();
+            if (width < 4 || height < 4) {
+                return source;
+            }
+            int top = 0;
+            int bottom = height - 1;
+            while (top < height - 2 && isRowMostlyBlack(source, top, width)) {
+                top++;
+            }
+            while (bottom > top + 1 && isRowMostlyBlack(source, bottom, width)) {
+                bottom--;
+            }
+            int croppedHeight = bottom - top + 1;
+            if (top <= 1 && bottom >= height - 2) {
+                return source;
+            }
+            if (croppedHeight < height / 2) {
+                // Avoid aggressive crop if detection is uncertain.
+                return source;
+            }
+            return Bitmap.createBitmap(source, 0, top, width, croppedHeight);
+        } catch (Exception e) {
+            Log.w(TAG, "cropVerticalLetterbox failed", e);
+            return source;
+        }
+    }
+
+    private boolean isRowMostlyBlack(@NonNull Bitmap bitmap, int y, int width) {
+        int step = Math.max(1, width / 64);
+        int samples = 0;
+        int dark = 0;
+        for (int x = 0; x < width; x += step) {
+            int p = bitmap.getPixel(x, y);
+            int r = (p >> 16) & 0xff;
+            int g = (p >> 8) & 0xff;
+            int b = p & 0xff;
+            int luma = (r * 299 + g * 587 + b * 114) / 1000;
+            if (luma < 14) {
+                dark++;
+            }
+            samples++;
+        }
+        return samples > 0 && dark >= (samples * 0.94f);
     }
 
     @Nullable
@@ -1488,6 +1874,67 @@ public class RecordingService extends Service {
             cameraSwitchPreviousType = null;
             cameraSwitchStartTimeNanos = -1L;
             Log.d(TAG, "Camera switch cleanup complete");
+        }
+    }
+
+    private void switchCameraPreviewOnly(@NonNull CameraType newCameraType) {
+        if (!previewOnlyActive) {
+            Log.w(TAG, "Preview-only camera switch ignored: preview-only mode is not active");
+            return;
+        }
+        if (newCameraType.isDual()) {
+            broadcastOnCameraSwitchFailed("Dual camera is not supported in preview-only mode", newCameraType);
+            return;
+        }
+
+        CameraType currentType = sharedPreferencesManager.getCameraSelection();
+        if (currentType == newCameraType) {
+            Log.d(TAG, "Preview-only camera switch ignored: already on " + newCameraType);
+            return;
+        }
+
+        Log.i(TAG, "Preview-only camera switch: " + currentType + " -> " + newCameraType);
+        try {
+            sharedPreferencesManager.sharedPreferences
+                .edit()
+                .putString(Constants.PREF_CAMERA_SELECTION, newCameraType.toString())
+                .apply();
+
+            previewSessionConfigInFlight = false;
+            if (captureSession != null) {
+                try {
+                    captureSession.stopRepeating();
+                } catch (Exception ignored) {
+                }
+                try {
+                    captureSession.close();
+                } catch (Exception ignored) {
+                }
+                captureSession = null;
+            }
+            if (cameraDevice != null) {
+                try {
+                    cameraDevice.close();
+                } catch (Exception ignored) {
+                }
+                cameraDevice = null;
+            }
+            isCameraOpen = false;
+            if (glRecordingPipeline != null && previewSurface != null && previewSurface.isValid()) {
+                glRecordingPipeline.setPreviewSurfaceImmediate(previewSurface);
+            }
+            openCamera();
+            broadcastOnCameraSwitchComplete(currentType, newCameraType);
+        } catch (Exception e) {
+            Log.e(TAG, "Preview-only camera switch failed", e);
+            try {
+                sharedPreferencesManager.sharedPreferences
+                    .edit()
+                    .putString(Constants.PREF_CAMERA_SELECTION, currentType.toString())
+                    .apply();
+            } catch (Exception ignored) {
+            }
+            broadcastOnCameraSwitchFailed("Preview-only camera switch failed: " + e.getMessage(), newCameraType);
         }
     }
 
@@ -2232,6 +2679,34 @@ public class RecordingService extends Service {
         }
     }
 
+    private void ensureWatermarkInfoProvider() {
+        if (watermarkInfoProvider != null) return;
+        watermarkInfoProvider = new WatermarkInfoProvider() {
+            @Override
+            public String getWatermarkText() {
+                String dfOverlayPayload = buildForensicsOverlayPayload();
+                if (dfOverlayPayload != null) {
+                    return dfOverlayPayload;
+                }
+                String watermarkOption = sharedPreferencesManager.getWatermarkOption();
+                String locationText = sharedPreferencesManager.isLocalisationEnabled() ? getLocationData() : "";
+                String customText = sharedPreferencesManager.getWatermarkCustomText();
+                String customTextLine = (customText != null && !customText.isEmpty()) ? "\n" + customText : "";
+
+                switch (watermarkOption) {
+                    case "timestamp_fadcam":
+                        return "Captured by FadCam - " + getCurrentTimestamp() + locationText + customTextLine;
+                    case "timestamp":
+                        return getCurrentTimestamp() + locationText + customTextLine;
+                    case "no_watermark":
+                        return "";
+                    default:
+                        return "Captured by FadCam - " + getCurrentTimestamp() + locationText + customTextLine;
+                }
+            }
+        };
+    }
+
     private float clamp01(float value) {
         return Math.max(0f, Math.min(1f, value));
     }
@@ -2863,6 +3338,24 @@ public class RecordingService extends Service {
                 // For other states like PAUSED, just stop recording
                 Log.w(TAG, "Camera disconnected while in state " + recordingState + ", stopping recording");
                 stopRecording();
+            } else if (previewOnlyActive) {
+                Log.w(TAG, "Camera disconnected during preview-only, scheduling recovery");
+                mainHandler.postDelayed(() -> {
+                    if (!previewOnlyActive || recordingState != RecordingState.NONE) {
+                        return;
+                    }
+                    if (previewSurface == null || !previewSurface.isValid()) {
+                        pendingPreviewOnlyStart = true;
+                        Log.d(TAG, "Preview-only recovery deferred: waiting for valid surface");
+                        return;
+                    }
+                    try {
+                        ensurePreviewOnlyGlPipeline();
+                        openCamera();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Preview-only recovery failed", e);
+                    }
+                }, 450);
             }
         }
 
@@ -2900,6 +3393,24 @@ public class RecordingService extends Service {
             else if (recordingState != RecordingState.NONE && recordingState != RecordingState.WAITING_FOR_CAMERA) {
                 Log.w(TAG, "Camera error during recording, stopping recording");
                 stopRecording();
+            } else if (previewOnlyActive) {
+                Log.w(TAG, "Camera error during preview-only, scheduling recovery");
+                mainHandler.postDelayed(() -> {
+                    if (!previewOnlyActive || recordingState != RecordingState.NONE) {
+                        return;
+                    }
+                    if (previewSurface == null || !previewSurface.isValid()) {
+                        pendingPreviewOnlyStart = true;
+                        Log.d(TAG, "Preview-only recovery deferred after error: waiting for valid surface");
+                        return;
+                    }
+                    try {
+                        ensurePreviewOnlyGlPipeline();
+                        openCamera();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Preview-only recovery after error failed", e);
+                    }
+                }, 550);
             }
 
             // Show error to user
@@ -3037,7 +3548,11 @@ public class RecordingService extends Service {
     private void createCameraPreviewSession() {
         if (cameraDevice == null) {
             Log.e(TAG, "createCameraPreviewSession: cameraDevice is null!");
-            stopRecording(); // Cannot create session without camera
+            if (previewOnlyActive) {
+                stopPreviewOnlyMode();
+            } else {
+                stopRecording(); // Cannot create session without camera
+            }
             return;
         }
         // If using OpenGL pipeline for watermarking
@@ -3058,6 +3573,10 @@ public class RecordingService extends Service {
             // }
             if (surfaces.isEmpty()) {
                 Log.e(TAG, "No valid surfaces for camera session!");
+                if (previewOnlyActive) {
+                    Log.w(TAG, "Preview-only active but no UI surface yet; waiting for ACTION_CHANGE_SURFACE");
+                    return;
+                }
                 stopRecording();
                 return;
             }
@@ -3221,20 +3740,33 @@ public class RecordingService extends Service {
             }
         } catch (CameraAccessException e) {
             Log.e(TAG, "createCameraPreviewSession: Camera Access Exception", e);
-            stopRecording();
+            if (previewOnlyActive) {
+                stopPreviewOnlyMode();
+            } else {
+                stopRecording();
+            }
         } catch (IllegalStateException e) {
             Log.e(TAG, "createCameraPreviewSession: IllegalStateException", e);
-            stopRecording();
+            if (previewOnlyActive) {
+                stopPreviewOnlyMode();
+            } else {
+                stopRecording();
+            }
         } catch (Exception e) {
             Log.e(TAG, "createCameraPreviewSession: Exception", e);
-            stopRecording();
+            if (previewOnlyActive) {
+                stopPreviewOnlyMode();
+            } else {
+                stopRecording();
+            }
         }
     }
 
     private final CameraCaptureSession.StateCallback captureSessionCallback = new CameraCaptureSession.StateCallback() {
         @Override
         public void onConfigured(@NonNull CameraCaptureSession session) {
-            if (isStopping || cameraDevice == null || recordingState == RecordingState.NONE) {
+            previewSessionConfigInFlight = false;
+            if (isStopping || cameraDevice == null || (recordingState == RecordingState.NONE && !previewOnlyActive)) {
                 Log.w(TAG,
                         "onConfigured: Service is stopping, camera device is null, or recording state is NONE. Aborting.");
                 return;
@@ -3259,7 +3791,8 @@ public class RecordingService extends Service {
                 captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
                         isRecordingTorchEnabled ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
                 // Defensive: check session state before using
-                if (captureSession == null || cameraDevice == null || recordingState == RecordingState.NONE) {
+                if (captureSession == null || cameraDevice == null
+                        || (recordingState == RecordingState.NONE && !previewOnlyActive)) {
                     Log.w(TAG,
                             "onConfigured: Session or cameraDevice became null before setRepeatingRequest. Aborting.");
                     return;
@@ -3268,34 +3801,52 @@ public class RecordingService extends Service {
                 try {
                     session.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
                     Log.d(TAG, "Started repeating request for standard session");
+                    maybeApplyDeferredAeLockAfterSessionStart("standard");
+                    if (previewOnlyActive) {
+                        Log.d(TAG, "Preview-only session is now actively streaming camera frames to preview surface");
+                    }
                 } catch (IllegalStateException ise) {
                     Log.e(TAG, "setRepeatingRequest failed: session likely closed", ise);
-                    stopRecording();
+                    if (previewOnlyActive) {
+                        stopPreviewOnlyMode();
+                    } else {
+                        stopRecording();
+                    }
                     return;
                 }
                 // Start the GL pipeline only after session is configured and repeating request
                 // is set
-                if (glRecordingPipeline != null) {
+                if (glRecordingPipeline != null && !previewOnlyActive) {
                     glRecordingPipeline.startRecording();
                 }
                 // Handle recording state
                 handleSessionConfigured();
             } catch (CameraAccessException e) {
                 Log.e(TAG, "Error starting repeating request", e);
-                stopRecording();
+                if (previewOnlyActive) {
+                    stopPreviewOnlyMode();
+                } else {
+                    stopRecording();
+                }
             }
         }
 
         @Override
         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
+            previewSessionConfigInFlight = false;
             if (isStopping)
                 return;
             Log.e(TAG, "Standard capture session configuration failed");
-            stopRecording();
+            if (previewOnlyActive) {
+                stopPreviewOnlyMode();
+            } else {
+                stopRecording();
+            }
         }
 
         @Override
         public void onClosed(@NonNull CameraCaptureSession session) {
+            previewSessionConfigInFlight = false;
             if (isStopping)
                 return;
             Log.d(TAG, "Capture session closed");
@@ -3336,6 +3887,7 @@ public class RecordingService extends Service {
 
                 // Start repeating burst for high-speed recording
                 highSpeedSession.setRepeatingBurst(highSpeedRequests, null, backgroundHandler);
+                maybeApplyDeferredAeLockAfterSessionStart("high-speed");
 
                 // Handle recording state
                 handleSessionConfigured();
@@ -3465,7 +4017,10 @@ public class RecordingService extends Service {
     private void setupSurfaceTexture(Intent intent) {
         Surface oldPreviewSurface = previewSurface; // Store old surface to check for changes
         if (intent != null) {
-            previewSurface = intent.getParcelableExtra("SURFACE");
+            boolean hasSurfaceExtra = intent.hasExtra("SURFACE");
+            if (hasSurfaceExtra) {
+                previewSurface = intent.getParcelableExtra("SURFACE");
+            }
             boolean isFullscreenTransition = intent.getBooleanExtra("IS_FULLSCREEN_TRANSITION", false);
             boolean validOldSurface = oldPreviewSurface != null && oldPreviewSurface.isValid();
             boolean validNewSurface = previewSurface != null && previewSurface.isValid();
@@ -3479,7 +4034,7 @@ public class RecordingService extends Service {
                     } else {
                         glRecordingPipeline.setPreviewSurface(previewSurface);
                     }
-                } else {
+                } else if (hasSurfaceExtra) {
                     glRecordingPipeline.setPreviewSurface(null);
                 }
             }
@@ -3613,9 +4168,24 @@ public class RecordingService extends Service {
         Log.d(TAG, "Broadcasted: BROADCAST_ON_RECORDING_STOPPED");
     }
 
+    private void broadcastOnPreviewOnlyStarted() {
+        Intent broadcastIntent = new Intent(Constants.BROADCAST_ON_PREVIEW_ONLY_STARTED);
+        broadcastIntent.putExtra(Constants.EXTRA_PREVIEW_ONLY_ACTIVE, true);
+        sendBroadcast(broadcastIntent);
+        Log.d(TAG, "Broadcasted: BROADCAST_ON_PREVIEW_ONLY_STARTED");
+    }
+
+    private void broadcastOnPreviewOnlyStopped() {
+        Intent broadcastIntent = new Intent(Constants.BROADCAST_ON_PREVIEW_ONLY_STOPPED);
+        broadcastIntent.putExtra(Constants.EXTRA_PREVIEW_ONLY_ACTIVE, false);
+        sendBroadcast(broadcastIntent);
+        Log.d(TAG, "Broadcasted: BROADCAST_ON_PREVIEW_ONLY_STOPPED");
+    }
+
     private void broadcastOnRecordingStateCallback() {
         Intent broadcastIntent = new Intent(Constants.BROADCAST_ON_RECORDING_STATE_CALLBACK);
         broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_STATE, recordingState);
+        broadcastIntent.putExtra(Constants.EXTRA_PREVIEW_ONLY_ACTIVE, previewOnlyActive);
         // Include start time so late joiners (e.g., fragment after orientation change) can restore elapsed timer
         if (recordingState == RecordingState.IN_PROGRESS || recordingState == RecordingState.PAUSED) {
             broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_START_TIME, recordingStartTime);
@@ -3926,7 +4496,9 @@ public class RecordingService extends Service {
 
     private void toggleRecordingTorch() {
         if (captureRequestBuilder != null && captureSession != null && cameraDevice != null) {
-            if (recordingState == RecordingState.IN_PROGRESS || recordingState == RecordingState.PAUSED) {
+            if (recordingState == RecordingState.IN_PROGRESS
+                    || recordingState == RecordingState.PAUSED
+                    || previewOnlyActive) {
                 try {
                     isRecordingTorchEnabled = !isRecordingTorchEnabled; // Toggle the state for the session
                     Log.d(TAG, "Toggling recording torch via CaptureRequest. New state: " + isRecordingTorchEnabled);
@@ -3996,7 +4568,8 @@ public class RecordingService extends Service {
         return recordingState == RecordingState.IN_PROGRESS ||
                 recordingState == RecordingState.PAUSED ||
                 recordingState == RecordingState.STARTING ||
-                recordingState == RecordingState.WAITING_FOR_CAMERA;
+                recordingState == RecordingState.WAITING_FOR_CAMERA ||
+                previewOnlyActive;
 
     }
 
@@ -4393,7 +4966,8 @@ public class RecordingService extends Service {
             Log.d(TAG, "Creating standard session with optimized frame rate settings");
 
             // Create standard request builder
-            captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+            captureRequestBuilder = cameraDevice.createCaptureRequest(
+                    previewOnlyActive ? CameraDevice.TEMPLATE_PREVIEW : CameraDevice.TEMPLATE_RECORD);
 
             // Add surfaces as targets
             for (Surface surface : surfaces) {
@@ -4423,10 +4997,18 @@ public class RecordingService extends Service {
             }
 
             // Create the session
+            if (previewOnlyActive) {
+                previewSessionConfigInFlight = true;
+            }
             cameraDevice.createCaptureSession(surfaces, captureSessionCallback, backgroundHandler);
         } catch (Exception e) {
             Log.e(TAG, "Failed to create standard session", e);
-            stopRecording();
+            previewSessionConfigInFlight = false;
+            if (previewOnlyActive) {
+                stopPreviewOnlyMode();
+            } else {
+                stopRecording();
+            }
         }
     }
 
@@ -4494,11 +5076,20 @@ public class RecordingService extends Service {
                         .get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE);
                 if (aeLockSupported != null && aeLockSupported) {
                     boolean lockToUse = (runtimeAeLock != null) ? runtimeAeLock : (aeLock != null && aeLock);
-                    builder.set(CaptureRequest.CONTROL_AE_LOCK, lockToUse);
-                    Log.d(TAG, "Applied " + (runtimeAeLock != null ? "runtime" : "saved") +
-                            " AE lock=" + lockToUse + " to request builder");
+                    if (lockToUse && runtimeAeLock == null) {
+                        // Fresh session + saved lock=true: let AE converge with EV first, then lock.
+                        builder.set(CaptureRequest.CONTROL_AE_LOCK, false);
+                        pendingDeferredAeLockEnable = true;
+                        Log.d(TAG, "Deferring saved AE lock enable until after repeating starts");
+                    } else {
+                        builder.set(CaptureRequest.CONTROL_AE_LOCK, lockToUse);
+                        pendingDeferredAeLockEnable = false;
+                        Log.d(TAG, "Applied " + (runtimeAeLock != null ? "runtime" : "saved") +
+                                " AE lock=" + lockToUse + " to request builder");
+                    }
                 } else {
                     Log.w(TAG, "AE lock not supported by camera characteristics");
+                    pendingDeferredAeLockEnable = false;
                 }
 
                 // Apply AF mode: use runtime value if available, otherwise saved value
@@ -4527,6 +5118,69 @@ public class RecordingService extends Service {
             }
         } catch (Exception e) {
             Log.w(TAG, "Error applying camera prefs: " + e.getMessage());
+        }
+    }
+
+    private void maybeApplyDeferredAeLockAfterSessionStart(String sessionType) {
+        if (!pendingDeferredAeLockEnable || backgroundHandler == null) {
+            return;
+        }
+        pendingDeferredAeLockEnable = false;
+        backgroundHandler.postDelayed(() -> {
+            try {
+                if (captureSession == null || captureRequestBuilder == null || currentCameraCharacteristics == null) {
+                    return;
+                }
+                boolean shouldLock = (runtimeAeLock != null)
+                        ? runtimeAeLock
+                        : (sharedPreferencesManager != null && sharedPreferencesManager.isAeLockedSaved());
+                if (!shouldLock) {
+                    return;
+                }
+                Log.d(TAG, "Applying deferred AE lock after " + sessionType + " session start");
+                applyAeLock(true);
+            } catch (Exception e) {
+                Log.w(TAG, "Deferred AE lock apply failed", e);
+            }
+        }, 900);
+    }
+
+    private boolean tryApplyManualExposureLock(Long exposureTimeNs, Integer iso) {
+        if (captureRequestBuilder == null || captureSession == null || currentCameraCharacteristics == null
+                || exposureTimeNs == null || iso == null) {
+            return false;
+        }
+        try {
+            int[] aeModes = currentCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES);
+            boolean aeOffSupported = false;
+            if (aeModes != null) {
+                for (int mode : aeModes) {
+                    if (mode == CaptureRequest.CONTROL_AE_MODE_OFF) {
+                        aeOffSupported = true;
+                        break;
+                    }
+                }
+            }
+            Range<Long> expRange = currentCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+            Range<Integer> isoRange = currentCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+            if (!aeOffSupported || expRange == null || isoRange == null) {
+                return false;
+            }
+
+            long clampedExp = Math.max(expRange.getLower(), Math.min(expRange.getUpper(), exposureTimeNs));
+            int clampedIso = Math.max(isoRange.getLower(), Math.min(isoRange.getUpper(), iso));
+
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, clampedExp);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, clampedIso);
+            captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+            manualAeLockActive = true;
+            Log.d(TAG, "Manual AE lock applied: exposureNs=" + clampedExp + ", iso=" + clampedIso);
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "Manual AE lock unsupported/failed; falling back to AE lock", e);
+            return false;
         }
     }
 
@@ -4664,6 +5318,10 @@ public class RecordingService extends Service {
      * Handle common tasks after any session is configured
      */
     private void handleSessionConfigured() {
+        if (previewOnlyActive && recordingState == RecordingState.NONE) {
+            Log.d(TAG, "Preview-only camera session configured");
+            return;
+        }
         // Handle recording states
         if (recordingState == RecordingState.STARTING) {
             try {
@@ -4729,6 +5387,113 @@ public class RecordingService extends Service {
             Log.d(TAG, "Session configured while in PAUSED state");
             setupRecordingResumeNotification();
         }
+    }
+
+    private void stopPreviewOnlyMode() {
+        pendingPreviewOnlyStart = false;
+        if (!previewOnlyActive) {
+            return;
+        }
+        previewOnlyActive = false;
+        releasePreviewOnlyGlPipeline();
+        try {
+            if (captureSession != null) {
+                try {
+                    captureSession.stopRepeating();
+                } catch (Exception ignore) {
+                }
+                captureSession.close();
+                captureSession = null;
+            }
+            if (cameraDevice != null) {
+                cameraDevice.close();
+                cameraDevice = null;
+            }
+            isCameraOpen = false;
+        } catch (Exception e) {
+            Log.w(TAG, "Failed while stopping preview-only mode", e);
+        }
+        broadcastOnPreviewOnlyStopped();
+        if (!isWorkingInProgress()) {
+            stopSelf();
+        }
+    }
+
+    private void ensurePreviewOnlyGlPipeline() {
+        try {
+            ensureWatermarkInfoProvider();
+            if (glRecordingPipeline != null) {
+                if (previewSurface != null && previewSurface.isValid()) {
+                    glRecordingPipeline.setPreviewSurfaceImmediate(previewSurface);
+                }
+                glRecordingPipeline.startPreviewOnlyRendering();
+                glRecordingPipeline.updateWatermark();
+                return;
+            }
+
+            Size resolution = sharedPreferencesManager.getCameraResolution();
+            int videoWidth = resolution.getWidth();
+            int videoHeight = resolution.getHeight();
+            CameraType cameraType = sharedPreferencesManager.getCameraSelection();
+            int videoFramerate = sharedPreferencesManager.getSpecificVideoFrameRate(cameraType);
+            String orientation = sharedPreferencesManager.getVideoOrientation();
+            VideoCodec selectedCodec = sharedPreferencesManager.getVideoCodec();
+
+            int sensorOrientation = 0;
+            try {
+                CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+                String cameraId = getCameraId(cameraManager, cameraType);
+                if (cameraId != null) {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                    Integer so = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+                    if (so != null) sensorOrientation = so;
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Preview-only: failed to read sensor orientation", e);
+            }
+
+            File previewTempFile = new File(getCacheDir(),
+                    "preview_gl_temp_" + System.currentTimeMillis() + ".mp4");
+            glRecordingPipeline = new com.fadcam.opengl.GLRecordingPipeline(
+                    this,
+                    watermarkInfoProvider,
+                    videoWidth,
+                    videoHeight,
+                    videoFramerate,
+                    previewTempFile.getAbsolutePath(),
+                    0L,
+                    1,
+                    new GLSegmentCallback(),
+                    previewSurface,
+                    orientation,
+                    sensorOrientation,
+                    selectedCodec,
+                    null,
+                    null
+            );
+            glRecordingPipeline.prepareSurfaces();
+            glRecordingPipeline.startPreviewOnlyRendering();
+            glRecordingPipeline.updateWatermark();
+            Log.d(TAG, "Preview-only GL pipeline initialized");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize preview-only GL pipeline", e);
+            releasePreviewOnlyGlPipeline();
+        }
+    }
+
+    private void releasePreviewOnlyGlPipeline() {
+        if (glRecordingPipeline == null) return;
+        try {
+            glRecordingPipeline.stopPreviewOnlyRendering();
+        } catch (Exception e) {
+            Log.w(TAG, "Error stopping preview-only renderer", e);
+        }
+        try {
+            glRecordingPipeline.stopRecording();
+        } catch (Exception e) {
+            Log.w(TAG, "Error releasing preview-only GL pipeline", e);
+        }
+        glRecordingPipeline = null;
     }
 
     // Add these fields to RecordingService class
@@ -4890,6 +5655,7 @@ public class RecordingService extends Service {
         runtimeExposureCompensation = null;
         runtimeAeLock = null;
         runtimeAfMode = null;
+        pendingDeferredAeLockEnable = false;
         Log.d(TAG, "Cleared runtime camera overrides for fresh recording session");
 
         createNotificationChannel();
@@ -4923,30 +5689,7 @@ public class RecordingService extends Service {
             if (recordingWakeLock != null && !recordingWakeLock.isHeld())
                 recordingWakeLock.acquire();
 
-            watermarkInfoProvider = new WatermarkInfoProvider() {
-                @Override
-                public String getWatermarkText() {
-                    String dfOverlayPayload = buildForensicsOverlayPayload();
-                    if (dfOverlayPayload != null) {
-                        return dfOverlayPayload;
-                    }
-                    String watermarkOption = sharedPreferencesManager.getWatermarkOption();
-                    String locationText = sharedPreferencesManager.isLocalisationEnabled() ? getLocationData() : "";
-                    String customText = sharedPreferencesManager.getWatermarkCustomText();
-                    String customTextLine = (customText != null && !customText.isEmpty()) ? "\n" + customText : "";
-                    
-                    switch (watermarkOption) {
-                        case "timestamp_fadcam":
-                            return "Captured by FadCam - " + getCurrentTimestamp() + locationText + customTextLine;
-                        case "timestamp":
-                            return getCurrentTimestamp() + locationText + customTextLine;
-                        case "no_watermark":
-                            return "";
-                        default:
-                            return "Captured by FadCam - " + getCurrentTimestamp() + locationText + customTextLine;
-                    }
-                }
-            };
+            ensureWatermarkInfoProvider();
 
             // Check for active streaming bitrate + FPS cap (quality preset)
             android.content.SharedPreferences fadcamPrefs = getSharedPreferences("FadCamPrefs", Context.MODE_PRIVATE);

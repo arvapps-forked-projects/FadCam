@@ -29,6 +29,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.os.VibrationEffect;
@@ -195,6 +196,7 @@ public class HomeFragment extends BaseFragment {
     
     private ImageView btnHamburgerMenu;
     private View hamburgerBadgeDot;
+    private ImageView ivAppTitle; // App logo in header
     private TextView tvPreviewPlaceholder;
     private TextView tvPreviewHint; // Hint text for long press to enable preview
     
@@ -205,8 +207,33 @@ public class HomeFragment extends BaseFragment {
     protected MaterialButton buttonPauseResume;
     protected Button buttonCamSwitch;
     protected MaterialButton buttonTorchSwitch;
+    protected MaterialButton buttonMirrorSwitch;
     
     private boolean isPreviewEnabled = true;
+    private boolean isPreviewOnlyActive = false;
+    private boolean isPreviewOnlyStartPending = false;
+    private long lastPreviewOnlyToggleDispatchMs = 0L;
+    private static final long PREVIEW_ONLY_TOGGLE_DEBOUNCE_MS = 500L;
+    private long previewOnlyStartPendingDeadlineMs = 0L;
+    private android.view.ScaleGestureDetector previewScaleGestureDetector;
+    private float previewPinchZoomRatio = 1.0f;
+    private long previewZoomDispatchMs = 0L;
+    private float previewUiScale = 1.0f;
+    private float previewUiPanX = 0f;
+    private float previewUiPanY = 0f;
+    private boolean isPanningPreview = false;
+    private float previewLastTouchX = 0f;
+    private float previewLastTouchY = 0f;
+    private boolean previewLongPressTriggered = false;
+    private final Handler previewLongPressHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingPreviewLongPressRunnable;
+    private final Handler previewOnlyStartHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingPreviewOnlyStartTimeoutRunnable;
+    private View containerPreviewZoomHud;
+    private TextView textPreviewZoomHud;
+    private View containerPreviewZoomMap;
+    private View viewPreviewZoomMapViewport;
+    private MaterialButton btnPreviewZoomReset;
 
     private View cardPreview;
     private TextView btnFullscreenPreview;
@@ -256,6 +283,8 @@ public class HomeFragment extends BaseFragment {
     private BroadcastReceiver broadcastOnRecordingPaused;
     private BroadcastReceiver broadcastOnRecordingStopped;
     private BroadcastReceiver broadcastOnRecordingStateCallback;
+    private BroadcastReceiver broadcastOnPreviewOnlyStarted;
+    private BroadcastReceiver broadcastOnPreviewOnlyStopped;
     private BroadcastReceiver segmentCompleteStatsReceiver; // For segment completion to update stats
 
     // Camera switch broadcast receivers
@@ -548,13 +577,11 @@ public class HomeFragment extends BaseFragment {
      * (card long-press, texture long-press via GestureDetector).
      */
     private void handlePreviewLongPress() {
-        // Only handle preview toggle when recording - do nothing when idle
-        if (!isRecordingOrPaused()) {
-            // showRandomMessage(); // Removed: No funny messages, just show layered icons
+        if (previewUiScale > 1.001f) {
+            Log.d(TAG, "Ignoring long-press toggle while zoom/pan gesture mode is active");
             return;
         }
-
-        // Unified Card Bounce Animation (Down then Up) - only for recording mode
+        // Unified Card Bounce Animation (Down then Up)
         AnimatorSet cardBounceAnim = new AnimatorSet();
         ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(
             cardPreview,
@@ -590,6 +617,54 @@ public class HomeFragment extends BaseFragment {
                 @Override
                 public void onAnimationEnd(Animator animation) {
                     super.onAnimationEnd(animation);
+
+                    if (!isRecordingOrPaused()) {
+                        if (!isAdded() || getContext() == null) {
+                            return;
+                        }
+                        long now = SystemClock.elapsedRealtime();
+                        if (now - lastPreviewOnlyToggleDispatchMs < PREVIEW_ONLY_TOGGLE_DEBOUNCE_MS) {
+                            Log.d(TAG, "Ignoring preview-only toggle due to debounce window");
+                            return;
+                        }
+                        lastPreviewOnlyToggleDispatchMs = now;
+
+                        CameraType cameraType = sharedPreferencesManager.getCameraSelection();
+                        if (cameraType == null || cameraType.isDual()) {
+                            Utils.showQuickToast(getContext(), R.string.preview_dual_not_supported);
+                            return;
+                        }
+                        Intent previewIntent = new Intent(getContext(), RecordingService.class);
+                        boolean shouldStopPreviewOnly = isPreviewOnlyActive
+                                && textureView != null
+                                && textureView.getVisibility() == View.VISIBLE;
+                        previewIntent.setAction(shouldStopPreviewOnly
+                                ? Constants.INTENT_ACTION_STOP_PREVIEW_ONLY
+                                : Constants.INTENT_ACTION_START_PREVIEW_ONLY);
+                        if (!shouldStopPreviewOnly) {
+                            isPreviewOnlyStartPending = true;
+                            previewOnlyStartPendingDeadlineMs = SystemClock.elapsedRealtime() + 1800L;
+                            isPreviewEnabled = true;
+                            resetTextureView(); // avoid stale last frame from previous recording session
+                            ensureTextureViewSurfaceForPreviewStart();
+                            if (textureViewSurface != null && textureViewSurface.isValid()) {
+                                previewIntent.putExtra("SURFACE", textureViewSurface);
+                                previewIntent.putExtra("SURFACE_WIDTH", textureView.getWidth());
+                                previewIntent.putExtra("SURFACE_HEIGHT", textureView.getHeight());
+                            }
+                            schedulePreviewOnlySurfacePushBurst();
+                            schedulePreviewOnlyStartTimeout();
+                        } else {
+                            clearPreviewOnlyPendingState(true);
+                            isPreviewOnlyActive = false;
+                        }
+                        ServiceStartPolicy.startRecordingAction(requireContext(), previewIntent);
+                        if (!shouldStopPreviewOnly) {
+                            schedulePreviewOnlySurfacePushBurst();
+                        }
+                        updatePreviewVisibility();
+                        return;
+                    }
 
                     // Core logic: toggle preview, update UI, save state (runs AFTER card bounce)
                     boolean wasEnabled = isPreviewEnabled;
@@ -656,27 +731,33 @@ public class HomeFragment extends BaseFragment {
             return;
         }
 
-        if (isRecording()) {
+        if (isRecording() || isPaused() || isPreviewOnlyActive) {
             if (isPreviewEnabled) {
                 // Show preview
                 textureView.setVisibility(View.VISIBLE);
                 tvPreviewPlaceholder.setVisibility(View.GONE);
-                if (tvPreviewHint != null) tvPreviewHint.setVisibility(View.GONE);
+                if (tvPreviewHint != null) {
+                    tvPreviewHint.setVisibility(View.GONE);
+                }
+                applyPreviewTransform();
                 Log.d(TAG, "Preview enabled and recording - showing preview");
 
                 // Ensure surface is sent to service
                 if (
                     textureViewSurface != null &&
                     textureViewSurface.isValid() &&
-                    isRecordingOrPaused()
+                    (isRecordingOrPaused() || isPreviewOnlyActive)
                 ) {
                     updateServiceWithCurrentSurface(textureViewSurface);
                 }
             } else {
                 // Hide preview but show hint text (using layered icons with hint)
                 textureView.setVisibility(View.INVISIBLE);
+                resetPreviewTransform();
                 tvPreviewPlaceholder.setVisibility(View.GONE); // Keep hidden
-                if (tvPreviewHint != null) tvPreviewHint.setVisibility(View.VISIBLE); // Show hint
+                if (tvPreviewHint != null) {
+                    tvPreviewHint.setVisibility(View.VISIBLE);
+                }
                 Log.d(
                     TAG,
                     "Preview disabled but recording - showing hint text"
@@ -686,11 +767,38 @@ public class HomeFragment extends BaseFragment {
                 updateServiceWithCurrentSurface(null);
             }
         } else {
+            boolean pendingStillFresh = isPreviewOnlyStartPending
+                    && SystemClock.elapsedRealtime() < previewOnlyStartPendingDeadlineMs;
+            if (isPreviewOnlyStartPending && !pendingStillFresh) {
+                isPreviewOnlyStartPending = false;
+                previewOnlyStartPendingDeadlineMs = 0L;
+            }
+            if (pendingStillFresh && isPreviewEnabled) {
+                textureView.setVisibility(View.VISIBLE);
+                tvPreviewPlaceholder.setVisibility(View.GONE);
+                if (tvPreviewHint != null) {
+                    // Keep UI deterministic on tab returns: never show stale "starting" copy.
+                    tvPreviewHint.setText(R.string.preview_enable_hint);
+                    tvPreviewHint.setVisibility(View.VISIBLE);
+                }
+                schedulePreviewOnlyStartTimeout();
+                if (textureViewSurface != null && textureViewSurface.isValid()) {
+                    updateServiceWithCurrentSurface(textureViewSurface, textureView.getWidth(), textureView.getHeight());
+                }
+                updateFullscreenButtonVisibility();
+                return;
+            }
             // Not recording, keep placeholder and hint hidden (using layered icons only)
             textureView.setVisibility(View.INVISIBLE);
+            resetPreviewTransform();
             tvPreviewPlaceholder.setVisibility(View.GONE); // Keep hidden
-            if (tvPreviewHint != null) tvPreviewHint.setVisibility(View.GONE); // Hide hint
-            Log.d(TAG, "Not recording - keeping placeholder hidden");
+            if (tvPreviewHint != null) {
+                // If we are not recording and not in preview-only mode, the preview is NOT shown.
+                // We should always show the "Long press to enable" hint because the area is reactive.
+                tvPreviewHint.setText(R.string.preview_enable_hint);
+                tvPreviewHint.setVisibility(View.VISIBLE);
+            }
+            Log.d(TAG, "Not recording - showing hint because area is reactive");
         }
 
         // Show fullscreen button only when preview is active and recording
@@ -1572,16 +1680,20 @@ public class HomeFragment extends BaseFragment {
                 requireContext()
             );
         }
+        // Always clear stale "starting preview" pending state when Home becomes visible.
+        // Service callback is the source of truth and will re-assert active preview state.
+        clearPreviewOnlyPendingState(true);
+
+        registerBroadcastReceivers(); // Centralized registration
 
         // Note: No need to restore recordingStartTime from SharedPreferences.
         // We'll fetch state from service which will broadcast the correct start time.
         Log.d(TAG, "onResume: Fetching recording state from service (source of truth)...");
         fetchRecordingState(); // Service will broadcast state + start time via callback
 
-        registerBroadcastReceivers(); // Centralized registration
-
         // Re-load preview state from SharedPreferences to ensure consistency
         isPreviewEnabled = sharedPreferencesManager.isPreviewEnabled();
+        syncPreviewZoomStateFromPrefs(false);
         Log.d(
             TAG,
             "onResume: Loaded isPreviewEnabled state = " + isPreviewEnabled
@@ -1595,7 +1707,7 @@ public class HomeFragment extends BaseFragment {
 
         // Critical: When resuming, send the appropriate surface to the service
         // This ensures preview shows correctly after app is minimized/restored
-        if (isPreviewEnabled && isRecordingOrPaused()) {
+        if (isPreviewEnabled && (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending)) {
             // Attempt to recover surface if it was lost
             if (textureViewSurface == null || !textureViewSurface.isValid()) {
                 Log.d(TAG, "onResume: Surface null/invalid, attempting recovery via resetTextureView");
@@ -1604,10 +1716,17 @@ public class HomeFragment extends BaseFragment {
             if (textureViewSurface != null && textureViewSurface.isValid()) {
                 Log.d(TAG, "onResume: Preview enabled, sending valid surface to service");
                 updateServiceWithCurrentSurface(textureViewSurface);
+                if (isPreviewOnlyStartPending) {
+                    schedulePreviewOnlySurfacePushBurst();
+                    schedulePreviewOnlyStartTimeout();
+                }
             } else {
                 Log.d(TAG, "onResume: Surface still unavailable after reset — onSurfaceTextureAvailable will handle it");
+                if (isPreviewOnlyStartPending && !isPreviewOnlyActive) {
+                    schedulePreviewOnlyStartTimeout();
+                }
             }
-        } else if (!isPreviewEnabled || !isRecordingOrPaused()) {
+        } else if (!isPreviewEnabled || (!isRecordingOrPaused() && !isPreviewOnlyActive)) {
             // If preview is disabled or not recording, send null surface
             Log.d(
                 TAG,
@@ -1621,11 +1740,28 @@ public class HomeFragment extends BaseFragment {
         // This ensures stats reflect any changes made in Records tab or after recording.
         VideoStatsCache.invalidateStats(sharedPreferencesManager);
         updateStats();
+        isTorchOn = sharedPreferencesManager.sharedPreferences.getBoolean(Constants.PREF_TORCH_STATE, false);
         updateTorchUI(isTorchOn);
+        updateMirrorButtonVisibilityAndState();
+        if (isRecordingOrPaused() || isPreviewOnlyActive) {
+            pushFrontMirrorToService(sharedPreferencesManager.isFrontVideoMirrorEnabled());
+        }
 
         // Start bubble rotation animation when visible (battery optimization)
         startBubbleRotation();
         isLaunchingPhotoCapture = false;
+    }
+
+    private void clearPreviewOnlyPendingState(boolean resetHintText) {
+        isPreviewOnlyStartPending = false;
+        previewOnlyStartPendingDeadlineMs = 0L;
+        if (pendingPreviewOnlyStartTimeoutRunnable != null) {
+            previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
+        }
+        if (resetHintText && tvPreviewHint != null && !isRecordingOrPaused() && !isPreviewOnlyActive) {
+            tvPreviewHint.setText(R.string.preview_enable_hint);
+            tvPreviewHint.setVisibility(View.VISIBLE);
+        }
     }
 
     // Inside HomeFragment.java
@@ -1915,21 +2051,68 @@ public class HomeFragment extends BaseFragment {
                         (RecordingState) i.getSerializableExtra(
                             Constants.INTENT_EXTRA_RECORDING_STATE
                         );
+                    isPreviewOnlyActive = i.getBooleanExtra(
+                        Constants.EXTRA_PREVIEW_ONLY_ACTIVE,
+                        false
+                    );
                     Log.i(
                         TAG,
-                        "Received Service State Callback: " + serviceState
+                        "Received Service State Callback: " + serviceState + ", previewOnly=" + isPreviewOnlyActive
                     );
                     if (serviceState == null) serviceState =
                         RecordingState.NONE; // Default to NONE
 
                     // *** CALL the handler method ***
                     handleServiceStateUpdate(serviceState);
+                    updatePreviewVisibility();
                 }
             };
             Log.d(
                 TAG,
                 "Initialized broadcastOnRecordingStateCallback receiver"
             );
+        }
+        if (broadcastOnPreviewOnlyStarted == null) {
+            broadcastOnPreviewOnlyStarted = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent i) {
+                    isPreviewOnlyStartPending = false;
+                    previewOnlyStartPendingDeadlineMs = 0L;
+                    if (pendingPreviewOnlyStartTimeoutRunnable != null) {
+                        previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
+                    }
+                    isPreviewOnlyActive = true;
+                    isPreviewEnabled = true;
+                    updatePreviewVisibility();
+                    resetTextureView();
+                    if (textureViewSurface != null && textureViewSurface.isValid()) {
+                        updateServiceWithCurrentSurface(textureViewSurface);
+                        if (textureView != null) {
+                            textureView.postDelayed(() -> {
+                                if (textureViewSurface != null && textureViewSurface.isValid()) {
+                                    updateServiceWithCurrentSurface(textureViewSurface);
+                                }
+                            }, 120L);
+                        }
+                    }
+                }
+            };
+        }
+        if (broadcastOnPreviewOnlyStopped == null) {
+            broadcastOnPreviewOnlyStopped = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent i) {
+                    isPreviewOnlyStartPending = false;
+                    previewOnlyStartPendingDeadlineMs = 0L;
+                    if (pendingPreviewOnlyStartTimeoutRunnable != null) {
+                        previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
+                    }
+                    isPreviewOnlyActive = false;
+                    updatePreviewVisibility();
+                    updateServiceWithCurrentSurface(null);
+                    updateMainSwipeGestureGate(false);
+                }
+            };
         }
     }
 
@@ -2131,6 +2314,13 @@ public class HomeFragment extends BaseFragment {
                 // UI *should* be idle unless background processing is happening
                 // for a *previous* video. Reset UI directly here as this confirms
                 // the *current* recording attempt is definitely stopped.
+                if (!isPreviewOnlyActive) {
+                    isPreviewOnlyStartPending = false;
+                    previewOnlyStartPendingDeadlineMs = 0L;
+                    if (pendingPreviewOnlyStartTimeoutRunnable != null) {
+                        previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
+                    }
+                }
                 Log.d(
                     TAG,
                     "handleServiceStateUpdate: Service state is NONE. Resetting UI to idle."
@@ -2546,6 +2736,48 @@ public class HomeFragment extends BaseFragment {
             );
         }
 
+        IntentFilter intentFilterPreviewOnlyStarted = new IntentFilter(
+            Constants.BROADCAST_ON_PREVIEW_ONLY_STARTED
+        );
+        if (broadcastOnPreviewOnlyStarted != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(
+                    broadcastOnPreviewOnlyStarted,
+                    intentFilterPreviewOnlyStarted,
+                    Context.RECEIVER_EXPORTED
+                );
+            } else {
+                context.registerReceiver(
+                    broadcastOnPreviewOnlyStarted,
+                    intentFilterPreviewOnlyStarted
+                );
+            }
+        } else {
+            allRegisteredSuccessfully = false;
+            Log.e(TAG, "broadcastOnPreviewOnlyStarted is null, not registering");
+        }
+
+        IntentFilter intentFilterPreviewOnlyStopped = new IntentFilter(
+            Constants.BROADCAST_ON_PREVIEW_ONLY_STOPPED
+        );
+        if (broadcastOnPreviewOnlyStopped != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(
+                    broadcastOnPreviewOnlyStopped,
+                    intentFilterPreviewOnlyStopped,
+                    Context.RECEIVER_EXPORTED
+                );
+            } else {
+                context.registerReceiver(
+                    broadcastOnPreviewOnlyStopped,
+                    intentFilterPreviewOnlyStopped
+                );
+            }
+        } else {
+            allRegisteredSuccessfully = false;
+            Log.e(TAG, "broadcastOnPreviewOnlyStopped is null, not registering");
+        }
+
         isStateReceiversRegistered = allRegisteredSuccessfully;
         if (allRegisteredSuccessfully) {
             Log.i(
@@ -2658,6 +2890,15 @@ public class HomeFragment extends BaseFragment {
                 lastCameraSwitchTime = System.currentTimeMillis(); // Track when switch completed
                 if (buttonCamSwitch != null) {
                     buttonCamSwitch.setEnabled(true);
+                }
+                updateMirrorButtonVisibilityAndState();
+                if ((isPreviewOnlyActive || isRecordingOrPaused()) && isPreviewEnabled) {
+                    if (textureView != null && textureView.isAvailable()) {
+                        resetTextureView();
+                        if (textureViewSurface != null && textureViewSurface.isValid()) {
+                            updateServiceWithCurrentSurface(textureViewSurface);
+                        }
+                    }
                 }
                 
                 // Show success toast - debounce duplicates (ignore if within 500ms of last)
@@ -2797,6 +3038,12 @@ public class HomeFragment extends BaseFragment {
                 if (
                     broadcastOnRecordingStateCallback != null
                 ) context.unregisterReceiver(broadcastOnRecordingStateCallback);
+                if (
+                    broadcastOnPreviewOnlyStarted != null
+                ) context.unregisterReceiver(broadcastOnPreviewOnlyStarted);
+                if (
+                    broadcastOnPreviewOnlyStopped != null
+                ) context.unregisterReceiver(broadcastOnPreviewOnlyStopped);
                 Log.i(TAG, "Unregistered recording state receivers.");
             } catch (IllegalArgumentException e) {
                 Log.w(
@@ -2887,6 +3134,16 @@ public class HomeFragment extends BaseFragment {
     public void onPause() {
         super.onPause();
         Log.d(TAG, "HomeFragment paused.");
+        updateMainSwipeGestureGate(false);
+        if (!isRecordingOrPaused() && (isPreviewOnlyActive || isPreviewOnlyStartPending)) {
+            dispatchStopPreviewOnly();
+            clearPreviewOnlyPendingState(true);
+            isPreviewOnlyActive = false;
+            updatePreviewVisibility();
+        }
+        if (pendingPreviewOnlyStartTimeoutRunnable != null && !isPreviewOnlyStartPending) {
+            previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
+        }
 
         // Stop bubble rotation animation to save battery
         if (!isLaunchingPhotoCapture) {
@@ -2941,13 +3198,14 @@ public class HomeFragment extends BaseFragment {
             SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
             if (surfaceTexture != null) {
                 textureViewSurface = new Surface(surfaceTexture);
+                applyPreviewTransform();
                 Log.d(
                     TAG,
                     "resetTextureView: Created new surface from existing SurfaceTexture"
                 );
 
                 // If recording and preview enabled, update service with new surface
-                if (isPreviewEnabled && isRecordingOrPaused()) {
+                if (isPreviewEnabled && (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending)) {
                     updateServiceWithCurrentSurface(textureViewSurface);
                     Log.d(
                         TAG,
@@ -3139,6 +3397,14 @@ public class HomeFragment extends BaseFragment {
             requireContext()
         );
 
+        // Initialize views first
+        initializeViews(view);
+
+        // Trigger logo reveal animation on fresh start
+        if (savedInstanceState == null) {
+            startLogoRevealAnimation();
+        }
+
         // Initialize camera control state from saved preferences
         currentEvIndex =
             sharedPreferencesManager.getSavedExposureCompensation();
@@ -3227,8 +3493,6 @@ public class HomeFragment extends BaseFragment {
             executorService = Executors.newSingleThreadExecutor();
         }
 
-        initializeViews(view);
-
         // Initialize UI components using helper
         fragmentHelper = new HomeFragmentHelper(this);
         fragmentHelper.initializeComponents(view);
@@ -3289,6 +3553,13 @@ public class HomeFragment extends BaseFragment {
                         bundle.keySet()
                     );
                     if (sliderVal != Integer.MIN_VALUE) {
+                        if (aeLocked) {
+                            com.fadcam.Log.d(
+                                TAG,
+                                "Ignoring exposure slider update while AE lock is enabled"
+                            );
+                            return;
+                        }
                         currentEvIndex = sliderVal;
                         // Debug: record that we received slider update (will only write to debug log
                         // when enabled)
@@ -3314,12 +3585,12 @@ public class HomeFragment extends BaseFragment {
                     }
                     SharedPreferencesManager sp =
                         SharedPreferencesManager.getInstance(requireContext());
+                    sp.setSavedExposureCompensation(currentEvIndex);
                     if (
                         !isMyServiceRunning(
                             com.fadcam.services.RecordingService.class
                         )
                     ) {
-                        sp.setSavedExposureCompensation(currentEvIndex);
                         com.fadcam.Log.d(
                             TAG,
                             "Exposure saved to prefs via picker"
@@ -3397,12 +3668,12 @@ public class HomeFragment extends BaseFragment {
 
                     SharedPreferencesManager sp =
                         SharedPreferencesManager.getInstance(requireContext());
+                    sp.setSavedAeLock(aeLocked);
                     if (
                         !isMyServiceRunning(
                             com.fadcam.services.RecordingService.class
                         )
                     ) {
-                        sp.setSavedAeLock(aeLocked);
                         com.fadcam.Log.d(
                             TAG,
                             "AE lock saved to prefs via picker"
@@ -3618,6 +3889,12 @@ public class HomeFragment extends BaseFragment {
                                     "x saved to preferences"
                                 );
                             }
+
+                            // Sync UI scale and update map/HUD
+                            previewPinchZoomRatio = zoomRatio;
+                            previewUiScale = Math.max(1.0f, Math.min(4.0f, zoomRatio));
+                            applyPreviewTransform();
+                            updatePreviewZoomHudUi(zoomRatio);
                         } else {
                             com.fadcam.Log.w(
                                 TAG,
@@ -3677,7 +3954,7 @@ public class HomeFragment extends BaseFragment {
                         } catch (Exception ignored) {}
                     }
 
-                    if (isRecordingOrPaused()) {
+                    if (isRecordingOrPaused() || isPreviewOnlyActive) {
                         if (
                             isPreviewEnabled &&
                             textureViewSurface != null &&
@@ -4484,98 +4761,120 @@ public class HomeFragment extends BaseFragment {
             tvPreviewPlaceholder.setFocusable(false);
         }
 
-        // Setup tap-to-focus and long-press on the preview using GestureDetector for robust handling
-        final android.view.GestureDetector gestureDetector =
-            new android.view.GestureDetector(
-                requireContext(),
-                new android.view.GestureDetector.SimpleOnGestureListener() {
-                    @Override
-                    public boolean onSingleTapUp(MotionEvent e) {
-                        if (
-                            !isRecordingOrPaused() || textureView == null
-                        ) return false;
-                        float x = e.getX();
-                        float y = e.getY();
-                        int width = textureView.getWidth();
-                        int height = textureView.getHeight();
-                        if (width <= 0 || height <= 0) return false;
-
-                        float normalizedX = x / width;
-                        float normalizedY = y / height;
-                        Log.d(
-                            TAG,
-                            "GestureDetector tap: normalized=" +
-                            normalizedX +
-                            "," +
-                            normalizedY
-                        );
-
-                        Intent tapToFocusIntent =
-                            RecordingControlIntents.tapToFocus(
-                                requireContext(),
-                                normalizedX,
-                                normalizedY
-                            );
-                        requireContext().startService(tapToFocusIntent);
-                        showFocusIndicator(x, y);
-                        return true;
-                    }
-
-                    @Override
-                    public void onLongPress(MotionEvent e) {
-                        performHapticFeedback();
-                        // Use the shared handler to toggle preview/animate
-                        handlePreviewLongPress();
-                    }
-
-                    @Override
-                    public boolean onDown(MotionEvent e) {
-                        // Must return true to receive subsequent events (including long press)
-                        return true;
-                    }
+        syncPreviewZoomStateFromPrefs(false);
+        previewScaleGestureDetector = new android.view.ScaleGestureDetector(
+            requireContext(),
+            new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                @Override
+                public boolean onScale(android.view.ScaleGestureDetector detector) {
+                    applyPreviewPinchZoom(detector.getScaleFactor());
+                    return true;
                 }
-            );
+            }
+        );
 
         textureView.setOnTouchListener((v, event) -> {
             try {
-                boolean handled = gestureDetector.onTouchEvent(event);
-                // For ACTION_UP/ACTION_CANCEL ensure any pending long-press is completed by the detector
-                if (
-                    event.getAction() == MotionEvent.ACTION_UP ||
-                    event.getAction() == MotionEvent.ACTION_CANCEL
-                ) {
-                    // Allow detector to finalize; no-op here
-                }
-                return handled;
-            } catch (Exception ex) {
-                Log.w(
-                    TAG,
-                    "Gesture handling failed, falling back to older touch logic: " +
-                    (ex != null ? ex.getMessage() : "")
-                );
-                // Fallback: existing logic for tap-to-focus on ACTION_UP
-                if (
-                    event.getAction() == MotionEvent.ACTION_UP &&
-                    isRecordingOrPaused()
-                ) {
-                    float x = event.getX();
-                    float y = event.getY();
-                    int width = v.getWidth();
-                    int height = v.getHeight();
-                    if (width > 0 && height > 0) {
-                        float normalizedX = x / width;
-                        float normalizedY = y / height;
-                        Intent tapToFocusIntent =
-                            RecordingControlIntents.tapToFocus(
-                                requireContext(),
-                                normalizedX,
-                                normalizedY
-                            );
-                        requireContext().startService(tapToFocusIntent);
-                        showFocusIndicator(x, y);
+                final int action = event.getActionMasked();
+                final float touchSlop = android.view.ViewConfiguration.get(requireContext()).getScaledTouchSlop();
+                final boolean zoomGestureLock = previewUiScale > 1.001f;
+                updateMainSwipeGestureGate(zoomGestureLock || isPanningPreview);
+                requestPreviewParentIntercept(v, zoomGestureLock || action == MotionEvent.ACTION_POINTER_DOWN);
+                if (previewScaleGestureDetector != null) {
+                    previewScaleGestureDetector.onTouchEvent(event);
+                    if (previewScaleGestureDetector.isInProgress()) {
+                        if (pendingPreviewLongPressRunnable != null) {
+                            previewLongPressHandler.removeCallbacks(pendingPreviewLongPressRunnable);
+                        }
+                        updateMainSwipeGestureGate(zoomGestureLock);
+                        isPanningPreview = false;
                         return true;
                     }
                 }
+                switch (action) {
+                    case MotionEvent.ACTION_DOWN:
+                        isPanningPreview = false;
+                        previewLongPressTriggered = false;
+                        updateMainSwipeGestureGate(zoomGestureLock);
+                        previewLastTouchX = event.getX();
+                        previewLastTouchY = event.getY();
+                        pendingPreviewLongPressRunnable = () -> {
+                            previewLongPressTriggered = true;
+                            performHapticFeedback();
+                            handlePreviewLongPress();
+                        };
+                        if (!zoomGestureLock) {
+                            previewLongPressHandler.postDelayed(pendingPreviewLongPressRunnable, 420L);
+                        }
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        float travelDx = event.getX() - previewLastTouchX;
+                        float travelDy = event.getY() - previewLastTouchY;
+                        if (Math.abs(travelDx) > touchSlop || Math.abs(travelDy) > touchSlop) {
+                            if (pendingPreviewLongPressRunnable != null) {
+                                previewLongPressHandler.removeCallbacks(pendingPreviewLongPressRunnable);
+                            }
+                        }
+                        if (previewUiScale > 1.001f) {
+                            float dx = travelDx;
+                            float dy = travelDy;
+                            if (Math.abs(dx) > 1f || Math.abs(dy) > 1f) {
+                                isPanningPreview = true;
+                                updateMainSwipeGestureGate(true);
+                                previewUiPanX += dx;
+                                previewUiPanY += dy;
+                                applyPreviewTransform();
+                                previewLastTouchX = event.getX();
+                                previewLastTouchY = event.getY();
+                                return true;
+                            }
+                        }
+                        break;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (pendingPreviewLongPressRunnable != null) {
+                            previewLongPressHandler.removeCallbacks(pendingPreviewLongPressRunnable);
+                        }
+                        updateMainSwipeGestureGate(false);
+                        requestPreviewParentIntercept(v, false);
+                        if (previewLongPressTriggered) {
+                            previewLongPressTriggered = false;
+                            isPanningPreview = false;
+                            return true;
+                        }
+                        if (isPanningPreview) {
+                            isPanningPreview = false;
+                            return true;
+                        }
+                        if ((isRecordingOrPaused() || isPreviewOnlyActive) && textureView != null) {
+                            float x = event.getX();
+                            float y = event.getY();
+                            int width = textureView.getWidth();
+                            int height = textureView.getHeight();
+                            if (width > 0 && height > 0) {
+                                float normalizedX = x / width;
+                                float normalizedY = y / height;
+                                Intent tapToFocusIntent = RecordingControlIntents.tapToFocus(
+                                    requireContext(),
+                                    normalizedX,
+                                    normalizedY
+                                );
+                                requireContext().startService(tapToFocusIntent);
+                                showFocusIndicator(x, y);
+                                return true;
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                return true;
+            } catch (Exception ex) {
+                Log.w(
+                    TAG,
+                    "Gesture handling failed: " +
+                    (ex != null ? ex.getMessage() : "")
+                );
                 return false;
             }
         });
@@ -4653,10 +4952,10 @@ public class HomeFragment extends BaseFragment {
                         Log.d(TAG, "onSurfaceTextureAvailable: Clearing isReturningFromFullscreen flag");
                         isReturningFromFullscreen = false;
                     }
-                    if (isPreviewEnabled && isRecordingOrPaused()) {
+                    if (isPreviewEnabled && (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending)) {
                         Log.d(
                             TAG,
-                            "onSurfaceTextureAvailable: Recording in progress, sending surface to service"
+                            "onSurfaceTextureAvailable: Preview active, sending surface to service"
                         );
                         updateServiceWithCurrentSurface(
                             textureViewSurface,
@@ -4686,7 +4985,7 @@ public class HomeFragment extends BaseFragment {
                     );
                     if (
                         isPreviewEnabled &&
-                        isRecordingOrPaused() &&
+                        (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending) &&
                         textureViewSurface != null &&
                         textureViewSurface.isValid()
                     ) {
@@ -4714,7 +5013,7 @@ public class HomeFragment extends BaseFragment {
                         // Only send null if we're not returning from fullscreen.
                         // During fullscreen return, texture is destroyed/recreated rapidly, and
                         // sending null causes "Surface lost" dummy surface creation.
-                        if (isRecordingOrPaused() && !isReturningFromFullscreen) {
+                        if ((isRecordingOrPaused() || isPreviewOnlyActive) && !isReturningFromFullscreen) {
                             Log.d(
                                 TAG,
                                 "onSurfaceTextureDestroyed: Recording active, sending null surface to service."
@@ -4822,6 +5121,55 @@ public class HomeFragment extends BaseFragment {
         buttonCamSwitch.setOnClickListener(v -> {
             switchCamera();
         });
+
+        if (buttonMirrorSwitch != null) {
+            buttonMirrorSwitch.setOnClickListener(v -> {
+                boolean enabled = !sharedPreferencesManager.isFrontVideoMirrorEnabled();
+                sharedPreferencesManager.setFrontVideoMirrorEnabled(enabled);
+                pushFrontMirrorToService(enabled);
+                updateMirrorButtonVisibilityAndState();
+            });
+        }
+    }
+
+    private void pushFrontMirrorToService(boolean enabled) {
+        if (!isAdded() || getContext() == null) return;
+        if (!isRecordingOrPaused() && !isMyServiceRunning(RecordingService.class)) {
+            return;
+        }
+        Intent intent = new Intent(getContext(), RecordingService.class);
+        intent.setAction(Constants.INTENT_ACTION_SET_FRONT_VIDEO_MIRROR);
+        intent.putExtra(Constants.EXTRA_FRONT_VIDEO_MIRROR_ENABLED, enabled);
+        try {
+            ServiceStartPolicy.startRecordingAction(requireContext(), intent);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to push mirror preference to service: " + e.getMessage());
+        }
+    }
+
+    protected void updateMirrorButtonVisibilityAndState() {
+        if (buttonMirrorSwitch == null || sharedPreferencesManager == null) return;
+        CameraType selectedCamera = sharedPreferencesManager.getCameraSelection();
+        boolean shouldShow =
+            selectedCamera == CameraType.FRONT &&
+            !selectedCamera.isDual() &&
+            !getClass().getName().contains("FadRecHomeFragment");
+
+        buttonMirrorSwitch.setVisibility(shouldShow ? View.VISIBLE : View.GONE);
+        if (!shouldShow) {
+            return;
+        }
+
+        boolean enabled = sharedPreferencesManager.isFrontVideoMirrorEnabled();
+        buttonMirrorSwitch.setEnabled(true);
+        buttonMirrorSwitch.setAlpha(1.0f);
+        buttonMirrorSwitch.setContentDescription(
+            getString(enabled ? R.string.front_video_mirror_disable : R.string.front_video_mirror_enable)
+        );
+        buttonMirrorSwitch.setBackgroundTintList(
+            ColorStateList.valueOf(enabled ? ContextCompat.getColor(requireContext(), R.color.button_stop) : 0xFF3A3A3A)
+        );
+        buttonMirrorSwitch.setIconTint(ColorStateList.valueOf(Color.WHITE));
     }
 
     // --- Start Recording ---
@@ -4863,7 +5211,10 @@ public class HomeFragment extends BaseFragment {
             recordingState = RecordingState.NONE;
         }
 
-        if (isMyServiceRunning(RecordingService.class)) {
+        boolean serviceRunning = isMyServiceRunning(RecordingService.class);
+        boolean allowStartFromPreviewOnly =
+            serviceRunning && isPreviewOnlyActive;
+        if (serviceRunning && !allowStartFromPreviewOnly) {
             Log.w(
                 TAG,
                 "Start requested, but service appears to be already running or starting. Current state: " +
@@ -5067,7 +5418,10 @@ public class HomeFragment extends BaseFragment {
             recordingState = RecordingState.NONE;
         }
 
-        if (isMyServiceRunning(RecordingService.class)) {
+        boolean serviceRunning = isMyServiceRunning(RecordingService.class);
+        boolean allowStartFromPreviewOnly =
+            serviceRunning && isPreviewOnlyActive;
+        if (serviceRunning && !allowStartFromPreviewOnly) {
             Log.w(
                 TAG,
                 "Start requested, but service appears to be already running or starting. Current state: " +
@@ -7210,6 +7564,272 @@ public class HomeFragment extends BaseFragment {
         return list;
     }
 
+    private void applyPreviewPinchZoom(float scaleFactor) {
+        if (!isAdded() || getContext() == null) return;
+        CameraType cam = sharedPreferencesManager.getCameraSelection();
+        if (cam == null || cam.isDual()) return;
+
+        float minZoom = 0.5f;
+        float maxZoom = getHardwareSupportedMaxZoomRatio(cam);
+        float base = previewPinchZoomRatio > 0f
+            ? previewPinchZoomRatio
+            : sharedPreferencesManager.getSpecificZoomRatio(cam);
+        float next = Math.max(minZoom, Math.min(maxZoom, base * scaleFactor));
+        previewPinchZoomRatio = next;
+        previewUiScale = Math.max(1.0f, Math.min(4.0f, next));
+        applyPreviewTransform();
+        sharedPreferencesManager.setSpecificZoomRatio(cam, next);
+        updatePreviewZoomHudUi(next);
+
+        long now = System.currentTimeMillis();
+        if (now - previewZoomDispatchMs < 60L) return;
+        previewZoomDispatchMs = now;
+
+        try {
+            Intent zoomIntent = RecordingControlIntents.setZoomRatio(requireContext(), next);
+            zoomIntent.setClass(requireContext(), RecordingService.class);
+            requireContext().startService(zoomIntent);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to dispatch pinch zoom update: " + e.getMessage());
+        }
+    }
+
+    private void applyPreviewTransform() {
+        if (textureView == null) return;
+        float w = textureView.getWidth();
+        float h = textureView.getHeight();
+        if (w <= 0f || h <= 0f) return;
+
+        float maxPanX = (w * (previewUiScale - 1f)) / 2f;
+        float maxPanY = (h * (previewUiScale - 1f)) / 2f;
+        previewUiPanX = Math.max(-maxPanX, Math.min(maxPanX, previewUiPanX));
+        previewUiPanY = Math.max(-maxPanY, Math.min(maxPanY, previewUiPanY));
+
+        android.graphics.Matrix matrix = new android.graphics.Matrix();
+        matrix.postScale(previewUiScale, previewUiScale, w / 2f, h / 2f);
+        matrix.postTranslate(previewUiPanX, previewUiPanY);
+        textureView.setTransform(matrix);
+        updatePreviewZoomMapUi();
+    }
+
+    private void resetPreviewTransform() {
+        previewUiScale = 1.0f;
+        previewUiPanX = 0f;
+        previewUiPanY = 0f;
+        if (textureView != null) {
+            textureView.setTransform(null);
+        }
+        updatePreviewZoomHudUi(1.0f);
+    }
+
+    private void requestPreviewParentIntercept(View child, boolean disallow) {
+        if (child == null) return;
+        android.view.ViewParent parent = child.getParent();
+        while (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(disallow);
+            parent = parent.getParent();
+        }
+    }
+
+    private void updateMainSwipeGestureGate(boolean isGestureActive) {
+        if (!(getActivity() instanceof MainActivity)) return;
+        ((MainActivity) getActivity()).setPreviewGestureInProgress(isGestureActive, previewPinchZoomRatio);
+    }
+
+    private void ensureTextureViewSurfaceForPreviewStart() {
+        if (textureView == null || !textureView.isAvailable()) {
+            return;
+        }
+        SurfaceTexture st = textureView.getSurfaceTexture();
+        if (st == null) {
+            return;
+        }
+        if (textureViewSurface != null) {
+            try {
+                textureViewSurface.release();
+            } catch (Exception ignored) {
+            }
+        }
+        textureViewSurface = new Surface(st);
+    }
+
+    private void schedulePreviewOnlySurfacePushBurst() {
+        if (!isPreviewOnlyStartPending || !isAdded()) return;
+        ensureTextureViewSurfaceForPreviewStart();
+        if (textureView == null || textureViewSurface == null || !textureViewSurface.isValid()) return;
+        updateServiceWithCurrentSurface(textureViewSurface, textureView.getWidth(), textureView.getHeight());
+        textureView.postDelayed(() -> {
+            if (isPreviewOnlyStartPending && textureViewSurface != null && textureViewSurface.isValid()) {
+                updateServiceWithCurrentSurface(textureViewSurface, textureView.getWidth(), textureView.getHeight());
+            }
+        }, 160L);
+        textureView.postDelayed(() -> {
+            if (isPreviewOnlyStartPending && textureViewSurface != null && textureViewSurface.isValid()) {
+                updateServiceWithCurrentSurface(textureViewSurface, textureView.getWidth(), textureView.getHeight());
+            }
+        }, 420L);
+        textureView.postDelayed(() -> {
+            if (isPreviewOnlyStartPending && textureViewSurface != null && textureViewSurface.isValid()) {
+                updateServiceWithCurrentSurface(textureViewSurface, textureView.getWidth(), textureView.getHeight());
+            }
+        }, 760L);
+    }
+
+    private void schedulePreviewOnlyStartTimeout() {
+        if (!isPreviewOnlyStartPending) {
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (previewOnlyStartPendingDeadlineMs <= 0L) {
+            previewOnlyStartPendingDeadlineMs = now + 1800L;
+        }
+        long remainingMs = previewOnlyStartPendingDeadlineMs - now;
+        if (remainingMs <= 0L) {
+            isPreviewOnlyStartPending = false;
+            previewOnlyStartPendingDeadlineMs = 0L;
+            if (tvPreviewHint != null) {
+                tvPreviewHint.setText(R.string.preview_enable_hint);
+                tvPreviewHint.setVisibility(View.VISIBLE);
+            }
+            return;
+        }
+        if (pendingPreviewOnlyStartTimeoutRunnable != null) {
+            previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
+        }
+        pendingPreviewOnlyStartTimeoutRunnable = () -> {
+            if (!isAdded() || !isPreviewOnlyStartPending || isPreviewOnlyActive) {
+                return;
+            }
+            long remaining = previewOnlyStartPendingDeadlineMs - SystemClock.elapsedRealtime();
+            if (remaining > 0L) {
+                previewOnlyStartHandler.postDelayed(pendingPreviewOnlyStartTimeoutRunnable, Math.min(remaining, 350L));
+                return;
+            }
+            isPreviewOnlyStartPending = false;
+            previewOnlyStartPendingDeadlineMs = 0L;
+            if (tvPreviewHint != null) {
+                tvPreviewHint.setText(R.string.preview_enable_hint);
+                tvPreviewHint.setVisibility(View.VISIBLE);
+            }
+            Toast.makeText(requireContext(), "Preview could not start. Try long-press again.", Toast.LENGTH_SHORT).show();
+        };
+        previewOnlyStartHandler.postDelayed(
+                pendingPreviewOnlyStartTimeoutRunnable,
+                Math.min(remainingMs, 1200L));
+    }
+
+    private void setupPreviewZoomHud() {
+        if (btnPreviewZoomReset != null) {
+            btnPreviewZoomReset.setOnClickListener(v -> {
+                CameraType cam = sharedPreferencesManager.getCameraSelection();
+                previewPinchZoomRatio = 1.0f;
+                previewUiScale = 1.0f;
+                previewUiPanX = 0f;
+                previewUiPanY = 0f;
+                sharedPreferencesManager.setSpecificZoomRatio(cam, 1.0f);
+                applyPreviewTransform();
+                updatePreviewZoomHudUi(1.0f);
+                try {
+                    Intent zoomIntent = RecordingControlIntents.setZoomRatio(requireContext(), 1.0f);
+                    zoomIntent.setClass(requireContext(), RecordingService.class);
+                    requireContext().startService(zoomIntent);
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to dispatch zoom reset: " + e.getMessage());
+                }
+            });
+        }
+        updatePreviewZoomHudUi(previewPinchZoomRatio);
+    }
+
+    private void updatePreviewZoomHudUi(float zoomRatio) {
+        if (containerPreviewZoomHud == null || textPreviewZoomHud == null) return;
+        textPreviewZoomHud.setText(String.format(java.util.Locale.getDefault(), "%.1fx", zoomRatio));
+        boolean show = zoomRatio > 1.01f;
+        containerPreviewZoomHud.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (btnPreviewZoomReset != null) {
+            btnPreviewZoomReset.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+        updatePreviewZoomMapUi();
+    }
+
+    private void updatePreviewZoomMapUi() {
+        if (containerPreviewZoomMap == null || viewPreviewZoomMapViewport == null || textureView == null) return;
+        if (containerPreviewZoomMap instanceof ViewGroup) {
+            ((ViewGroup) containerPreviewZoomMap).setClipChildren(true);
+            ((ViewGroup) containerPreviewZoomMap).setClipToPadding(true);
+        }
+        int mapW;
+        int mapH;
+        String orientation = sharedPreferencesManager.getVideoOrientation();
+        boolean portrait = orientation == null || !orientation.toLowerCase(java.util.Locale.US).contains("landscape");
+        float density = getResources().getDisplayMetrics().density;
+        if (portrait) {
+            mapW = Math.round(42f * density);
+            mapH = Math.round(56f * density);
+        } else {
+            mapW = Math.round(56f * density);
+            mapH = Math.round(42f * density);
+        }
+        ViewGroup.LayoutParams mapLp = containerPreviewZoomMap.getLayoutParams();
+        if (mapLp != null && (mapLp.width != mapW || mapLp.height != mapH)) {
+            mapLp.width = mapW;
+            mapLp.height = mapH;
+            containerPreviewZoomMap.setLayoutParams(mapLp);
+        }
+
+        int actualMapW = containerPreviewZoomMap.getWidth() > 0 ? containerPreviewZoomMap.getWidth() : mapW;
+        int actualMapH = containerPreviewZoomMap.getHeight() > 0 ? containerPreviewZoomMap.getHeight() : mapH;
+
+        float scale = Math.max(1.0f, previewUiScale);
+        int vpW = Math.max(8, Math.min(actualMapW, Math.round(actualMapW / scale)));
+        int vpH = Math.max(8, Math.min(actualMapH, Math.round(actualMapH / scale)));
+        ViewGroup.LayoutParams vpLp = viewPreviewZoomMapViewport.getLayoutParams();
+        if (vpLp != null && (vpLp.width != vpW || vpLp.height != vpH)) {
+            vpLp.width = vpW;
+            vpLp.height = vpH;
+            viewPreviewZoomMapViewport.setLayoutParams(vpLp);
+        }
+
+        float viewW = textureView.getWidth();
+        float viewH = textureView.getHeight();
+        float maxPanX = (viewW * (scale - 1f)) / 2f;
+        float maxPanY = (viewH * (scale - 1f)) / 2f;
+        float nx = 0.5f;
+        float ny = 0.5f;
+        if (maxPanX > 0f) {
+            nx = (maxPanX - previewUiPanX) / (2f * maxPanX);
+        }
+        if (maxPanY > 0f) {
+            ny = (maxPanY - previewUiPanY) / (2f * maxPanY);
+        }
+        nx = Math.max(0f, Math.min(1f, nx));
+        ny = Math.max(0f, Math.min(1f, ny));
+        float tx = (actualMapW - vpW) * nx;
+        float ty = (actualMapH - vpH) * ny;
+        tx = Math.max(0f, Math.min(Math.max(0f, actualMapW - vpW), tx));
+        ty = Math.max(0f, Math.min(Math.max(0f, actualMapH - vpH), ty));
+        viewPreviewZoomMapViewport.setTranslationX(tx);
+        viewPreviewZoomMapViewport.setTranslationY(ty);
+    }
+
+    private void syncPreviewZoomStateFromPrefs(boolean forceResetPan) {
+        if (sharedPreferencesManager == null) return;
+        CameraType cam = sharedPreferencesManager.getCameraSelection();
+        if (cam == null) return;
+        float savedZoom = sharedPreferencesManager.getSpecificZoomRatio(cam);
+        previewPinchZoomRatio = savedZoom;
+        previewUiScale = Math.max(1.0f, Math.min(4.0f, savedZoom));
+        if (forceResetPan || previewUiScale <= 1.001f) {
+            previewUiPanX = 0f;
+            previewUiPanY = 0f;
+            isPanningPreview = false;
+            previewLongPressTriggered = false;
+            updateMainSwipeGestureGate(false);
+        }
+        applyPreviewTransform();
+        updatePreviewZoomHudUi(previewPinchZoomRatio);
+    }
+
     /**
      * Get hardware supported maximum zoom ratio for the given camera type.
      * Uses the same logic as VideoSettingsFragment.
@@ -7418,8 +8038,8 @@ public class HomeFragment extends BaseFragment {
 
         CameraType targetType = (currentType == CameraType.BACK) ? CameraType.FRONT : CameraType.BACK;
 
-        // Check if recording is active
-        if (isRecording()) {
+        // Check if recording or preview-only is active
+        if (isRecording() || isPreviewOnlyActive) {
             // Live switch during recording: send Intent to RecordingService
             Log.d(TAG, "Recording active, initiating live camera switch: " + currentType + " → " + targetType);
             
@@ -7439,11 +8059,9 @@ public class HomeFragment extends BaseFragment {
 
             // Show feedback - keep button ENABLED so user can see it's responsive
             vibrateTouch();
-            Toast.makeText(
-                getContext(),
-                "Switching to " + (targetType == CameraType.FRONT ? "front" : "rear") + " camera...",
-                Toast.LENGTH_SHORT
-            ).show();
+            Toast.makeText(getContext(),
+                    "Switching to " + (targetType == CameraType.FRONT ? "front" : "rear") + " camera...",
+                    Toast.LENGTH_SHORT).show();
             Log.d(TAG, "Camera switch intent sent, button stays enabled for responsiveness");
         } else {
             // Not recording: update preference only (old behavior)
@@ -7464,6 +8082,7 @@ public class HomeFragment extends BaseFragment {
             Log.d(TAG, "Camera preference updated to " + targetType);
             vibrateTouch();
             Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+            updateMirrorButtonVisibilityAndState();
         }
     }
 
@@ -7533,6 +8152,10 @@ public class HomeFragment extends BaseFragment {
 
         stopUpdatingInfo();
         stopUpdatingClock();
+        updateMainSwipeGestureGate(false);
+        if (pendingPreviewOnlyStartTimeoutRunnable != null) {
+            previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
+        }
 
         // Clean up helper
         if (fragmentHelper != null) {
@@ -7602,7 +8225,7 @@ public class HomeFragment extends BaseFragment {
                 return;
             }
 
-            if (isRecordingOrPaused()) {
+            if (isRecordingOrPaused() || isPreviewOnlyActive) {
                 boolean dualRunning = isMyServiceRunning(DualCameraRecordingService.class);
                 Log.d(
                     TAG,
@@ -8099,9 +8722,8 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void setupAppLogoLongPressListener(View view) {
-        ImageView appLogo = view.findViewById(R.id.ivAppTitle);
-        if (appLogo != null) {
-            appLogo.setOnLongClickListener(v -> {
+        if (ivAppTitle != null) {
+            ivAppTitle.setOnLongClickListener(v -> {
                 performHapticFeedback();
                 Log.i(
                     TAG,
@@ -8171,6 +8793,58 @@ public class HomeFragment extends BaseFragment {
     }
 
     /**
+     * Plays a nice slide-up reveal animation for the app logo in the header.
+     * Matches the timing and style of the bottom navigation dock reveal.
+     */
+    private void startLogoRevealAnimation() {
+        if (ivAppTitle == null) return;
+
+        // Respect system animation scale (accessibility)
+        if (isAnimationDisabled(ivAppTitle)) {
+            ivAppTitle.setAlpha(1f);
+            ivAppTitle.setTranslationY(0f);
+            return;
+        }
+
+        // Initial hidden state
+        ivAppTitle.setAlpha(0f);
+
+        // Defer until layout to ensure precise positioning, though SLIDE_DP is fixed
+        ivAppTitle.post(() -> {
+            if (!isAdded()) return;
+            
+            float density = getResources().getDisplayMetrics().density;
+            float slideY = 18f * density; // Match DockRevealAnimator.SLIDE_DP
+
+            ivAppTitle.setTranslationY(slideY);
+            ivAppTitle.setAlpha(0f);
+
+            ivAppTitle.animate()
+                    .translationY(0f)
+                    .alpha(1f)
+                    .setDuration(450) // Match DockRevealAnimator.EXPAND_DURATION
+                    .setStartDelay(50) // Match DockRevealAnimator.START_DELAY_MS
+                    .setInterpolator(new android.view.animation.PathInterpolator(0.2f, 1.0f, 0.3f, 1.0f))
+                    .start();
+        });
+    }
+
+    /**
+     * Returns true if the user has disabled animations via accessibility or
+     * developer options (global animation scale = 0).
+     */
+    private boolean isAnimationDisabled(View view) {
+        try {
+            android.content.ContentResolver cr = view.getContext().getContentResolver();
+            float scale = android.provider.Settings.Global.getFloat(cr,
+                    android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f);
+            return scale == 0f;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /**
      * Wires the "Stats" card to navigate to the Records tab.
      * Applies only to Home and is safe across configuration changes.
      */
@@ -8213,6 +8887,7 @@ public class HomeFragment extends BaseFragment {
         tvRemainingSubtitle = view.findViewById(R.id.tvRemainingSubtitle);
         btnHamburgerMenu = view.findViewById(R.id.btnHamburgerMenu);
         hamburgerBadgeDot = view.findViewById(R.id.hamburgerBadgeDot);
+        ivAppTitle = view.findViewById(R.id.ivAppTitle);
 
         // Update hamburger badge visibility
         updateHamburgerBadgeVisibility();
@@ -8230,11 +8905,18 @@ public class HomeFragment extends BaseFragment {
         buttonStartStop = view.findViewById(R.id.buttonStartStop);
         buttonPauseResume = view.findViewById(R.id.buttonPauseResume);
         buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
+        buttonMirrorSwitch = view.findViewById(R.id.buttonMirrorSwitch);
         cardPreview = view.findViewById(R.id.cardPreview); // Assuming R.id.cardPreview exists
         btnFullscreenPreview = view.findViewById(R.id.btnFullscreenPreview);
         btnCaptureShotPreview = view.findViewById(R.id.btnCaptureShotPreview);
+        containerPreviewZoomHud = view.findViewById(R.id.containerPreviewZoomHud);
+        textPreviewZoomHud = view.findViewById(R.id.textPreviewZoomHud);
+        containerPreviewZoomMap = view.findViewById(R.id.containerPreviewZoomMap);
+        viewPreviewZoomMapViewport = view.findViewById(R.id.viewPreviewZoomMapViewport);
+        btnPreviewZoomReset = view.findViewById(R.id.btnPreviewZoomReset);
         setupFullscreenButton();
         setupCaptureShotButton();
+        setupPreviewZoomHud();
         vibrator = (Vibrator) requireActivity().getSystemService(
             Context.VIBRATOR_SERVICE
         );
@@ -8257,6 +8939,7 @@ public class HomeFragment extends BaseFragment {
         // Torch button (already initialized elsewhere, but good to have it
         // consistently)
         buttonTorchSwitch = view.findViewById(R.id.buttonTorchSwitch);
+        updateMirrorButtonVisibilityAndState();
 
         // Initialize rotating bubble background (animation started in onResume for battery optimization)
         ivBubbleBackground = view.findViewById(R.id.ivBubbleBackground);
@@ -8338,12 +9021,6 @@ public class HomeFragment extends BaseFragment {
         if (btnFullscreenPreview == null) return;
 
         btnFullscreenPreview.setOnClickListener(v -> {
-            if (!isRecordingOrPaused()) {
-                Toast.makeText(requireContext(),
-                        getString(R.string.fullscreen_preview_not_recording),
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
             // Launch fullscreen preview — the activity will take over the preview surface
             Intent intent = new Intent(requireContext(), FullscreenPreviewActivity.class);
             isLaunchingFullscreen = true;
@@ -8357,6 +9034,15 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void captureShotFromCurrentPreview() {
+        if (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending) {
+            Intent intent = new Intent(
+                    requireContext(),
+                    isDualRecordingActive ? DualCameraRecordingService.class : RecordingService.class
+            );
+            intent.setAction(Constants.INTENT_ACTION_CAPTURE_PHOTO);
+            requireContext().startService(intent);
+            return;
+        }
         if (!isRecordingOrPaused()) {
             try {
                 isLaunchingPhotoCapture = true;
@@ -8369,12 +9055,6 @@ public class HomeFragment extends BaseFragment {
             }
             return;
         }
-        Intent intent = new Intent(
-                requireContext(),
-                isDualRecordingActive ? DualCameraRecordingService.class : RecordingService.class
-        );
-        intent.setAction(Constants.INTENT_ACTION_CAPTURE_PHOTO);
-        requireContext().startService(intent);
     }
 
     /**
@@ -8391,6 +9071,7 @@ public class HomeFragment extends BaseFragment {
                         isLaunchingFullscreen = false;
                         isReturningFromFullscreen = true;
                         resetTextureView();
+                        syncPreviewZoomStateFromPrefs(true);
                         // Safety retry: if TextureView wasn't ready yet (e.g. it
                         // was recreated), onSurfaceTextureAvailable handles it.
                         // But if it IS available and the first reset didn't take
@@ -8401,6 +9082,7 @@ public class HomeFragment extends BaseFragment {
                                             || !textureViewSurface.isValid()) {
                                         resetTextureView();
                                     }
+                                    syncPreviewZoomStateFromPrefs(true);
                                     // Clear the guard flag after surface should be stable
                                     isReturningFromFullscreen = false;
                                 }, 600);
@@ -8412,7 +9094,7 @@ public class HomeFragment extends BaseFragment {
      */
     private void updateFullscreenButtonVisibility() {
         if (btnFullscreenPreview == null) return;
-        boolean show = isPreviewEnabled && isRecordingOrPaused();
+        boolean show = true;
         try {
             if (sharedPreferencesManager != null && sharedPreferencesManager.isPreviewQuickActionsAlwaysVisible()) {
                 show = true;
@@ -8459,6 +9141,19 @@ public class HomeFragment extends BaseFragment {
                 TAG,
                 "updateServiceWithCurrentSurface: Fragment not added or context is null, cannot send surface update."
             );
+            return;
+        }
+
+        // Avoid waking RecordingService with ACTION_CHANGE_SURFACE when nothing is active.
+        // This prevents service churn (create/destroy loops) while idle.
+        boolean shouldSyncSingleService =
+            isRecordingOrPaused() ||
+            isPreviewOnlyActive ||
+            isPreviewOnlyStartPending ||
+            isMyServiceRunning(RecordingService.class) ||
+            isFullscreenTransition;
+        if (!isDualRecordingActive && !shouldSyncSingleService) {
+            Log.d(TAG, "updateServiceWithCurrentSurface: Skipping surface sync while idle");
             return;
         }
 
@@ -8874,6 +9569,8 @@ public class HomeFragment extends BaseFragment {
         }
         
         if (!hidden) {
+            // Reset stale pending text/state on tab return; real state comes from service callback.
+            clearPreviewOnlyPendingState(true);
             // Tab switched back — resume all operations
             if (isResumed()) {
                 performResumeOperations();
@@ -8882,26 +9579,57 @@ public class HomeFragment extends BaseFragment {
             // Camera surface handling
             if (
                 isPreviewEnabled &&
-                isRecordingOrPaused() &&
+                (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending) &&
                 textureViewSurface != null &&
                 textureViewSurface.isValid()
             ) {
                 Log.d(TAG, "onHiddenChanged: Preview enabled, sending valid surface to service");
                 updateServiceWithCurrentSurface(textureViewSurface);
-            } else if (!isPreviewEnabled || !isRecordingOrPaused()) {
+            } else if (!isPreviewEnabled || (!isRecordingOrPaused() && !isPreviewOnlyActive && !isPreviewOnlyStartPending)) {
                 Log.d(TAG, "onHiddenChanged: Preview disabled or not recording, sending null surface");
                 updateServiceWithCurrentSurface(null);
+            }
+            if (isPreviewOnlyStartPending && !isPreviewOnlyActive) {
+                schedulePreviewOnlyStartTimeout();
             }
         } else {
             // Tab switched away — pause heavy operations
             if (!isLaunchingPhotoCapture) {
                 stopBubbleRotation();
             }
+            if (!isRecordingOrPaused() && (isPreviewOnlyActive || isPreviewOnlyStartPending)) {
+                dispatchStopPreviewOnly();
+                clearPreviewOnlyPendingState(true);
+                isPreviewOnlyActive = false;
+                updatePreviewVisibility();
+            } else if (isPreviewOnlyStartPending && !isPreviewOnlyActive) {
+                clearPreviewOnlyPendingState(false);
+            }
             
-            if (isRecordingOrPaused()) {
+            if (isRecordingOrPaused() || isPreviewOnlyActive) {
                 Log.d(TAG, "onHiddenChanged: Fragment hidden while recording, sending null surface");
                 updateServiceWithCurrentSurface(null);
             }
+        }
+    }
+
+    private void dispatchStopPreviewOnly() {
+        if (!isAdded() || getContext() == null) {
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastPreviewOnlyToggleDispatchMs < PREVIEW_ONLY_TOGGLE_DEBOUNCE_MS) {
+            Log.d(TAG, "dispatchStopPreviewOnly: skipped by debounce");
+            return;
+        }
+        lastPreviewOnlyToggleDispatchMs = now;
+        try {
+            Intent stopIntent = new Intent(requireContext(), RecordingService.class);
+            stopIntent.setAction(Constants.INTENT_ACTION_STOP_PREVIEW_ONLY);
+            ServiceStartPolicy.startRecordingAction(requireContext(), stopIntent);
+            Log.d(TAG, "dispatchStopPreviewOnly: sent stop preview-only intent");
+        } catch (Exception e) {
+            Log.w(TAG, "dispatchStopPreviewOnly: failed to dispatch: " + e.getMessage());
         }
     }
 
