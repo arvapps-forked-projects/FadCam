@@ -240,8 +240,40 @@ public class HomeFragment extends BaseFragment {
     private TextView btnCaptureShotPreview;
     private boolean isLaunchingPhotoCapture = false;
     private Vibrator vibrator;
-    private ImageView ivBubbleBackground; // Rotating bubble shape behind camera icon
+    private ImageView ivBubbleBackground; // Rotating bubble shape behind camera icon (legacy, null after layout update)
     private android.view.animation.Animation bubbleRotationAnimation; // Animation instance to preserve state across tab switches
+
+    // ── Preview Avatar (replaces bubble + CCTV icon) ──────────────────────────
+    private ImageView ivPreviewAvatar;
+    private View zzzHomeBadgeGroup;
+    private View tvHomeZ1, tvHomeZ2, tvHomeZ3;
+    private ValueAnimator homeBreathingAnimator;
+    private ObjectAnimator homeAvatarFloatAnim;  // gentle bob up/down for sleeping avatar
+    private final List<ObjectAnimator> homeFloatingZAnims = new ArrayList<>();
+    private final Handler homeBlinkHandler = new Handler(Looper.getMainLooper());
+    private Runnable homeBlinkRunnable;
+    private final Random homeBlinkRandom = new Random();
+    private boolean homeAvatarLastEnabled = false;
+    /** When true, the next updatePreviewVisibility() call will animate the avatar↔preview crossfade. */
+    private boolean animateNextPreviewTransition = false;
+    /**
+     * True while the iris-close (Preview→Avatar) circular reveal is in flight.
+     * During this window, {@link #updatePreviewVisibility()} must NOT touch
+     * textureView or flAvatar — the service's "recording stopped" broadcast fires
+     * ~50 ms after the animation starts and would otherwise kill it mid-reveal.
+     */
+    private boolean isPreviewCloseAnimating = false;
+    /**
+     * Tracks whether the header logo slide-up animation has already played this
+     * process session.  Static so it survives fragment recreation (e.g. switching
+     * app modes) but resets on cold-start — exactly the desired UX.
+     */
+    private static boolean sLogoAnimationPlayed = false;
+    /** Slow alpha pulse on the moon/stars ambiance ImageView while avatar is sleeping. */
+    private ObjectAnimator ambianceTwinkleAnim = null;
+    /** Sun wake-up ambiance ImageView (ic_wake_sun) — shown when avatar wakes before preview opens. */
+    private ImageView ivWakeSun;
+    // ── End Preview Avatar fields ──────────────────────────────────────────────
 
     private CardView cardClock;
     private TextView tvClock, tvDateEnglish, tvDateArabic;
@@ -586,12 +618,12 @@ public class HomeFragment extends BaseFragment {
         ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(
             cardPreview,
             "scaleX",
-            0.9f
+            0.97f
         );
         ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(
             cardPreview,
             "scaleY",
-            0.9f
+            0.97f
         );
         scaleDownX.setDuration(50); // Fast scale down
         scaleDownY.setDuration(50);
@@ -662,6 +694,7 @@ public class HomeFragment extends BaseFragment {
                         if (!shouldStopPreviewOnly) {
                             schedulePreviewOnlySurfacePushBurst();
                         }
+                        animateNextPreviewTransition = true;
                         updatePreviewVisibility();
                         return;
                     }
@@ -669,6 +702,7 @@ public class HomeFragment extends BaseFragment {
                     // Core logic: toggle preview, update UI, save state (runs AFTER card bounce)
                     boolean wasEnabled = isPreviewEnabled;
                     isPreviewEnabled = !isPreviewEnabled;
+                    animateNextPreviewTransition = true;
                     updatePreviewVisibility(); // Main visual change for enabling/disabling preview
                     savePreviewState();
 
@@ -731,14 +765,20 @@ public class HomeFragment extends BaseFragment {
             return;
         }
 
+        // During the iris-close (Preview→Avatar) circular reveal (~480ms), ALL updatePreviewVisibility
+        // calls must be ignored.  The service's "recording stopped" broadcast fires ~50ms into the
+        // animation and would otherwise hide textureView (losing the camera background) and make
+        // flAvatar visible immediately — cancelling the reveal mid-flight.
+        if (isPreviewCloseAnimating) return;
+
         if (isRecording() || isPaused() || isPreviewOnlyActive) {
             if (isPreviewEnabled) {
                 // Show preview
                 textureView.setVisibility(View.VISIBLE);
+                // If animating, keep textureView transparent until the circular reveal plays
+                if (animateNextPreviewTransition) textureView.setAlpha(0f);
                 tvPreviewPlaceholder.setVisibility(View.GONE);
-                if (tvPreviewHint != null) {
-                    tvPreviewHint.setVisibility(View.GONE);
-                }
+                setHintVisibilityAnimated(false);
                 applyPreviewTransform();
                 Log.d(TAG, "Preview enabled and recording - showing preview");
 
@@ -755,9 +795,7 @@ public class HomeFragment extends BaseFragment {
                 textureView.setVisibility(View.INVISIBLE);
                 resetPreviewTransform();
                 tvPreviewPlaceholder.setVisibility(View.GONE); // Keep hidden
-                if (tvPreviewHint != null) {
-                    tvPreviewHint.setVisibility(View.VISIBLE);
-                }
+                setHintVisibilityAnimated(true);
                 Log.d(
                     TAG,
                     "Preview disabled but recording - showing hint text"
@@ -775,12 +813,10 @@ public class HomeFragment extends BaseFragment {
             }
             if (pendingStillFresh && isPreviewEnabled) {
                 textureView.setVisibility(View.VISIBLE);
+                if (animateNextPreviewTransition) textureView.setAlpha(0f);
                 tvPreviewPlaceholder.setVisibility(View.GONE);
-                if (tvPreviewHint != null) {
-                    // Keep UI deterministic on tab returns: never show stale "starting" copy.
-                    tvPreviewHint.setText(R.string.preview_enable_hint);
-                    tvPreviewHint.setVisibility(View.VISIBLE);
-                }
+                if (tvPreviewHint != null) tvPreviewHint.setText(R.string.preview_enable_hint);
+                setHintVisibilityAnimated(true);
                 schedulePreviewOnlyStartTimeout();
                 if (textureViewSurface != null && textureViewSurface.isValid()) {
                     updateServiceWithCurrentSurface(textureViewSurface, textureView.getWidth(), textureView.getHeight());
@@ -792,17 +828,211 @@ public class HomeFragment extends BaseFragment {
             textureView.setVisibility(View.INVISIBLE);
             resetPreviewTransform();
             tvPreviewPlaceholder.setVisibility(View.GONE); // Keep hidden
-            if (tvPreviewHint != null) {
-                // If we are not recording and not in preview-only mode, the preview is NOT shown.
-                // We should always show the "Long press to enable" hint because the area is reactive.
-                tvPreviewHint.setText(R.string.preview_enable_hint);
-                tvPreviewHint.setVisibility(View.VISIBLE);
-            }
+            if (tvPreviewHint != null) tvPreviewHint.setText(R.string.preview_enable_hint);
+            setHintVisibilityAnimated(true);
             Log.d(TAG, "Not recording - showing hint because area is reactive");
+        }
+
+        // Show/hide the preview avatar container (complement TextureView visibility)
+        View flAvatar = getView() != null ? getView().findViewById(R.id.fl_preview_avatar) : null;
+        if (flAvatar != null) {
+            boolean livePreviewShowing = textureView != null && textureView.getVisibility() == View.VISIBLE;
+            if (animateNextPreviewTransition) {
+                animateNextPreviewTransition = false;
+                boolean avatarCurrentlyVisible = flAvatar.getVisibility() == View.VISIBLE;
+                if (livePreviewShowing && avatarCurrentlyVisible) {
+                    // Step 1: Wake the avatar (wake-up AVD ~420ms: eyes open + brighten)
+                    applyHomeAvatarState(true, true);
+                    // Step 2: After wake animation, shrink avatar out + iris-open camera
+                    final View capturedAvatar = flAvatar;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        if (!isAdded() || capturedAvatar == null || textureView == null) return;
+                        capturedAvatar.animate().cancel();
+                        capturedAvatar.animate()
+                            .alpha(0f).scaleX(0.72f).scaleY(0.72f)
+                            .setDuration(280)
+                            .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                            .withEndAction(() -> {
+                                // Use INVISIBLE (not GONE) so the view retains its layout
+                                // dimensions — required for createCircularReveal on the
+                                // reverse (Preview→Avatar) path.  Disable to avoid
+                                // intercepting touches on the preview beneath it.
+                                capturedAvatar.setVisibility(View.INVISIBLE);
+                                capturedAvatar.setEnabled(false);
+                                capturedAvatar.setAlpha(1f);
+                                capturedAvatar.setScaleX(1f);
+                                capturedAvatar.setScaleY(1f);
+                            }).start();
+                        // Iris-open circular reveal on TextureView
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                            int cx = textureView.getWidth() / 2;
+                            int cy = textureView.getHeight() / 2;
+                            float maxR = (float) Math.hypot(cx, cy);
+                            Animator reveal = android.view.ViewAnimationUtils.createCircularReveal(
+                                    textureView, cx, cy, 0f, maxR);
+                            reveal.setDuration(500);
+                            reveal.setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f));
+                            reveal.addListener(new AnimatorListenerAdapter() {
+                                @Override
+                                public void onAnimationStart(Animator a) {
+                                    if (textureView != null) textureView.setAlpha(1f);
+                                }
+                            });
+                            reveal.start();
+                        } else {
+                            textureView.animate().alpha(1f).setDuration(450).start();
+                        }
+                    }, 480);
+                } else if (!livePreviewShowing && !avatarCurrentlyVisible) {
+                    // Preview → Avatar: mirror of the iris-open animation.
+                    //
+                    // IMPORTANT: textureView renders ON TOP of fl_preview_avatar in the
+                    // FrameLayout (declared after it in XML).  Running createCircularReveal
+                    // on fl_preview_avatar would be completely hidden.  Instead, contract
+                    // textureView from maxRadius→0 — the camera feed "closes like an iris",
+                    // revealing the sleeping avatar underneath.
+                    //
+                    // Guard: isPreviewCloseAnimating prevents the service's "stopped"
+                    // broadcast (~50ms later) from calling updatePreviewVisibility() and
+                    // hiding textureView/replacing flAvatar mid-animation.
+                    isPreviewCloseAnimating = true;
+
+                    final View capturedFlAvatar = flAvatar;
+
+                    // Show avatar in AWAKE state before fl_preview_avatar becomes visible —
+                    // keeps the "awake → asleep" narrative: the avatar wakes for the preview,
+                    // then the preview closes and the avatar falls asleep again.
+                    stopBubbleRotation();
+                    applyHomeAvatarState(true, false); // instant awake (no animation)
+
+                    // Show fl_preview_avatar now (on bottom layer) so avatar is ready
+                    capturedFlAvatar.setEnabled(true);
+                    capturedFlAvatar.setAlpha(1f);
+                    capturedFlAvatar.setScaleX(1f);
+                    capturedFlAvatar.setScaleY(1f);
+                    capturedFlAvatar.setVisibility(View.VISIBLE);
+
+                    // IMPORTANT: line 809 already set textureView INVISIBLE (the normal "not recording"
+                    // path runs before we get here).  Restore it to VISIBLE now so the camera's frozen
+                    // last frame is visible for the iris-close animation to contract over.
+                    if (textureView != null) {
+                        textureView.setVisibility(View.VISIBLE);
+                        textureView.setAlpha(1f);
+                    }
+
+                    // Contract textureView from maxRadius → 0 (iris-close).
+                    if (textureView != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                        final int tvW = textureView.getWidth();
+                        final int tvH = textureView.getHeight();
+                        if (tvW > 0) {
+                            final int cx = tvW / 2, cy = tvH / 2;
+                            final float maxR = (float) Math.hypot(cx, cy);
+                            Animator irisClose = android.view.ViewAnimationUtils.createCircularReveal(
+                                    textureView, cx, cy, maxR, 0f);
+                            irisClose.setDuration(480);
+                            irisClose.setInterpolator(new android.view.animation.AccelerateInterpolator(1.3f));
+                            irisClose.addListener(new AnimatorListenerAdapter() {
+                                @Override public void onAnimationEnd(Animator a) {
+                                    isPreviewCloseAnimating = false;
+                                    if (textureView != null) textureView.setVisibility(View.INVISIBLE);
+                                    if (!isAdded()) return;
+                                    // Brief hold so user sees the awake avatar before sleeping.
+                                    // ~650ms matches the sun spin-in duration (520ms + small buffer).
+                                    final View anchor = ivPreviewAvatar;
+                                    if (anchor != null) {
+                                        anchor.postDelayed(() -> {
+                                            if (isAdded()) applyHomeAvatarState(false, true);
+                                        }, 650);
+                                    } else {
+                                        applyHomeAvatarState(false, true);
+                                    }
+                                }
+                            });
+                            irisClose.start();
+                        } else {
+                            isPreviewCloseAnimating = false;
+                            textureView.setVisibility(View.INVISIBLE);
+                        }
+                    } else {
+                        // Fallback: fade textureView out
+                        if (textureView != null) {
+                            textureView.animate().alpha(0f).setDuration(340)
+                                .withEndAction(() -> {
+                                    isPreviewCloseAnimating = false;
+                                    textureView.setVisibility(View.INVISIBLE);
+                                    textureView.setAlpha(1f);
+                                    if (isAdded()) applyHomeAvatarState(false, true);
+                                }).start();
+                        } else {
+                            isPreviewCloseAnimating = false;
+                        }
+                    }
+                } else {
+                    // Neither animated condition fired (e.g. state is already correct).
+                    // Use INVISIBLE (not GONE) so the view keeps its layout dimensions
+                    // for a future createCircularReveal on close.
+                    if (livePreviewShowing) {
+                        flAvatar.setVisibility(View.INVISIBLE);
+                        flAvatar.setEnabled(false);
+                    } else {
+                        flAvatar.setVisibility(View.VISIBLE);
+                        flAvatar.setEnabled(true);
+                    }
+                }
+            } else {
+                // Non-animated path: same INVISIBLE rule.
+                if (livePreviewShowing) {
+                    flAvatar.setVisibility(View.INVISIBLE);
+                    flAvatar.setEnabled(false);
+                } else {
+                    flAvatar.setVisibility(View.VISIBLE);
+                    flAvatar.setEnabled(true);
+                }
+            }
         }
 
         // Show fullscreen button only when preview is active and recording
         updateFullscreenButtonVisibility();
+    }
+
+    /**
+     * Smoothly shows or hides the preview hint text with a fade + scale animation.
+     * Replaces bare setVisibility calls so the label appears/disappears in vibe with the
+     * preview iris-reveal and avatar transitions.
+     *
+     * @param show true to fade the hint in, false to fade it out.
+     */
+    private void setHintVisibilityAnimated(boolean show) {
+        if (tvPreviewHint == null) return;
+        if (show) {
+            if (tvPreviewHint.getVisibility() == View.VISIBLE && tvPreviewHint.getAlpha() >= 0.99f) return;
+            tvPreviewHint.animate().cancel();
+            tvPreviewHint.setAlpha(0f);
+            tvPreviewHint.setScaleX(0.88f);
+            tvPreviewHint.setScaleY(0.88f);
+            tvPreviewHint.setVisibility(View.VISIBLE);
+            tvPreviewHint.animate()
+                .alpha(1f).scaleX(1f).scaleY(1f)
+                .setDuration(380)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f))
+                .start();
+        } else {
+            if (tvPreviewHint.getVisibility() != View.VISIBLE) return;
+            tvPreviewHint.animate().cancel();
+            tvPreviewHint.animate()
+                .alpha(0f).scaleX(0.88f).scaleY(0.88f)
+                .setDuration(260)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                .withEndAction(() -> {
+                    if (tvPreviewHint != null) {
+                        tvPreviewHint.setVisibility(View.GONE);
+                        tvPreviewHint.setAlpha(1f);
+                        tvPreviewHint.setScaleX(1f);
+                        tvPreviewHint.setScaleY(1f);
+                    }
+                })
+                .start();
+        }
     }
 
     private void resetTimers() {
@@ -1760,7 +1990,7 @@ public class HomeFragment extends BaseFragment {
         }
         if (resetHintText && tvPreviewHint != null && !isRecordingOrPaused() && !isPreviewOnlyActive) {
             tvPreviewHint.setText(R.string.preview_enable_hint);
-            tvPreviewHint.setVisibility(View.VISIBLE);
+            setHintVisibilityAnimated(true);
         }
     }
 
@@ -3944,7 +4174,6 @@ public class HomeFragment extends BaseFragment {
 
                     // Update UI and service surface according to new state
                     updatePreviewVisibility();
-
                     // If we just enabled preview (was disabled before) ensure TextureView is reset
                     // to avoid showing stale frames or an invalid surface. This mirrors the same
                     // behavior used by the long-press handler which resets the TextureView when enabling.
@@ -7689,8 +7918,8 @@ public class HomeFragment extends BaseFragment {
             previewOnlyStartPendingDeadlineMs = 0L;
             if (tvPreviewHint != null) {
                 tvPreviewHint.setText(R.string.preview_enable_hint);
-                tvPreviewHint.setVisibility(View.VISIBLE);
             }
+            setHintVisibilityAnimated(true);
             return;
         }
         if (pendingPreviewOnlyStartTimeoutRunnable != null) {
@@ -7709,8 +7938,8 @@ public class HomeFragment extends BaseFragment {
             previewOnlyStartPendingDeadlineMs = 0L;
             if (tvPreviewHint != null) {
                 tvPreviewHint.setText(R.string.preview_enable_hint);
-                tvPreviewHint.setVisibility(View.VISIBLE);
             }
+            setHintVisibilityAnimated(true);
             Toast.makeText(requireContext(), "Preview could not start. Try long-press again.", Toast.LENGTH_SHORT).show();
         };
         previewOnlyStartHandler.postDelayed(
@@ -8122,11 +8351,14 @@ public class HomeFragment extends BaseFragment {
 
     @Override
     public void onDestroyView() {
-        // Clean up bubble rotation animation
+        // Clean up bubble rotation animation (legacy - ivBubbleBackground now null)
         if (ivBubbleBackground != null) {
             ivBubbleBackground.clearAnimation();
             bubbleRotationAnimation = null;
         }
+
+        // Clean up preview avatar animators
+        stopBubbleRotation(); // calls stopHomeBlinkLoop + breathing + floating
         
         super.onDestroyView();
         TorchService.setHomeFragment(null);
@@ -8799,10 +9031,19 @@ public class HomeFragment extends BaseFragment {
     private void startLogoRevealAnimation() {
         if (ivAppTitle == null) return;
 
+        // Only animate once per process session — skip if already played
+        // (e.g. returning after switching to FadRec/other mode).
+        if (sLogoAnimationPlayed) {
+            ivAppTitle.setAlpha(1f);
+            ivAppTitle.setTranslationY(0f);
+            return;
+        }
+
         // Respect system animation scale (accessibility)
         if (isAnimationDisabled(ivAppTitle)) {
             ivAppTitle.setAlpha(1f);
             ivAppTitle.setTranslationY(0f);
+            sLogoAnimationPlayed = true;
             return;
         }
 
@@ -8818,6 +9059,8 @@ public class HomeFragment extends BaseFragment {
 
             ivAppTitle.setTranslationY(slideY);
             ivAppTitle.setAlpha(0f);
+
+            sLogoAnimationPlayed = true; // Mark before starting — prevents double-fire
 
             ivAppTitle.animate()
                     .translationY(0f)
@@ -8941,8 +9184,16 @@ public class HomeFragment extends BaseFragment {
         buttonTorchSwitch = view.findViewById(R.id.buttonTorchSwitch);
         updateMirrorButtonVisibilityAndState();
 
-        // Initialize rotating bubble background (animation started in onResume for battery optimization)
+        // Initialize rotating bubble background (now replaced by avatar — will be null)
         ivBubbleBackground = view.findViewById(R.id.ivBubbleBackground);
+
+        // Bind preview avatar views (replace bubble + CCTV icon)
+        ivPreviewAvatar = view.findViewById(R.id.iv_preview_avatar);
+        ivWakeSun = view.findViewById(R.id.iv_wake_sun);
+        zzzHomeBadgeGroup = view.findViewById(R.id.zzz_home_badge_group);
+        tvHomeZ1 = view.findViewById(R.id.tv_home_zzz_1);
+        tvHomeZ2 = view.findViewById(R.id.tv_home_zzz_2);
+        tvHomeZ3 = view.findViewById(R.id.tv_home_zzz_3);
 
         // Compact overlay handling removed: we now use PickerBottomSheetFragment for
         // controls.
@@ -8952,64 +9203,324 @@ public class HomeFragment extends BaseFragment {
     }
 
     /**
-     * Starts a continuous slow rotation animation on the bubble background shape.
-     * Creates a modern, dynamic visual effect behind the camera icon.
-     * Preserves animation state across tab switches to avoid resetting to initial position.
+     * Called in onResume to initialise or resume the preview-area avatar animation.
+     * Replaces the old bubble-rotation animation; keeps the same call-sites.
+     * Home avatar is ALWAYS sleeping — it only shows when the camera feed is not visible,
+     * so there is no "awake" state needed here.
      */
     private void startBubbleRotation() {
-        if (ivBubbleBackground == null) {
-            return;
-        }
-        
-        // If animation already exists and is running, resume it (API 26+) or just return
-        if (bubbleRotationAnimation != null) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                // Resume the animation from where it was paused using reflection
-                try {
-                    java.lang.reflect.Method isPausedMethod = android.view.animation.Animation.class.getMethod("isPaused");
-                    java.lang.reflect.Method resumeMethod = android.view.animation.Animation.class.getMethod("resume");
-                    if ((boolean) isPausedMethod.invoke(bubbleRotationAnimation)) {
-                        resumeMethod.invoke(bubbleRotationAnimation);
-                        Log.d(TAG, "Resumed bubble background rotation animation");
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Failed to resume animation via reflection", e);
-                }
-            }
-            return; // Animation already set, don't recreate
-        }
-        
-        // First time: create and start the animation
-        bubbleRotationAnimation = android.view.animation.AnimationUtils.loadAnimation(requireContext(), R.anim.rotate_slow_left);
-        ivBubbleBackground.startAnimation(bubbleRotationAnimation);
-        Log.d(TAG, "Started bubble background rotation animation");
+        if (ivPreviewAvatar == null) return;
+        applyHomeAvatarState(false, false); // always sleeping in home fragment
     }
 
     /**
-     * Pauses the bubble rotation animation (for battery optimization when fragment is hidden).
-     * Preserves the current rotation position instead of resetting to 0°.
+     * Suspends avatar animations (call on onPause / tab hidden).
+     * Keeps the visual state — animations resume on next startBubbleRotation().
      */
     private void stopBubbleRotation() {
-        if (ivBubbleBackground == null || bubbleRotationAnimation == null) {
-            return;
-        }
-        
-        // Pause the animation to preserve current rotation (API 26+) using reflection
-        // For older APIs, we just leave it running (minimal CPU usage for a simple rotation)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            try {
-                java.lang.reflect.Method isPausedMethod = android.view.animation.Animation.class.getMethod("isPaused");
-                java.lang.reflect.Method pauseMethod = android.view.animation.Animation.class.getMethod("pause");
-                if (!(boolean) isPausedMethod.invoke(bubbleRotationAnimation)) {
-                    pauseMethod.invoke(bubbleRotationAnimation);
-                    Log.d(TAG, "Paused bubble background rotation animation");
+        stopHomeBlinkLoop();
+        if (ambianceTwinkleAnim != null) { ambianceTwinkleAnim.cancel(); ambianceTwinkleAnim = null; }
+        if (ivWakeSun != null) { ivWakeSun.animate().cancel(); }
+        if (homeBreathingAnimator != null) { homeBreathingAnimator.cancel(); homeBreathingAnimator = null; }
+        if (homeAvatarFloatAnim != null) { homeAvatarFloatAnim.cancel(); homeAvatarFloatAnim = null; }
+        if (ivPreviewAvatar != null) { ivPreviewAvatar.setScaleX(1f); ivPreviewAvatar.setScaleY(1f); ivPreviewAvatar.setTranslationY(0f); }
+        for (ObjectAnimator a : homeFloatingZAnims) a.cancel();
+        homeFloatingZAnims.clear();
+    }
+
+    // ── Preview Avatar Animation Logic ───────────────────────────────────────
+
+    /**
+     * Applies awake (enabled=true) or sleeping (enabled=false) state to the home
+     * preview avatar, mirroring the sidebar toggle behaviour.
+     *
+     * @param enabled true = awake (toggle_on_idle + blink loop)
+     * @param animate true = play transition animations; false = instant state
+     */
+    private void applyHomeAvatarState(boolean enabled, boolean animate) {
+        if (ivPreviewAvatar == null) return;
+        homeAvatarLastEnabled = enabled;
+
+        if (enabled) {
+            stopHomeBlinkLoop();
+            stopHomeBreathing();
+            ivPreviewAvatar.setAlpha(1.0f);
+            // Cancel twinkle + animate moon out, spin sun in
+            if (ambianceTwinkleAnim != null) { ambianceTwinkleAnim.cancel(); ambianceTwinkleAnim = null; }
+            if (getView() != null) {
+                View ivAmbiance = getView().findViewById(R.id.iv_sleep_ambiance);
+                if (ivAmbiance != null) {
+                    ivAmbiance.animate().cancel();
+                    ivAmbiance.animate().alpha(0f).scaleX(0.75f).scaleY(0.75f)
+                        .setDuration(280)
+                        .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                        .start();
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to pause animation via reflection", e);
+                if (ivWakeSun != null) {
+                    ivWakeSun.animate().cancel();
+                    ivWakeSun.setAlpha(0f);
+                    ivWakeSun.setScaleX(0.2f);
+                    ivWakeSun.setScaleY(0.2f);
+                    ivWakeSun.setRotation(-30f);
+                    ivWakeSun.animate()
+                        .alpha(1f).scaleX(1f).scaleY(1f).rotation(0f)
+                        .setDuration(520)
+                        .setInterpolator(new android.view.animation.OvershootInterpolator(1.5f))
+                        .start();
+                }
+            }
+            // Hide zzz
+            if (zzzHomeBadgeGroup != null) {
+                if (animate && zzzHomeBadgeGroup.getVisibility() == View.VISIBLE) {
+                    zzzHomeBadgeGroup.animate().alpha(0f).setDuration(180).withEndAction(() -> {
+                        zzzHomeBadgeGroup.setVisibility(View.GONE);
+                        zzzHomeBadgeGroup.setAlpha(1f);
+                        resetHomeZLetters();
+                    }).start();
+                } else {
+                    zzzHomeBadgeGroup.setVisibility(View.GONE);
+                    resetHomeZLetters();
+                }
+            }
+            if (animate) {
+                // Wake-up AVD → idle + blink
+                ivPreviewAvatar.setImageResource(R.drawable.toggle_on_anim);
+                android.graphics.drawable.Drawable d = ivPreviewAvatar.getDrawable();
+                if (d instanceof android.graphics.drawable.Animatable2) {
+                    ((android.graphics.drawable.Animatable2) d).registerAnimationCallback(
+                        new android.graphics.drawable.Animatable2.AnimationCallback() {
+                            @Override public void onAnimationEnd(android.graphics.drawable.Drawable drawable) {
+                                if (ivPreviewAvatar != null && ivPreviewAvatar.isAttachedToWindow()) {
+                                    ivPreviewAvatar.setImageResource(R.drawable.toggle_on_idle);
+                                    startHomeBlinkLoop();
+                                }
+                            }
+                        });
+                    ((android.graphics.drawable.Animatable2) d).start();
+                } else if (d instanceof android.graphics.drawable.Animatable) {
+                    ((android.graphics.drawable.Animatable) d).start();
+                    ivPreviewAvatar.postDelayed(() -> {
+                        if (ivPreviewAvatar != null && ivPreviewAvatar.isAttachedToWindow()) {
+                            ivPreviewAvatar.setImageResource(R.drawable.toggle_on_idle);
+                            startHomeBlinkLoop();
+                        }
+                    }, 480);
+                }
+            } else {
+                ivPreviewAvatar.setImageResource(R.drawable.toggle_on_idle);
+                startHomeBlinkLoop();
+            }
+
+        } else {
+            stopHomeBlinkLoop();
+            startHomeBreathing();
+            // Sun fades out (if visible), moon rises back in with slow twinkle
+            if (getView() != null) {
+                View ivAmbiance = getView().findViewById(R.id.iv_sleep_ambiance);
+                // Dismiss sun
+                if (ivWakeSun != null && ivWakeSun.getAlpha() > 0.02f) {
+                    ivWakeSun.animate().cancel();
+                    ivWakeSun.animate().alpha(0f).scaleX(0.4f).scaleY(0.4f).rotation(20f)
+                        .setDuration(220)
+                        .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                        .start();
+                }
+                // Moon rises back in (or starts twinkle directly if already visible)
+                if (ivAmbiance != null) {
+                    ivAmbiance.animate().cancel();
+                    if (ivAmbiance.getAlpha() < 0.1f) {
+                        // Was hidden by wake animation — animate back in
+                        ivAmbiance.setScaleX(0.8f);
+                        ivAmbiance.setScaleY(0.8f);
+                        ivAmbiance.animate().alpha(0.55f).scaleX(1f).scaleY(1f)
+                            .setDuration(380)
+                            .setInterpolator(new android.view.animation.DecelerateInterpolator(1.2f))
+                            .withEndAction(() -> {
+                                if (!isAdded() || getView() == null || ivAmbiance.getAlpha() < 0.1f) return;
+                                if (ambianceTwinkleAnim != null) ambianceTwinkleAnim.cancel();
+                                ambianceTwinkleAnim = ObjectAnimator.ofFloat(ivAmbiance, "alpha", 0.55f, 1.0f);
+                                ambianceTwinkleAnim.setDuration(3500);
+                                ambianceTwinkleAnim.setRepeatCount(ObjectAnimator.INFINITE);
+                                ambianceTwinkleAnim.setRepeatMode(ObjectAnimator.REVERSE);
+                                ambianceTwinkleAnim.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+                                ambianceTwinkleAnim.start();
+                            }).start();
+                    } else {
+                        // Already visible — reset scale and just start twinkle
+                        ivAmbiance.setScaleX(1f);
+                        ivAmbiance.setScaleY(1f);
+                        if (ambianceTwinkleAnim != null) ambianceTwinkleAnim.cancel();
+                        ambianceTwinkleAnim = ObjectAnimator.ofFloat(ivAmbiance, "alpha", 0.55f, 1.0f);
+                        ambianceTwinkleAnim.setDuration(3500);
+                        ambianceTwinkleAnim.setRepeatCount(ObjectAnimator.INFINITE);
+                        ambianceTwinkleAnim.setRepeatMode(ObjectAnimator.REVERSE);
+                        ambianceTwinkleAnim.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+                        ambianceTwinkleAnim.start();
+                    }
+                }
+            }
+
+            if (animate) {
+                ivPreviewAvatar.setImageResource(R.drawable.toggle_off_anim);
+                android.graphics.drawable.Drawable d = ivPreviewAvatar.getDrawable();
+                Runnable afterOff = () -> {
+                    if (ivPreviewAvatar == null || !ivPreviewAvatar.isAttachedToWindow()) return;
+                    ivPreviewAvatar.setImageResource(R.drawable.toggle_off);
+                    showHomeZzzLetters(true);
+                };
+                if (d instanceof android.graphics.drawable.Animatable2) {
+                    ((android.graphics.drawable.Animatable2) d).registerAnimationCallback(
+                        new android.graphics.drawable.Animatable2.AnimationCallback() {
+                            @Override public void onAnimationEnd(android.graphics.drawable.Drawable drawable) { afterOff.run(); }
+                        });
+                    ((android.graphics.drawable.Animatable2) d).start();
+                } else if (d instanceof android.graphics.drawable.Animatable) {
+                    ((android.graphics.drawable.Animatable) d).start();
+                    ivPreviewAvatar.postDelayed(afterOff, 320);
+                } else {
+                    afterOff.run();
+                }
+            } else {
+                ivPreviewAvatar.setImageResource(R.drawable.toggle_off);
+                showHomeZzzLetters(false);
             }
         }
-        // For API < 26: animation keeps running even when hidden (negligible performance impact)
     }
+
+    private void showHomeZzzLetters(boolean animate) {
+        if (zzzHomeBadgeGroup == null) return;
+        stopHomeFloatingZAnims();
+        if (animate) {
+            resetHomeZLetters();
+            View[] zs = {tvHomeZ1, tvHomeZ2, tvHomeZ3};
+            for (View z : zs) { if (z != null) { z.setAlpha(0f); z.setScaleX(0.1f); z.setScaleY(0.1f); z.setTranslationY(8f); } }
+            zzzHomeBadgeGroup.setVisibility(View.VISIBLE);
+            long delay = 130;
+            for (View z : zs) {
+                if (z == null) continue;
+                z.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                    .setStartDelay(delay).setDuration(290)
+                    .setInterpolator(new android.view.animation.OvershootInterpolator(2.5f)).start();
+                delay += 115;
+            }
+            zzzHomeBadgeGroup.postDelayed(() -> startHomeFloatingZAnims(), 700);
+        } else {
+            zzzHomeBadgeGroup.setVisibility(View.VISIBLE);
+            resetHomeZLetters();
+            startHomeFloatingZAnims();
+        }
+    }
+
+    private void resetHomeZLetters() {
+        for (View z : new View[]{tvHomeZ1, tvHomeZ2, tvHomeZ3}) {
+            if (z == null) continue;
+            z.setAlpha(1f); z.setScaleX(1f); z.setScaleY(1f); z.setTranslationY(0f);
+        }
+    }
+
+    private void startHomeBreathing() {
+        if (homeBreathingAnimator != null) homeBreathingAnimator.cancel();
+        if (ivPreviewAvatar == null) return;
+
+        // Alpha + scale pulse: gentle "inhale/exhale" feel
+        homeBreathingAnimator = ValueAnimator.ofFloat(0.0f, 1.0f);
+        homeBreathingAnimator.setDuration(2600);
+        homeBreathingAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        homeBreathingAnimator.setRepeatMode(ValueAnimator.REVERSE);
+        homeBreathingAnimator.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        homeBreathingAnimator.addUpdateListener(a -> {
+            if (ivPreviewAvatar == null || !ivPreviewAvatar.isAttachedToWindow()) return;
+            float t = (float) a.getAnimatedValue();             // 0 → 1
+            float alpha = 0.62f + 0.30f * t;                    // 0.62 ↔ 0.92
+            float scale = 0.96f + 0.04f * t;                    // 0.96 ↔ 1.00
+            ivPreviewAvatar.setAlpha(alpha);
+            ivPreviewAvatar.setScaleX(scale);
+            ivPreviewAvatar.setScaleY(scale);
+        });
+        homeBreathingAnimator.start();
+
+        // Gentle floating bob up/down
+        if (homeAvatarFloatAnim != null) homeAvatarFloatAnim.cancel();
+        homeAvatarFloatAnim = ObjectAnimator.ofFloat(ivPreviewAvatar, "translationY", 0f, -9f);
+        homeAvatarFloatAnim.setDuration(3400);
+        homeAvatarFloatAnim.setRepeatCount(ObjectAnimator.INFINITE);
+        homeAvatarFloatAnim.setRepeatMode(ObjectAnimator.REVERSE);
+        homeAvatarFloatAnim.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        homeAvatarFloatAnim.start();
+    }
+
+    private void stopHomeBreathing() {
+        if (homeBreathingAnimator != null) { homeBreathingAnimator.cancel(); homeBreathingAnimator = null; }
+        if (homeAvatarFloatAnim != null) { homeAvatarFloatAnim.cancel(); homeAvatarFloatAnim = null; }
+        if (ivPreviewAvatar != null) {
+            ivPreviewAvatar.setAlpha(1.0f);
+            ivPreviewAvatar.setScaleX(1.0f);
+            ivPreviewAvatar.setScaleY(1.0f);
+            ivPreviewAvatar.setTranslationY(0f);
+        }
+    }
+
+    private void startHomeFloatingZAnims() {
+        stopHomeFloatingZAnims();
+        View[] zs = {tvHomeZ1, tvHomeZ2, tvHomeZ3};
+        long[] durations = {1600, 1900, 2200};
+        float[] amps = {5f, 6f, 7f};
+        for (int i = 0; i < zs.length; i++) {
+            if (zs[i] == null) continue;
+            ObjectAnimator a = ObjectAnimator.ofFloat(zs[i], "translationY", 0f, -amps[i]);
+            a.setDuration(durations[i]); a.setRepeatCount(ObjectAnimator.INFINITE);
+            a.setRepeatMode(ObjectAnimator.REVERSE);
+            a.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+            a.start(); homeFloatingZAnims.add(a);
+        }
+    }
+
+    private void stopHomeFloatingZAnims() {
+        for (ObjectAnimator a : homeFloatingZAnims) a.cancel();
+        homeFloatingZAnims.clear();
+    }
+
+    private void startHomeBlinkLoop() {
+        stopHomeBlinkLoop();
+        scheduleNextHomeBlink(2500 + homeBlinkRandom.nextInt(2000));
+    }
+
+    private void scheduleNextHomeBlink(long delayMs) {
+        homeBlinkRunnable = () -> {
+            if (ivPreviewAvatar == null || !ivPreviewAvatar.isAttachedToWindow()) return;
+            ivPreviewAvatar.setImageResource(R.drawable.toggle_on_blink);
+            android.graphics.drawable.Drawable d = ivPreviewAvatar.getDrawable();
+            if (d instanceof android.graphics.drawable.Animatable2) {
+                ((android.graphics.drawable.Animatable2) d).registerAnimationCallback(
+                    new android.graphics.drawable.Animatable2.AnimationCallback() {
+                        @Override public void onAnimationEnd(android.graphics.drawable.Drawable drawable) {
+                            if (ivPreviewAvatar != null && ivPreviewAvatar.isAttachedToWindow()) {
+                                ivPreviewAvatar.setImageResource(R.drawable.toggle_on_idle);
+                                scheduleNextHomeBlink(3000 + homeBlinkRandom.nextInt(2500));
+                            }
+                        }
+                    });
+                ((android.graphics.drawable.Animatable2) d).start();
+            } else if (d instanceof android.graphics.drawable.Animatable) {
+                ((android.graphics.drawable.Animatable) d).start();
+                ivPreviewAvatar.postDelayed(() -> {
+                    if (ivPreviewAvatar != null && ivPreviewAvatar.isAttachedToWindow()) {
+                        ivPreviewAvatar.setImageResource(R.drawable.toggle_on_idle);
+                        scheduleNextHomeBlink(3000 + homeBlinkRandom.nextInt(2500));
+                    }
+                }, 260);
+            }
+        };
+        homeBlinkHandler.postDelayed(homeBlinkRunnable, delayMs);
+    }
+
+    private void stopHomeBlinkLoop() {
+        if (homeBlinkRunnable != null) { homeBlinkHandler.removeCallbacks(homeBlinkRunnable); homeBlinkRunnable = null; }
+    }
+
+    // ── End Preview Avatar Animation Logic ───────────────────────────────────
+
+
 
     // ─── Fullscreen Preview ──────────────────────────────────────────────────
 
@@ -9636,6 +10147,9 @@ public class HomeFragment extends BaseFragment {
 
     private void setTextColorsRecursive(View view, int primary, int secondary) {
         if (view == null) return;
+        // Skip views tagged "preserve_color" (e.g. zzZ badge letters) — they have
+        // semantic colors that must not be overridden by theme recoloring.
+        if ("preserve_color".equals(view.getTag())) return;
         if (view instanceof TextView) {
             TextView tv = (TextView) view;
             CharSequence text = tv.getText();
