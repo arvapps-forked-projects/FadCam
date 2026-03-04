@@ -33,6 +33,7 @@ import com.fadcam.ui.SettingsHomeFragment;
 import com.fadcam.forensics.ui.ForensicIntelligenceFragment;
 import com.fadcam.ui.utils.NewFeatureManager;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationBarView;
 
 import java.io.File;
 import java.util.Arrays;
@@ -144,27 +145,39 @@ public class MainActivity extends AppCompatActivity {
      */
     public void setStatusBarColor(int color) {
         if (getWindow() != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // Keep status bar transparent so it always blends with dynamic headers/themes.
+            getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        }
+        
+        // Update the status bar scrim color
+        View statusBarScrim = findViewById(R.id.status_bar_scrim);
+        if (statusBarScrim != null) {
             if (color == 0) {
-                // Restore status bar to match header/nav (colorTopBar)
-                try {
-                    android.util.TypedValue typedValue = new android.util.TypedValue();
-                    int colorTopBarAttr = getResources().getIdentifier("colorTopBar", "attr", getPackageName());
-                    if (colorTopBarAttr != 0 && getTheme().resolveAttribute(colorTopBarAttr, typedValue, true)) {
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                            int statusColor = getColor(typedValue.resourceId);
-                            getWindow().setStatusBarColor(statusColor);
-                        } else {
-                            int statusColor = getResources().getColor(typedValue.resourceId);
-                            getWindow().setStatusBarColor(statusColor);
-                        }
-                        Log.d("MainActivity", "Restored status bar color from colorTopBar: " + Integer.toHexString(typedValue.resourceId));
-                    }
-                } catch (Exception e) {
-                    Log.e("MainActivity", "Error restoring status bar color from colorTopBar", e);
+                // Restore theme color (resolve TopBar color attribute)
+                int colorTopBar = resolveThemeColor(this, R.attr.colorTopBar);
+                statusBarScrim.setBackgroundColor(colorTopBar);
+                
+                // Restore theme-based icon tint (Snow Veil is light theme, others are dark)
+                String currentTheme = SharedPreferencesManager.getInstance(this).sharedPreferences
+                        .getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+                if ("Snow Veil".equals(currentTheme) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    // Light theme -> dark icons
+                    getWindow().getDecorView().setSystemUiVisibility(
+                        getWindow().getDecorView().getSystemUiVisibility() | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    // Dark theme -> light icons
+                    getWindow().getDecorView().setSystemUiVisibility(
+                        getWindow().getDecorView().getSystemUiVisibility() & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
                 }
             } else {
-                // Set custom color
-                getWindow().setStatusBarColor(color);
+                // Set custom color (e.g., black for Remote tab)
+                statusBarScrim.setBackgroundColor(color);
+                
+                // For dark backgrounds (like black), ensure icons are light (white)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    getWindow().getDecorView().setSystemUiVisibility(
+                        getWindow().getDecorView().getSystemUiVisibility() & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+                }
             }
         }
     }
@@ -176,11 +189,40 @@ public class MainActivity extends AppCompatActivity {
      */
     public void setNavigationBarColor(int color) {
         if (getWindow() != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            // Keep navigation bar transparent in edge-to-edge mode.
+            getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        }
+        
+        // Update root layout background color to affect the navigation/gesture area background.
+        // This area is visible because of the fragment_container and nav_container paddings.
+        View root = findViewById(R.id.main_root_layout);
+        if (root != null) {
             if (color == 0) {
-                int navColor = resolveThemeColor(this, R.attr.colorBottomNav);
-                getWindow().setNavigationBarColor(navColor);
+                // Restore original theme background color
+                int bgColor = resolveThemeColor(this, android.R.attr.colorBackground);
+                root.setBackgroundColor(bgColor);
+                
+                // Restore theme-based icon tint
+                String currentTheme = SharedPreferencesManager.getInstance(this).sharedPreferences
+                        .getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
+                if ("Snow Veil".equals(currentTheme) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // Light theme -> dark icons
+                    getWindow().getDecorView().setSystemUiVisibility(
+                        getWindow().getDecorView().getSystemUiVisibility() | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // Dark theme -> light icons
+                    getWindow().getDecorView().setSystemUiVisibility(
+                        getWindow().getDecorView().getSystemUiVisibility() & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                }
             } else {
-                getWindow().setNavigationBarColor(color);
+                // Set custom color
+                root.setBackgroundColor(color);
+                
+                // For dark backgrounds (like black), ensure icons are light (white)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    getWindow().getDecorView().setSystemUiVisibility(
+                        getWindow().getDecorView().getSystemUiVisibility() & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                }
             }
         }
     }
@@ -420,6 +462,38 @@ public class MainActivity extends AppCompatActivity {
 
         // Fragment container for tab navigation
         bottomNavigationView = findViewById(R.id.bottom_navigation);
+        if (bottomNavigationView != null) {
+            // Prevent Material from applying its own window insets to the nav view.
+            // The parent nav_container already handles insets; letting Material add its own
+            // bottom padding causes icons to shift above-center on gesture-nav devices.
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(
+                    bottomNavigationView, (v, insets) -> insets);
+            bottomNavigationView.setPadding(0, 0, 0, 0);
+
+            // Active-tab label mode: only the selected tab shows its label.
+            bottomNavigationView.setLabelVisibilityMode(NavigationBarView.LABEL_VISIBILITY_SELECTED);
+            bottomNavigationView.setItemActiveIndicatorEnabled(false);
+            // Center content (icon + label) vertically within the 64dp dock.
+            bottomNavigationView.setItemGravity(NavigationBarView.ITEM_GRAVITY_CENTER);
+            try {
+                bottomNavigationView.setItemActiveIndicatorColor(
+                        android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT));
+            } catch (Exception ignored) { }
+
+            // Apply rounded corners (24dp) via ViewOutlineProvider so the background and
+            // elevation shadow both follow the rounded pill shape reliably across themes.
+            // The background color is resolved from the XML attribute; we only set the shape.
+            final float cornerPx = android.util.TypedValue.applyDimension(
+                    android.util.TypedValue.COMPLEX_UNIT_DIP, 24,
+                    getResources().getDisplayMetrics());
+            bottomNavigationView.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override
+                public void getOutline(android.view.View view, android.graphics.Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerPx);
+                }
+            });
+            bottomNavigationView.setClipToOutline(true);
+        }
         
         // Initialize SharedPreferencesManager before using it in fragments
         sharedPreferencesManager = SharedPreferencesManager.getInstance(this);
@@ -474,20 +548,19 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Save the original bottom nav background color for restoration later
-        // Get colorTopBar from theme (same color as header bar)
         try {
             android.util.TypedValue typedValue = new android.util.TypedValue();
-            int colorTopBarAttr = getResources().getIdentifier("colorTopBar", "attr", getPackageName());
-            if (colorTopBarAttr != 0 && getTheme().resolveAttribute(colorTopBarAttr, typedValue, true)) {
+            int colorBottomNavAttr = getResources().getIdentifier("colorBottomNav", "attr", getPackageName());
+            if (colorBottomNavAttr != 0 && getTheme().resolveAttribute(colorBottomNavAttr, typedValue, true)) {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                     originalBottomNavColor = getColor(typedValue.resourceId);
                 } else {
                     originalBottomNavColor = getResources().getColor(typedValue.resourceId);
                 }
-                Log.d("MainActivity", "Saved bottom nav color from colorTopBar: " + Integer.toHexString(originalBottomNavColor));
+                Log.d("MainActivity", "Saved bottom nav color from colorBottomNav: " + Integer.toHexString(originalBottomNavColor));
             }
         } catch (Exception e) {
-            Log.e("MainActivity", "Error getting bottom nav color from colorTopBar", e);
+            Log.e("MainActivity", "Error getting bottom nav color from colorBottomNav", e);
         }
 
         // Initialize badge visibility
@@ -568,22 +641,8 @@ public class MainActivity extends AppCompatActivity {
             createDynamicShortcuts();
         }
 
-        // After setContentView, apply theme colors
-        int colorTopBar = resolveThemeColor(this, R.attr.colorTopBar);
-        int colorBottomNav = resolveThemeColor(this, R.attr.colorBottomNav);
-        int colorStatusBar = resolveThemeColor(this, R.attr.colorStatusBar);
-        // Top bar (if using Toolbar)
-        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.topAppBar);
-        if (toolbar != null)
-            toolbar.setBackgroundColor(colorTopBar);
-        // Bottom navigation
-        com.google.android.material.bottomnavigation.BottomNavigationView bottomNav = findViewById(
-                R.id.bottom_navigation);
-        if (bottomNav != null)
-            bottomNav.setBackgroundColor(colorBottomNav);
-        // Status bar
-        getWindow().setStatusBarColor(colorStatusBar);
-        getWindow().setNavigationBarColor(colorBottomNav);
+        // The initial bar colors and transparency are now handled by switchFragment(0, false) 
+        // or restored from saved state via restoreBarColorsForCurrentTab() inside handleTabSelected.
 
         // theme change)-----------
         try {
@@ -1029,24 +1088,6 @@ public class MainActivity extends AppCompatActivity {
         // Update badge visibility for new features
         updateFeatureBadgeVisibility();
 
-        // Update UI for current theme
-        String currentTheme = SharedPreferencesManager.getInstance(this).sharedPreferences
-                .getString(Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
-
-        // Special handling for Snow Veil theme - set light status bar with dark icons
-        if ("Snow Veil".equals(currentTheme) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-
-            // Also set light navigation bar if API level is high enough
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                getWindow().getDecorView().setSystemUiVisibility(
-                        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // For other themes, use dark status bar with light icons (default)
-            getWindow().getDecorView().setSystemUiVisibility(0);
-        }
-
         // Restore language settings
         this.sharedPreferencesManager = SharedPreferencesManager.getInstance(this);
         String savedLanguageCode = sharedPreferencesManager.sharedPreferences.getString(Constants.LANGUAGE_KEY,
@@ -1441,26 +1482,64 @@ public class MainActivity extends AppCompatActivity {
         // Make system bars transparent
         getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
         getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            getWindow().setStatusBarContrastEnforced(false);
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
 
         // Handle window insets properly
         View rootView = findViewById(android.R.id.content);
+        View navContainer = findViewById(R.id.nav_container);
+        View statusBarScrim = findViewById(R.id.status_bar_scrim);
+        View dockGradientScrim = findViewById(R.id.dock_focus_gradient_scrim);
+        final int navBasePaddingStart = navContainer != null ? navContainer.getPaddingStart() : 0;
+        final int navBasePaddingTop = navContainer != null ? navContainer.getPaddingTop() : 0;
+        final int navBasePaddingEnd = navContainer != null ? navContainer.getPaddingEnd() : 0;
+        final int navBasePaddingBottom = navContainer != null ? navContainer.getPaddingBottom() : 0;
+        // Base gradient height in pixels (180dp), extended by systemBars.bottom so it always
+        // peeks above the nav pill on API 35+ edge-to-edge devices.
+        final int dockGradientBaseHeightPx = Math.round(180 * getResources().getDisplayMetrics().density);
         ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
             androidx.core.graphics.Insets systemBars = insets
                     .getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
 
             // Apply insets to main content areas
-            View bottomNav = findViewById(R.id.bottom_navigation);
             View fragmentContainer = findViewById(R.id.fragment_container);
             View overlayContainer = findViewById(R.id.overlay_fragment_container);
             if (fragmentContainer != null) {
-                // Apply top and side insets to main content, but not bottom (handled by bottom
-                // nav)
-                fragmentContainer.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);
+                // Apply all 4 sides: in landscape, nav bar moves to right (systemBars.right > 0).
+                fragmentContainer.setPadding(
+                        systemBars.left, systemBars.top,
+                        systemBars.right, systemBars.bottom);
             }
 
-            if (bottomNav != null) {
-                // Apply bottom inset to bottom navigation
-                bottomNav.setPadding(systemBars.left, 0, systemBars.right, systemBars.bottom);
+            if (statusBarScrim != null) {
+                ViewGroup.LayoutParams lp = statusBarScrim.getLayoutParams();
+                if (lp != null && lp.height != systemBars.top) {
+                    lp.height = systemBars.top;
+                    statusBarScrim.setLayoutParams(lp);
+                }
+            }
+
+            if (navContainer != null) {
+                // In landscape, nav bar shifts to the right (systemBars.right > 0).
+                // Apply right inset alongside bottom so dock doesn't clip under the nav bar.
+                navContainer.setPadding(
+                        navBasePaddingStart + systemBars.left,
+                        navBasePaddingTop,
+                        navBasePaddingEnd + systemBars.right,
+                        navBasePaddingBottom + systemBars.bottom);
+            }
+
+            // Extend gradient scrim height by systemBars.bottom so it always peeks above
+            // the nav pill even on API 35+ where the window extends behind the nav bar.
+            if (dockGradientScrim != null) {
+                ViewGroup.LayoutParams lp = dockGradientScrim.getLayoutParams();
+                int requiredHeight = dockGradientBaseHeightPx + systemBars.bottom;
+                if (lp != null && lp.height != requiredHeight) {
+                    lp.height = requiredHeight;
+                    dockGradientScrim.setLayoutParams(lp);
+                }
             }
 
             if (overlayContainer != null) {
