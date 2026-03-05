@@ -567,6 +567,11 @@ public class VideoPlayerActivity extends AppCompatActivity {
         final int touchSlop = android.view.ViewConfiguration.get(
             this
         ).getScaledTouchSlop();
+        // 56dp exclusion zone on each side: swipes starting here are Android back gestures,
+        // not seeks. This prevents the edge-swipe-to-back from also triggering a seek.
+        final float edgeZonePx = android.util.TypedValue.applyDimension(
+            android.util.TypedValue.COMPLEX_UNIT_DIP, 56f,
+            getResources().getDisplayMetrics());
         final float[] downXY = new float[2];
         final float[] lastPanXY = new float[2];
         final boolean[] pendingTap = new boolean[] { false };
@@ -688,18 +693,23 @@ public class VideoPlayerActivity extends AppCompatActivity {
                                 int w = playerView.getWidth();
                                 int h = playerView.getHeight();
                                 if (gestureMode == 0) {
-                                    // Simplify: as soon as we detect movement beyond a small
-                                    // threshold, decide direction (horizontal/vertical) and
-                                    // use the start X to determine left/right half.
-                                    final int MINI_SLOP = Math.max(1, touchSlop / 3);
+                                    // Use the full system touch slop (not 1/3 of it) so that
+                                    // micro-movements of 3-4px from a resting thumb do not
+                                    // accidentally start a seek or volume gesture.
+                                    final int MINI_SLOP = Math.max(8, touchSlop);
                                     if (adx > MINI_SLOP || ady > MINI_SLOP) {
                                         if (Math.abs(dy) > Math.abs(dx)) {
                                             // vertical swipe — left half = brightness, right half = volume
                                             if (gestureStartX > (w / 2f)) gestureMode = 2; // volume
                                             else gestureMode = 3; // brightness
                                         } else {
-                                            // horizontal swipe — seek
-                                            gestureMode = 1;
+                                            // horizontal swipe — seek.
+                                            // Skip if the swipe started in the 24dp edge zone:
+                                            // that zone belongs to Android's back gesture and we
+                                            // must not steal those touch events.
+                                            if (gestureStartX > edgeZonePx && gestureStartX < w - edgeZonePx) {
+                                                gestureMode = 1;
+                                            }
                                         }
                                         // Movement indicates a deliberate gesture; cancel long-press
                                         try { if (longPressRunnable[0] != null) handler.removeCallbacks(longPressRunnable[0]); } catch (Exception ignored) {}
@@ -854,6 +864,13 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 case android.view.MotionEvent.ACTION_CANCEL:
                     {
                         try { if (longPressRunnable[0] != null) handler.removeCallbacks(longPressRunnable[0]); } catch (Exception ignored) {}
+
+                        // If the system intercepted a seek gesture (e.g. back navigation),
+                        // restore the playback position to where it was before the swipe.
+                        if (ev.getActionMasked() == android.view.MotionEvent.ACTION_CANCEL
+                                && gestureMode == 1 && player != null) {
+                            try { player.seekTo(seekStartPosition); } catch (Exception ignored) {}
+                        }
 
                         // Reset pinching state when all fingers are lifted
                         if (ev.getPointerCount() <= 1) {
@@ -1345,11 +1362,34 @@ public class VideoPlayerActivity extends AppCompatActivity {
                                            "ms, actual=" + actualPos + "ms (keyframe alignment)");
                                 lastSeekPositionMs = -1; // Clear to use actual player position
                             }
-                            // When ready, log player audio state
+                            // When ready, log player audio state and validate resume position
                             if (state == Player.STATE_READY && player != null) {
                                 Log.i(TAG, "  Player READY - volume=" + player.getVolume() + 
                                            ", audioSessionId=" + player.getAudioSessionId() +
                                            ", playWhenReady=" + player.getPlayWhenReady());
+                                // Guard: if the restored resume position exceeds the actual
+                                // file duration (e.g., old files recorded before the pause-gap
+                                // fix that had inflated container durations), seek back to 0
+                                // and wipe the stale saved position so the user isn't dropped
+                                // past the end of the real content.
+                                try {
+                                    long actualDur = player.getDuration();
+                                    long curPos = player.getCurrentPosition();
+                                    if (actualDur > 0 && actualDur != C.TIME_UNSET && curPos > actualDur) {
+                                        Log.w(TAG, "  Stale resume position (" + curPos + "ms) exceeds" +
+                                                   " actual duration (" + actualDur + "ms)" +
+                                                   " — resetting to start and clearing saved position");
+                                        player.seekTo(0);
+                                        if (videoUri != null && spm != null) {
+                                            String uriStr = videoUri.toString();
+                                            String fname = getFileName(videoUri);
+                                            spm.setSavedPlaybackPositionMs(uriStr, 0);
+                                            spm.setSavedPlaybackPositionMsByFilename(fname, 0);
+                                        }
+                                    }
+                                } catch (Exception ex) {
+                                    Log.e(TAG, "Error validating resume position", ex);
+                                }
                             }
                         }
                         @Override
