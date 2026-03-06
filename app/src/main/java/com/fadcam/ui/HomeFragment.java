@@ -236,8 +236,8 @@ public class HomeFragment extends BaseFragment {
     private MaterialButton btnPreviewZoomReset;
 
     private View cardPreview;
-    private TextView btnFullscreenPreview;
-    private TextView btnCaptureShotPreview;
+    private View btnFullscreenPreview;
+    private View btnCaptureShotPreview;
     private boolean isLaunchingPhotoCapture = false;
     private Vibrator vibrator;
     private ImageView ivBubbleBackground; // Rotating bubble shape behind camera icon (legacy, null after layout update)
@@ -269,6 +269,14 @@ public class HomeFragment extends BaseFragment {
      * ~50 ms after the animation starts and would otherwise kill it mid-reveal.
      */
     private boolean isPreviewCloseAnimating = false;
+    /** True while the Avatar→Preview iris-open animation is playing (~980 ms). Blocks re-entrant
+     *  updatePreviewVisibility() calls (e.g. the service's "started" broadcast arriving ~50 ms
+     *  later) from resetting textureView alpha or avatar visibility mid-animation. */
+    private boolean isPreviewOpenAnimating = false;
+    /** True once the iris-open postDelayed fires and we are waiting for the first camera frame
+     *  to arrive in onSurfaceTextureUpdated before performing the circular reveal.  This avoids
+     *  revealing a blank/black TextureView during the first-start service-init hitch. */
+    private volatile boolean pendingIrisOpenReveal = false;
     /**
      * Tracks whether the header logo slide-up animation has already played this
      * process session.  Static so it survives fragment recreation (e.g. switching
@@ -776,6 +784,7 @@ public class HomeFragment extends BaseFragment {
         // animation and would otherwise hide textureView (losing the camera background) and make
         // flAvatar visible immediately — cancelling the reveal mid-flight.
         if (isPreviewCloseAnimating) return;
+        if (isPreviewOpenAnimating) return;
 
         if (isRecording() || isPaused() || isPreviewOnlyActive) {
             if (isPreviewEnabled) {
@@ -846,7 +855,20 @@ public class HomeFragment extends BaseFragment {
             if (animateNextPreviewTransition) {
                 animateNextPreviewTransition = false;
                 boolean avatarCurrentlyVisible = flAvatar.getVisibility() == View.VISIBLE;
-                if (livePreviewShowing && avatarCurrentlyVisible) {
+                if (livePreviewShowing) {
+                    // Ensure avatar is in a fully visible/reset state before wake animation,
+                    // even if it was previously hidden (INVISIBLE) by a prior enable cycle.
+                    if (!avatarCurrentlyVisible) {
+                        flAvatar.setVisibility(View.VISIBLE);
+                        flAvatar.setAlpha(1f);
+                        flAvatar.setScaleX(1f);
+                        flAvatar.setScaleY(1f);
+                        flAvatar.setEnabled(true);
+                    }
+                    // Guard: isPreviewOpenAnimating blocks the service's "started" broadcast
+                    // (~50ms later) from calling updatePreviewVisibility() and overwriting
+                    // textureView alpha / avatar visibility mid-animation.
+                    isPreviewOpenAnimating = true;
                     // Step 1: Wake the avatar (wake-up AVD ~420ms: eyes open + brighten)
                     applyHomeAvatarState(true, true);
                     // Step 2: After wake animation, shrink avatar out + iris-open camera
@@ -869,25 +891,18 @@ public class HomeFragment extends BaseFragment {
                                 capturedAvatar.setScaleX(1f);
                                 capturedAvatar.setScaleY(1f);
                             }).start();
-                        // Iris-open circular reveal on TextureView
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                            int cx = textureView.getWidth() / 2;
-                            int cy = textureView.getHeight() / 2;
-                            float maxR = (float) Math.hypot(cx, cy);
-                            Animator reveal = android.view.ViewAnimationUtils.createCircularReveal(
-                                    textureView, cx, cy, 0f, maxR);
-                            reveal.setDuration(500);
-                            reveal.setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f));
-                            reveal.addListener(new AnimatorListenerAdapter() {
-                                @Override
-                                public void onAnimationStart(Animator a) {
-                                    if (textureView != null) textureView.setAlpha(1f);
-                                }
-                            });
-                            reveal.start();
-                        } else {
-                            textureView.animate().alpha(1f).setDuration(450).start();
-                        }
+                        // Iris-open circular reveal on TextureView.
+                        // We wait for the first actual camera frame via onSurfaceTextureUpdated
+                        // rather than revealing immediately — avoids showing a blank TextureView
+                        // during the first-start service-init hitch.
+                        pendingIrisOpenReveal = true;
+                        // Fallback: if no camera frame arrives within 2.5 s, reveal anyway.
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                            if (pendingIrisOpenReveal && isAdded()) {
+                                pendingIrisOpenReveal = false;
+                                performIrisOpenReveal();
+                            }
+                        }, 2500);
                     }, 480);
                 } else if (!livePreviewShowing && !avatarCurrentlyVisible) {
                     // Preview → Avatar: mirror of the iris-open animation.
@@ -999,6 +1014,41 @@ public class HomeFragment extends BaseFragment {
 
         // Show fullscreen button only when preview is active and recording
         updateFullscreenButtonVisibility();
+    }
+
+    /**
+     * Performs the iris-open circular reveal on textureView.
+     * Called from onSurfaceTextureUpdated (first camera frame) or from a timeout fallback,
+     * so the reveal only starts when the camera feed is actually available.
+     */
+    private void performIrisOpenReveal() {
+        if (textureView == null || !isAdded()) {
+            isPreviewOpenAnimating = false;
+            return;
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            int cx = textureView.getWidth() / 2;
+            int cy = textureView.getHeight() / 2;
+            float maxR = (float) Math.hypot(cx, cy);
+            Animator reveal = android.view.ViewAnimationUtils.createCircularReveal(
+                    textureView, cx, cy, 0f, maxR);
+            reveal.setDuration(500);
+            reveal.setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f));
+            reveal.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationStart(Animator a) {
+                    if (textureView != null) textureView.setAlpha(1f);
+                }
+                @Override
+                public void onAnimationEnd(Animator a) {
+                    isPreviewOpenAnimating = false;
+                }
+            });
+            reveal.start();
+        } else {
+            textureView.animate().alpha(1f).setDuration(450)
+                    .withEndAction(() -> isPreviewOpenAnimating = false).start();
+        }
     }
 
     /**
@@ -1460,7 +1510,6 @@ public class HomeFragment extends BaseFragment {
 
     private void onRecordingStarted(boolean toast) {
         Log.d(TAG, "📍 onRecordingStarted(toast=" + toast + ") - Timer managed by service in SharedPreferences");
-
         // Note: Timer value (recordingStartTime) is managed by RecordingService
         // Fragment reads it from SharedPreferences when calculating elapsed time
         // This method only updates UI state
@@ -1484,6 +1533,7 @@ public class HomeFragment extends BaseFragment {
         // Always force preview enabled on first recording start
         isPreviewEnabled = true;
         savePreviewState();
+        animateNextPreviewTransition = true;
         updatePreviewVisibility();
 
         // When recording starts, ensure we have a valid surface
@@ -1543,7 +1593,7 @@ public class HomeFragment extends BaseFragment {
         buttonPauseResume.setIcon(
             AppCompatResources.getDrawable(
                 requireContext(),
-                R.drawable.ic_pause
+                R.drawable.pause_rounded
             )
         );
         buttonPauseResume.setEnabled(true);
@@ -1555,7 +1605,7 @@ public class HomeFragment extends BaseFragment {
         );
         buttonStartStop.setText(getString(R.string.button_stop));
         buttonStartStop.setIcon(
-            AppCompatResources.getDrawable(requireContext(), R.drawable.ic_stop)
+            AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded)
         );
         buttonStartStop.setEnabled(true);
 
@@ -1583,7 +1633,7 @@ public class HomeFragment extends BaseFragment {
         recordingState = RecordingState.PAUSED;
 
         buttonPauseResume.setIcon(
-            AppCompatResources.getDrawable(requireContext(), R.drawable.ic_play)
+            AppCompatResources.getDrawable(requireContext(), R.drawable.play_button_rounded)
         );
         buttonPauseResume.setEnabled(true);
 
@@ -1597,7 +1647,7 @@ public class HomeFragment extends BaseFragment {
         );
         buttonStartStop.setText(getString(R.string.button_stop));
         buttonStartStop.setIcon(
-            AppCompatResources.getDrawable(requireContext(), R.drawable.ic_stop)
+            AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded)
         );
     }
 
@@ -1632,7 +1682,15 @@ public class HomeFragment extends BaseFragment {
             resetUIButtonsToIdleState();
 
             // Handle visual elements for preview and timers
-            updatePreviewVisibility(); // Show placeholder text instead of preview
+            // If preview was showing during recording, animate the iris-close transition
+            // (camera feed contracts like an iris, revealing the sleeping avatar).
+            if (isPreviewEnabled && textureView != null
+                    && textureView.getVisibility() == View.VISIBLE) {
+                pendingIrisOpenReveal = false; // cancel any pending iris-open
+                isPreviewOpenAnimating = false; // ensure open guard doesn't block the close anim
+                animateNextPreviewTransition = true;
+            }
+            updatePreviewVisibility(); // Triggers iris-close or direct hide
             stopUpdatingInfo(); // Stop updating storage info
 
             Log.d(
@@ -1695,7 +1753,7 @@ public class HomeFragment extends BaseFragment {
                 buttonStartStop.setIcon(
                     AppCompatResources.getDrawable(
                         getContext(),
-                        R.drawable.ic_play
+                        R.drawable.play_button_rounded
                     )
                 );
                 // Always use green color for start button regardless of theme
@@ -1715,7 +1773,7 @@ public class HomeFragment extends BaseFragment {
                 buttonPauseResume.setIcon(
                     AppCompatResources.getDrawable(
                         getContext(),
-                        R.drawable.ic_pause
+                        R.drawable.pause_rounded
                     )
                 );
             }
@@ -2532,11 +2590,19 @@ public class HomeFragment extends BaseFragment {
         );
 
         // Update the local recording state variable
+        RecordingState previousState = recordingState;
         recordingState = reportedState;
 
         // Update UI elements based on the state
         switch (reportedState) {
             case IN_PROGRESS:
+                // On a fresh recording start (not re-delivering the same state), force preview
+                // on and flag the transition for the avatar → preview animation.
+                if (previousState != RecordingState.IN_PROGRESS) {
+                    isPreviewEnabled = true;
+                    savePreviewState();
+                    animateNextPreviewTransition = true;
+                }
                 setUIForRecordingActive(); // Call helper to set Stop/Pause buttons etc.
                 break;
             case PAUSED:
@@ -2591,7 +2657,7 @@ public class HomeFragment extends BaseFragment {
             buttonStartStop.setIcon(
                 AppCompatResources.getDrawable(
                     requireContext(),
-                    R.drawable.ic_stop
+                    R.drawable.stop_rounded
                 )
             );
 
@@ -2599,7 +2665,7 @@ public class HomeFragment extends BaseFragment {
             buttonPauseResume.setIcon(
                 AppCompatResources.getDrawable(
                     requireContext(),
-                    R.drawable.ic_pause
+                    R.drawable.pause_rounded
                 )
             );
             buttonPauseResume.setAlpha(1.0f); // Make fully visible when enabled
@@ -2647,7 +2713,7 @@ public class HomeFragment extends BaseFragment {
             buttonStartStop.setIcon(
                 AppCompatResources.getDrawable(
                     requireContext(),
-                    R.drawable.ic_stop
+                    R.drawable.stop_rounded
                 )
             );
 
@@ -2655,7 +2721,7 @@ public class HomeFragment extends BaseFragment {
             buttonPauseResume.setIcon(
                 AppCompatResources.getDrawable(
                     requireContext(),
-                    R.drawable.ic_play
+                    R.drawable.play_button_rounded
                 )
             ); // Show
             // Play
@@ -2709,7 +2775,7 @@ public class HomeFragment extends BaseFragment {
             buttonStartStop.setIcon(
                 AppCompatResources.getDrawable(
                     requireContext(),
-                    R.drawable.ic_stop
+                    R.drawable.stop_rounded
                 )
             );
 
@@ -2719,7 +2785,7 @@ public class HomeFragment extends BaseFragment {
             buttonPauseResume.setIcon(
                 AppCompatResources.getDrawable(
                     requireContext(),
-                    R.drawable.ic_pause
+                    R.drawable.pause_rounded
                 )
             );
 
@@ -5285,7 +5351,14 @@ public class HomeFragment extends BaseFragment {
                 public void onSurfaceTextureUpdated(
                     @NonNull SurfaceTexture surface
                 ) {
-                    // This gets called every frame, so don't log here
+                    // Trigger the deferred iris-open reveal on the first camera frame.
+                    if (pendingIrisOpenReveal) {
+                        pendingIrisOpenReveal = false; // atomic-enough: one thread reads, sets back
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                            if (isAdded()) performIrisOpenReveal();
+                            else isPreviewOpenAnimating = false;
+                        });
+                    }
                 }
             }
         );
@@ -5581,7 +5654,7 @@ public class HomeFragment extends BaseFragment {
     private void pauseDualRecording() {
         Log.d(TAG, "pauseDualRecording: Pausing dual video recording");
         buttonPauseResume.setIcon(
-                AppCompatResources.getDrawable(requireContext(), R.drawable.ic_play));
+                AppCompatResources.getDrawable(requireContext(), R.drawable.play_button_rounded));
         buttonPauseResume.setEnabled(false);
 
         Intent intent = new Intent(getContext(), DualCameraRecordingService.class);
@@ -5595,7 +5668,7 @@ public class HomeFragment extends BaseFragment {
     private void resumeDualRecording() {
         Log.d(TAG, "resumeDualRecording: Resuming dual video recording");
         buttonPauseResume.setIcon(
-                AppCompatResources.getDrawable(requireContext(), R.drawable.ic_pause));
+                AppCompatResources.getDrawable(requireContext(), R.drawable.pause_rounded));
         buttonPauseResume.setEnabled(false);
 
         Intent intent = new Intent(getContext(), DualCameraRecordingService.class);
@@ -7389,7 +7462,7 @@ public class HomeFragment extends BaseFragment {
         }
 
         buttonPauseResume.setIcon(
-            AppCompatResources.getDrawable(requireContext(), R.drawable.ic_play)
+            AppCompatResources.getDrawable(requireContext(), R.drawable.play_button_rounded)
         );
         buttonPauseResume.setEnabled(false);
 
@@ -7413,7 +7486,7 @@ public class HomeFragment extends BaseFragment {
         buttonPauseResume.setIcon(
             AppCompatResources.getDrawable(
                 requireContext(),
-                R.drawable.ic_pause
+                R.drawable.pause_rounded
             )
         );
         buttonPauseResume.setEnabled(false);
@@ -9225,6 +9298,17 @@ public class HomeFragment extends BaseFragment {
         btnHamburgerMenu = view.findViewById(R.id.btnHamburgerMenu);
         hamburgerBadgeDot = view.findViewById(R.id.hamburgerBadgeDot);
         ivAppTitle = view.findViewById(R.id.ivAppTitle);
+        // Set up header logo click handler for Privacy Black Mode
+        if (ivAppTitle != null) {
+            ivAppTitle.setOnClickListener(v -> {
+                if (sharedPreferencesManager.isPrivacyBlackModeEnabled()) {
+                    Intent intent = new Intent(requireContext(), PrivacyBlackActivity.class);
+                    startActivity(intent);
+                } else {
+                    Toast.makeText(requireContext(), R.string.privacy_black_enable_needed_hint, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
 
         // Update hamburger badge visibility
         updateHamburgerBadgeVisibility();

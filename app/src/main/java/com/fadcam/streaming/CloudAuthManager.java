@@ -49,6 +49,11 @@ public class CloudAuthManager {
     private final java.util.List<TokenRefreshListener> pendingRefreshListeners = new java.util.ArrayList<>();
     private final Object refreshLock = new Object();
     
+    // Stream token fetch retry limits to prevent hammering Supabase
+    private static final int MAX_STREAM_TOKEN_REFRESH_ATTEMPTS = 2;  // Only retry refresh once
+    private long lastFailedStreamTokenFetchTime = 0;
+    private static final long STREAM_TOKEN_RETRY_COOLDOWN_MS = 60000;  // Wait 60s before retrying after failure
+    
     private static CloudAuthManager instance;
     private final Context context;
     private final SharedPreferences prefs;
@@ -228,8 +233,15 @@ public class CloudAuthManager {
     
     /**
      * Completely unlink this device from cloud account
+     * Notifies the backend to mark device as inactive and removes from dashboard
      */
     public void unlinkDevice() {
+        final String deviceId = getDeviceId();
+        final String userId = getUserId();
+        
+        Log.i(TAG, "Unlinking device from cloud account...");
+        
+        // Clear local state immediately (don't wait for network response)
         prefs.edit()
             .remove(KEY_JWT_TOKEN)
             .remove(KEY_JWT_EXPIRY)
@@ -240,7 +252,46 @@ public class CloudAuthManager {
             .remove(KEY_IS_LINKED)
             .remove(KEY_LINKED_AT)
             .apply();
-        Log.i(TAG, "Device unlinked from cloud account");
+        
+        clearStreamToken();
+        
+        // Notify backend asynchronously (don't block UI)
+        if (userId != null && deviceId != null) {
+            new Thread(() -> {
+                try {
+                    String url = SUPABASE_URL + "/functions/v1/unlink-device";
+                    java.net.URI uri = java.net.URI.create(url);
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) uri.toURL().openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(10000);
+                    conn.setDoOutput(true);
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    
+                    // Send device_id and user_id for verification
+                    String body = "{\"device_id\":\"" + deviceId + "\",\"user_id\":\"" + userId + "\"}";
+                    try (java.io.OutputStream os = conn.getOutputStream()) {
+                        os.write(body.getBytes("UTF-8"));
+                    }
+                    
+                    int responseCode = conn.getResponseCode();
+                    if (responseCode == 200) {
+                        Log.i(TAG, "✅ Device unlinked from backend - will disappear from dashboard");
+                    } else if (responseCode == 404) {
+                        Log.w(TAG, "⚠️ Device not found on backend (already unlinked?)");
+                    } else if (responseCode == 403) {
+                        Log.w(TAG, "⚠️ Backend rejected unlink (ownership mismatch)");
+                    } else {
+                        Log.w(TAG, "⚠️ Backend unlink failed (HTTP " + responseCode + "), but local unlink complete");
+                    }
+                    conn.disconnect();
+                } catch (Exception e) {
+                    Log.w(TAG, "⚠️ Failed to notify backend of unlink: " + e.getMessage());
+                }
+            }).start();
+        }
+        
+        Log.i(TAG, "✅ Device unlinked locally and from dashboard");
     }
     
     /**
@@ -618,9 +669,18 @@ public class CloudAuthManager {
      * @param listener Callback for success/error (called on main thread)
      */
     public void fetchStreamTokenAsync(@Nullable StreamTokenListener listener) {
+        fetchStreamTokenAsyncWithRetry(listener, 0);
+    }
+    
+    /**
+     * Internal: Fetch stream token with retry limit to prevent hammering Supabase
+     * 
+     * @param listener Callback for success/error
+     * @param refreshAttempt Current refresh attempt count (0-based)
+     */
+    private void fetchStreamTokenAsyncWithRetry(@Nullable StreamTokenListener listener, int refreshAttempt) {
         String deviceId = getDeviceId();
         String userId = getUserId();
-        String accessToken = getJwtToken();
         
         if (userId == null) {
             Log.w(TAG, "No user ID available for stream token fetch");
@@ -630,6 +690,41 @@ public class CloudAuthManager {
             return;
         }
         
+        // Check if JWT token is expired and refresh if needed
+        if (isTokenExpired()) {
+            // Check retry limit to prevent hammering Supabase
+            if (refreshAttempt >= MAX_STREAM_TOKEN_REFRESH_ATTEMPTS) {
+                Log.e(TAG, "❌ Stream token refresh exceeded max attempts (" + MAX_STREAM_TOKEN_REFRESH_ATTEMPTS + "), giving up");
+                lastFailedStreamTokenFetchTime = System.currentTimeMillis();
+                if (listener != null) {
+                    listener.onError("Token refresh failed - device may need to be re-linked");
+                }
+                return;
+            }
+            
+            Log.i(TAG, "JWT token expired (attempt " + (refreshAttempt + 1) + "/" + MAX_STREAM_TOKEN_REFRESH_ATTEMPTS + "), refreshing...");
+            final int nextAttempt = refreshAttempt + 1;
+            refreshTokenAsync(new TokenRefreshListener() {
+                @Override
+                public void onRefreshSuccess(String newToken, long newExpiry) {
+                    Log.i(TAG, "JWT token refreshed, now fetching stream token...");
+                    // Retry with incremented attempt count
+                    fetchStreamTokenAsyncWithRetry(listener, nextAttempt);
+                }
+                
+                @Override
+                public void onRefreshFailed(String error) {
+                    Log.e(TAG, "JWT token refresh failed (attempt " + nextAttempt + "/" + MAX_STREAM_TOKEN_REFRESH_ATTEMPTS + "): " + error);
+                    lastFailedStreamTokenFetchTime = System.currentTimeMillis();
+                    if (listener != null) {
+                        listener.onError("Token refresh failed: " + error);
+                    }
+                }
+            });
+            return;  // Exit, will be called again after refresh or fail after max attempts
+        }
+        
+        String accessToken = getJwtToken();
         String url = SUPABASE_URL + "/functions/v1/get-stream-token";
         
         Log.i(TAG, "Fetching stream token for device: " + deviceId.substring(0, 8) + "... (using " + (accessToken != null ? "Bearer token" : "device auth") + ")");
@@ -644,7 +739,7 @@ public class CloudAuthManager {
                 conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type", "application/json");
                 
-                // Add Bearer token if available (might still be valid)
+                // Add Bearer token if available (now guaranteed to be fresh)
                 if (accessToken != null && !accessToken.isEmpty()) {
                     conn.setRequestProperty("Authorization", "Bearer " + accessToken);
                 }

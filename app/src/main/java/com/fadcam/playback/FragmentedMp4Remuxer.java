@@ -36,21 +36,63 @@ public class FragmentedMp4Remuxer {
     
     /**
      * Checks if a file is a fragmented MP4 that needs remuxing.
-     * This is a simple heuristic based on file structure.
+     *
+     * <p>Inspects the first 64 KB of the file for the presence of a
+     * {@code moof} (movie fragment) box, which is the definitive marker
+     * of a fragmented MP4 container. Fragmented MP4 files recorded by
+     * FadCam (or any other recorder using Media3's FragmentedMp4Muxer)
+     * lack sidx boxes, so ExoPlayer cannot seek within them.</p>
      *
      * @param file The file to check.
      * @return true if the file appears to be a fragmented MP4.
      */
     public boolean needsRemux(File file) {
-        // For now, assume all FadCam recordings are fMP4
-        // A more sophisticated check would parse the file header
+        if (file == null || !file.exists() || !file.canRead()) return false;
         String name = file.getName().toLowerCase();
-        return name.startsWith("fadcam_") && name.endsWith(".mp4");
+        if (!name.endsWith(".mp4")) return false;
+
+        // Scan the first 64 KB of the file for the 'moof' box type.
+        // MP4 box structure: [4-byte size][4-byte type] — we look for ASCII "moof" (0x6D6F6F66).
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+            int scanLimit = (int) Math.min(raf.length(), 65536);
+            byte[] buf = new byte[scanLimit];
+            raf.readFully(buf);
+
+            // Search for the 'moof' box type in the buffer
+            byte m = (byte) 'm', o = (byte) 'o', f = (byte) 'f';
+            for (int i = 0; i <= buf.length - 4; i++) {
+                if (buf[i] == m && buf[i + 1] == o && buf[i + 2] == o && buf[i + 3] == f) {
+                    // Verify this looks like a valid box: the 4 bytes before 'moof'
+                    // should be the box size (> 8). If i >= 4, check it.
+                    if (i >= 4) {
+                        int boxSize = ((buf[i - 4] & 0xFF) << 24)
+                                    | ((buf[i - 3] & 0xFF) << 16)
+                                    | ((buf[i - 2] & 0xFF) << 8)
+                                    | (buf[i - 1] & 0xFF);
+                        if (boxSize >= 8) {
+                            Log.d(TAG, "Detected fragmented MP4 (moof box at offset "
+                                    + (i - 4) + ", size=" + boxSize + "): " + file.getName());
+                            return true;
+                        }
+                    } else {
+                        // 'moof' at very start — unlikely but still fragmented
+                        Log.d(TAG, "Detected fragmented MP4 (moof at offset 0): " + file.getName());
+                        return true;
+                    }
+                }
+            }
+            Log.d(TAG, "Not a fragmented MP4 (no moof in first " + scanLimit + " bytes): " + file.getName());
+            return false;
+        } catch (IOException e) {
+            Log.w(TAG, "Could not check file for fMP4 structure: " + file.getName(), e);
+            // Fallback: assume FadCam-named files are fragmented
+            return name.startsWith("fadcam_");
+        }
     }
     
     /**
      * Gets the path for the remuxed version of a file.
-     * The remuxed file is stored in a cache directory.
+     * The remuxed file is stored in a cache directory with a clean name.
      *
      * @param originalFile The original file.
      * @return Path to the remuxed file (may not exist yet).
@@ -61,11 +103,12 @@ public class FragmentedMp4Remuxer {
             cacheDir.mkdirs();
         }
         
-        // Use original filename + hash of path to handle duplicates
-        String hash = String.valueOf(originalFile.getAbsolutePath().hashCode());
         String name = originalFile.getName();
         String baseName = name.substring(0, name.lastIndexOf('.'));
-        return new File(cacheDir, baseName + "_" + hash + "_seekable.mp4");
+        
+        // Use a hash of the full path to handle duplicate filenames from different directories
+        String hash = String.valueOf(Math.abs(originalFile.getAbsolutePath().hashCode() % 10000));
+        return new File(cacheDir, baseName + "-remuxed-" + hash + ".mp4");
     }
     
     /**
@@ -251,5 +294,108 @@ public class FragmentedMp4Remuxer {
         if (deleted > 0) {
             Log.i(TAG, "Cleaned up " + deleted + " cached remuxed files");
         }
+    }
+    
+    /**
+     * Gets the total size of all cached remuxed files in bytes.
+     *
+     * @return Size in bytes, or 0 if cache directory doesn't exist.
+     */
+    public long getTotalCacheSize() {
+        File cacheDir = new File(context.getCacheDir(), "remuxed");
+        if (!cacheDir.exists()) return 0;
+        
+        long totalSize = 0;
+        File[] files = cacheDir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile()) {
+                    totalSize += file.length();
+                }
+            }
+        }
+        return totalSize;
+    }
+    
+    /**
+     * Gets the size of cached files matching a specific filename prefix.
+     * Used to calculate cache size for a specific project/video.
+     *
+     * @param prefix The filename prefix to match (e.g., "clip_001").
+     * @return Size in bytes of matching cached files.
+     */
+    public long getCacheSizeForPrefix(String prefix) {
+        File cacheDir = new File(context.getCacheDir(), "remuxed");
+        if (!cacheDir.exists()) return 0;
+        
+        long totalSize = 0;
+        File[] files = cacheDir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile() && file.getName().startsWith(prefix)) {
+                    totalSize += file.length();
+                }
+            }
+        }
+        return totalSize;
+    }
+    
+    /**
+     * Delete all cached remuxed files matching a specific filename prefix.
+     * Call this when a project or clip is deleted to clean up orphaned cache files.
+     *
+     * @param prefix The filename prefix to match (e.g., "clip_001").
+     * @return Number of files deleted.
+     */
+    public int deleteCacheForPrefix(String prefix) {
+        File cacheDir = new File(context.getCacheDir(), "remuxed");
+        if (!cacheDir.exists()) return 0;
+        
+        int deleted = 0;
+        File[] files = cacheDir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile() && file.getName().startsWith(prefix)) {
+                    if (file.delete()) {
+                        Log.d(TAG, "Deleted cache file: " + file.getName());
+                        deleted++;
+                    }
+                }
+            }
+        }
+        
+        if (deleted > 0) {
+            Log.i(TAG, "Deleted " + deleted + " cached files for prefix: " + prefix);
+        }
+        
+        return deleted;
+    }
+    
+    /**
+     * Clear all remuxed cache files.
+     *
+     * @return Number of files deleted.
+     */
+    public int clearAllCache() {
+        File cacheDir = new File(context.getCacheDir(), "remuxed");
+        if (!cacheDir.exists()) return 0;
+        
+        int deleted = 0;
+        File[] files = cacheDir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isFile() && file.delete()) {
+                    deleted++;
+                }
+            }
+        }
+        
+        // Try to delete the cache directory itself if empty
+        if (cacheDir.listFiles() != null && cacheDir.listFiles().length == 0) {
+            cacheDir.delete();
+        }
+        
+        Log.i(TAG, "Cleared cache: deleted " + deleted + " files");
+        return deleted;
     }
 }

@@ -95,24 +95,36 @@ public class RemoteStreamService extends Service {
         // Start foreground with notification
         startForeground(NOTIFICATION_ID, buildNotification("Ready. Start recording to begin streaming.", "http://..."));
         
-        // Start HTTP server
-        if (!startHttpServer()) {
-            Log.e(TAG, "Failed to start HTTP server, stopping service");
-            stopSelf();
-            return START_NOT_STICKY;
-        }
+        // Check streaming mode (0 = local, 1 = cloud)
+        int streamingMode = getSharedPreferences("FadCamCloudPrefs", MODE_PRIVATE).getInt("streaming_mode", 0);
+        boolean isCloudMode = streamingMode == 1;
         
-        // Save port to preferences for CloudStatusManager
-        getSharedPreferences("FadCamPrefs", MODE_PRIVATE)
-            .edit()
-            .putInt("stream_server_port", activePort)
-            .apply();
+        Log.i(TAG, (isCloudMode ? "☁️" : "📱") + " Streaming mode: " + (isCloudMode ? "CLOUD" : "LOCAL"));
+        
+        // SECURITY FIX: Only start HTTP server in LOCAL mode
+        // In cloud mode, all streaming goes through relay server, no local access needed
+        if (!isCloudMode) {
+            if (!startHttpServer()) {
+                Log.e(TAG, "Failed to start HTTP server, stopping service");
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+            
+            // Save port to preferences for local dashboard
+            getSharedPreferences("FadCamPrefs", MODE_PRIVATE)
+                .edit()
+                .putInt("stream_server_port", activePort)
+                .apply();
+        } else {
+            Log.i(TAG, "🔒 Cloud mode active - HTTP server not started (all traffic through relay)");
+            activePort = -1;
+        }
         
         // Enable streaming in RemoteStreamManager
         RemoteStreamManager.getInstance().setStreamingEnabled(true);
         
         // Start cloud status manager (handles status push and command poll)
-        // This works independently of video streaming - just needs server to be on
+        // This works independently of video streaming - just needs service to be on
         CloudStatusManager.getInstance(this).start();
         
         // Update notification with stream URL
@@ -140,6 +152,9 @@ public class RemoteStreamService extends Service {
         // Disable streaming in RemoteStreamManager (clears buffer automatically)
         RemoteStreamManager.getInstance().setStreamingEnabled(false);
         
+        // Cancel notification when service stops
+        stopForeground(true);
+        
         super.onDestroy();
     }
     
@@ -147,6 +162,58 @@ public class RemoteStreamService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return binder;
+    }
+    
+    /**
+     * SECURITY FIX: Handle streaming mode changes dynamically
+     * Stops HTTP server when switching to cloud, starts when switching to local.
+     * This is called from RemoteFragment when user changes streaming mode.
+     * Ensures the server is immediately updated without needing a service restart.
+     */
+    public void updateStreamingMode() {
+        // Get current mode from preferences (0 = local, 1 = cloud)
+        int streamingMode = getSharedPreferences("FadCamCloudPrefs", MODE_PRIVATE)
+            .getInt("streaming_mode", 0);
+        boolean isCloudMode = streamingMode == 1;
+        
+        Log.i(TAG, (isCloudMode ? "☁️" : "📱") + " Mode changed: " + (isCloudMode ? "CLOUD" : "LOCAL"));
+        
+        boolean serverRunning = isServerRunning();
+        
+        if (isCloudMode) {
+            // Cloud mode: STOP server if running (security - no local access in cloud mode)
+            if (serverRunning) {
+                Log.i(TAG, "🔒 Stopping HTTP server (switching to cloud mode)");
+                stopHttpServer();
+                updateNotification();
+            } else {
+                Log.i(TAG, "🔒 Cloud mode - HTTP server already stopped");
+            }
+        } else {
+            // Local mode: START server if not running
+            if (!serverRunning) {
+                Log.i(TAG, "📱 Starting HTTP server (switching to local mode)");
+                if (startHttpServer()) {
+                    // Save port to preferences
+                    getSharedPreferences("FadCamPrefs", MODE_PRIVATE)
+                        .edit()
+                        .putInt("stream_server_port", activePort)
+                        .apply();
+                    updateNotification();
+                } else {
+                    Log.e(TAG, "❌ Failed to start HTTP server when switching to local mode");
+                }
+            } else {
+                Log.i(TAG, "📱 Local mode - HTTP server already running on port " + activePort);
+            }
+        }
+    }
+    
+    /**
+     * Check if HTTP server is currently running
+     */
+    public boolean isServerRunning() {
+        return httpServer != null && httpServer.isAlive();
     }
     
     /**
@@ -406,33 +473,40 @@ public class RemoteStreamService extends Service {
      * Shows cloud dashboard URL if in cloud mode, local dashboard URL if in local mode.
      */
     private void updateNotification() {
-        if (activePort == -1) {
-            return;
-        }
-        
         // Check if cloud mode is enabled
         android.content.SharedPreferences cloudPrefs = getSharedPreferences("FadCamCloudPrefs", Context.MODE_PRIVATE);
         int streamingMode = cloudPrefs.getInt("streaming_mode", 0); // 0 = local, 1 = cloud
         boolean isCloudMode = streamingMode == 1;
         
         String dashboardUrl;
-        if (isCloudMode) {
-            // Cloud mode - show cloud dashboard URL with device ID
-            String deviceId = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
-            dashboardUrl = "https://fadcam.fadseclab.com/stream/" + deviceId + "/";
-        } else {
-            // Local mode - show local dashboard URL (root, not /live.m3u8)
-            String ipAddress = getLocalIpAddress();
-            dashboardUrl = "http://" + ipAddress + ":" + activePort + "/";
-        }
-        
-        // Check if we have fragments
         int fragmentCount = RemoteStreamManager.getInstance().getBufferedCount();
         String contentText;
-        if (fragmentCount > 0) {
-            contentText = "Streaming: " + dashboardUrl + " (" + fragmentCount + " fragments)";
+        
+        if (isCloudMode) {
+            // Cloud mode - show cloud dashboard URL with device ID (even if activePort == -1)
+            String deviceId = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+            dashboardUrl = "https://fadcam.fadseclab.com/stream/" + deviceId + "/";
+            
+            if (fragmentCount > 0) {
+                contentText = "Cloud Streaming: " + dashboardUrl + " (" + fragmentCount + " fragments)";
+            } else {
+                contentText = "Cloud Streaming: " + dashboardUrl;
+            }
         } else {
-            contentText = dashboardUrl + " • Start recording to stream";
+            // Local mode - only show if server is running (activePort != -1)
+            if (activePort == -1) {
+                Log.d(TAG, "Local mode but server not running, skipping notification update");
+                return;
+            }
+            
+            String ipAddress = getLocalIpAddress();
+            dashboardUrl = "http://" + ipAddress + ":" + activePort + "/";
+            
+            if (fragmentCount > 0) {
+                contentText = "Streaming: " + dashboardUrl + " (" + fragmentCount + " fragments)";
+            } else {
+                contentText = dashboardUrl + " • Start recording to stream";
+            }
         }
         
         Notification notification = buildNotification(contentText, dashboardUrl);
@@ -503,12 +577,5 @@ public class RemoteStreamService extends Service {
      */
     public int getActivePort() {
         return activePort;
-    }
-    
-    /**
-     * Check if server is running.
-     */
-    public boolean isServerRunning() {
-        return httpServer != null && httpServer.isAlive();
     }
 }
