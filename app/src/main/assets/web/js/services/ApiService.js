@@ -346,6 +346,65 @@ class ApiService {
     }
 
     /**
+     * POST /camera/switch - Switch the active camera (BACK ↔ FRONT).
+     * During active recording the switch happens live; otherwise the preference is saved.
+     * @param {string|null} target - 'back', 'front', or null to toggle
+     * @returns {Promise<Object>} Response data
+     */
+    async switchCamera(target = null) {
+        const params = target ? { to: target.toUpperCase() } : {};
+        return this.post('/camera/switch', params);
+    }
+
+    /**
+     * Toggle camera (BACK ↔ FRONT) – convenience alias for switchCamera()
+     * @returns {Promise<Object>}
+     */
+    async toggleCamera() {
+        return this.switchCamera(null);
+    }
+
+    /**
+     * POST /config/zoom – Set zoom ratio and optional pan.
+     * @param {number} ratio      Zoom magnification (≥ 1.0)
+     * @param {number} [panX=0]   Horizontal pan -1.0…+1.0 (0 = centre)
+     * @param {number} [panY=0]   Vertical pan   -1.0…+1.0 (0 = centre)
+     */
+    async setZoom(ratio, panX = null, panY = null) {
+        const body = { ratio };
+        // Only include pan when explicitly provided – avoids wiping phone's saved pan
+        if (panX !== null && panY !== null) {
+            body.panX = panX;
+            body.panY = panY;
+        }
+        return this.post('/config/zoom', body);
+    }
+
+    /**
+     * POST /config/exposure – Set exposure compensation in EV steps.
+     * @param {number} ev  Integer −5…+5
+     */
+    async setExposure(ev) {
+        return this.post('/config/exposure', { ev: Math.round(ev) });
+    }
+
+    /**
+     * POST /config/mirror – Set or toggle front-camera horizontal mirror.
+     * @param {boolean|null} enabled  true/false to set explicitly, null to toggle
+     */
+    async setMirror(enabled = null) {
+        const params = (enabled !== null) ? { enabled } : {};
+        return this.post('/config/mirror', params);
+    }
+
+    /**
+     * POST /config/aeLock – Toggle AE (Auto-Exposure) lock.
+     */
+    async toggleAeLock() {
+        return this.post('/config/aeLock', {});
+    }
+
+    /**
      * Generic POST request
      * @param {string} endpoint - API endpoint path
      * @param {Object} data - Request body data

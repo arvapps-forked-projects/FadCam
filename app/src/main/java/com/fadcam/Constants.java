@@ -26,6 +26,11 @@ public abstract class Constants {
     // *** NEW: Zoom Ratio Prefs per Camera ***
     public static final String PREF_ZOOM_RATIO_FRONT = "zoom_ratio_front";
     public static final String PREF_ZOOM_RATIO_BACK = "zoom_ratio_back";
+    // Pan offset prefs per camera (-1.0 .. 1.0)
+    public static final String PREF_PAN_X_FRONT = "pan_x_front";
+    public static final String PREF_PAN_Y_FRONT = "pan_y_front";
+    public static final String PREF_PAN_X_BACK = "pan_x_back";
+    public static final String PREF_PAN_Y_BACK = "pan_y_back";
     // *** End New Zoom Ratio Prefs ***
     public static final String PREF_CAMERA_SELECTION = "camera_selection";
     public static final String PREF_FRONT_VIDEO_MIRROR_ENABLED =
@@ -127,6 +132,16 @@ public abstract class Constants {
         "com.fadcam.ON_TORCH_STATE_CHANGED";
     public static final String BROADCAST_ON_TORCH_STATE_REQUEST =
         "ON_TORCH_STATE_REQUEST";
+    /** Sent via LocalBroadcastManager when mirror state changes (from web or RecordingService). */
+    public static final String BROADCAST_ON_MIRROR_CHANGED =
+        "com.fadcam.ON_MIRROR_CHANGED";
+    public static final String EXTRA_MIRROR_ENABLED = "com.fadcam.EXTRA_MIRROR_ENABLED";
+    /** Sent via LocalBroadcastManager when zoom / pan state changes (from web or RecordingService). */
+    public static final String BROADCAST_ON_ZOOM_CHANGED =
+        "com.fadcam.ON_ZOOM_CHANGED";
+    public static final String EXTRA_BROADCAST_ZOOM_RATIO = "com.fadcam.EXTRA_BROADCAST_ZOOM_RATIO";
+    public static final String EXTRA_BROADCAST_PAN_X = "com.fadcam.EXTRA_BROADCAST_PAN_X";
+    public static final String EXTRA_BROADCAST_PAN_Y = "com.fadcam.EXTRA_BROADCAST_PAN_Y";
     public static final String BROADCAST_MOTION_LAB_DEBUG =
         "com.fadcam.MOTION_LAB_DEBUG";
     public static final String EXTRA_MOTION_DEBUG_SCORE = "motion_debug_score";
@@ -310,6 +325,10 @@ public abstract class Constants {
     public static final String EXTRA_FOCUS_X = "com.fadcam.EXTRA_FOCUS_X"; // float (normalized 0..1)
     public static final String EXTRA_FOCUS_Y = "com.fadcam.EXTRA_FOCUS_Y"; // float (normalized 0..1)
     public static final String EXTRA_ZOOM_RATIO = "com.fadcam.EXTRA_ZOOM_RATIO"; // float
+    /** Pan offset X for zoom: float -1.0 (full left) to +1.0 (full right), 0.0 = centre */
+    public static final String EXTRA_PAN_X = "com.fadcam.EXTRA_PAN_X"; // float
+    /** Pan offset Y for zoom: float -1.0 (full top) to +1.0 (full bottom), 0.0 = centre */
+    public static final String EXTRA_PAN_Y = "com.fadcam.EXTRA_PAN_Y"; // float
     public static final String INTENT_ACTION_PAUSE_RECORDING =
         "ACTION_PAUSE_RECORDING";
     public static final String INTENT_ACTION_START_RECORDING =

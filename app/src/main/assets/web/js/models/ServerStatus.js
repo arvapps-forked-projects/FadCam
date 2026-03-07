@@ -124,6 +124,20 @@ class ServerStatus {
         // Torch state
         this.torchOn = data.torchState || false;
 
+        // Camera selection (back / front)
+        this.cameraType = (data.cameraType || 'back').toLowerCase();
+
+        // Zoom and pan state
+        this.zoomRatio = data.zoomRatio ?? 1.0;
+        this.panX = data.panX ?? 0.0;
+        this.panY = data.panY ?? 0.0;
+
+        // Exposure compensation (integer EV steps)
+        this.exposureCompensation = data.exposureCompensation ?? 0;
+
+        // Front-camera mirror
+        this.mirrorEnabled = data.mirrorEnabled || false;
+
         // Volume state
         this.volume = data.volume ?? 0;
         this.maxVolume = data.maxVolume ?? 15;

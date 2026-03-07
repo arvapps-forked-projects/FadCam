@@ -519,6 +519,25 @@ public class SharedPreferencesManager {
         sharedPreferences.edit().putFloat(specificKey, zoomRatio).commit();
     }
 
+    /** Returns the saved pan-X offset (-1.0…+1.0) for the given camera. Default: 0.0 (centre). */
+    public float getSpecificPanX(CameraType cameraType) {
+        String key = (cameraType == CameraType.FRONT) ? Constants.PREF_PAN_X_FRONT : Constants.PREF_PAN_X_BACK;
+        return sharedPreferences.getFloat(key, 0.0f);
+    }
+
+    /** Returns the saved pan-Y offset (-1.0…+1.0) for the given camera. Default: 0.0 (centre). */
+    public float getSpecificPanY(CameraType cameraType) {
+        String key = (cameraType == CameraType.FRONT) ? Constants.PREF_PAN_Y_FRONT : Constants.PREF_PAN_Y_BACK;
+        return sharedPreferences.getFloat(key, 0.0f);
+    }
+
+    /** Persists pan offsets for the given camera. */
+    public void setSpecificPan(CameraType cameraType, float panX, float panY) {
+        String keyX = (cameraType == CameraType.FRONT) ? Constants.PREF_PAN_X_FRONT : Constants.PREF_PAN_X_BACK;
+        String keyY = (cameraType == CameraType.FRONT) ? Constants.PREF_PAN_Y_FRONT : Constants.PREF_PAN_Y_BACK;
+        sharedPreferences.edit().putFloat(keyX, panX).putFloat(keyY, panY).apply();
+    }
+
     // --- End New Zoom Ratio Methods ---
 
     public VideoCodec getVideoCodec() {
@@ -996,6 +1015,25 @@ public class SharedPreferencesManager {
             .edit()
             .putInt(Constants.PREF_AF_MODE, afMode)
             .commit();
+    }
+
+    // ----- Exposure compensation range (populated when camera opens) -----
+    private static final String PREF_EXPOSURE_COMP_MIN = "pref_exposure_comp_min";
+    private static final String PREF_EXPOSURE_COMP_MAX = "pref_exposure_comp_max";
+
+    public int getExposureCompensationMin() {
+        return sharedPreferences.getInt(PREF_EXPOSURE_COMP_MIN, -12);
+    }
+
+    public int getExposureCompensationMax() {
+        return sharedPreferences.getInt(PREF_EXPOSURE_COMP_MAX, 12);
+    }
+
+    public void setExposureCompensationRange(int min, int max) {
+        sharedPreferences.edit()
+            .putInt(PREF_EXPOSURE_COMP_MIN, min)
+            .putInt(PREF_EXPOSURE_COMP_MAX, max)
+            .apply();
     }
 
     // --- End Other methods ---
