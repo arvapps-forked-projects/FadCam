@@ -1074,46 +1074,67 @@ import fi.iki.elonen.NanoHTTPD;
 
             org.json.JSONObject json = new org.json.JSONObject(body);
             float ratio = (float) json.optDouble("ratio", 1.0);
-            ratio = Math.max(1.0f, ratio);
+            boolean hasPan = json.has("panX") || json.has("panY");
+            float requestedPanX = hasPan
+                    ? Math.max(-1f, Math.min(1f, (float) json.optDouble("panX", 0.0)))
+                    : 0.0f;
+            float requestedPanY = hasPan
+                    ? Math.max(-1f, Math.min(1f, (float) json.optDouble("panY", 0.0)))
+                    : 0.0f;
 
             com.fadcam.SharedPreferencesManager spManager =
                     com.fadcam.SharedPreferencesManager.getInstance(context);
+            com.fadcam.CameraType cam = spManager.getCameraSelection();
+            float maxZoomRatio = spManager.getMaxSupportedZoomRatio(cam);
+            ratio = Math.max(0.5f, Math.min(maxZoomRatio, ratio));
+            if (ratio <= 1.0f) {
+                requestedPanX = 0.0f;
+                requestedPanY = 0.0f;
+                hasPan = true;
+            }
+
+            // Persist immediately so /status becomes the single source of truth even before the
+            // recording service finishes applying the request.
+            spManager.setSpecificZoomRatio(cam, ratio);
+            float effectivePanX = spManager.getSpecificPanX(cam);
+            float effectivePanY = spManager.getSpecificPanY(cam);
+            if (hasPan) {
+                spManager.setSpecificPan(cam, requestedPanX, requestedPanY);
+                effectivePanX = requestedPanX;
+                effectivePanY = requestedPanY;
+            }
+
+            RemoteStreamManager.getInstance().invalidateStatusCache();
 
             if (spManager.isRecordingInProgress()) {
                 android.content.Intent intent = new android.content.Intent(
                         context, com.fadcam.services.RecordingService.class);
                 intent.setAction(com.fadcam.Constants.INTENT_ACTION_SET_ZOOM_RATIO);
                 intent.putExtra(com.fadcam.Constants.EXTRA_ZOOM_RATIO, ratio);
-                if (json.has("panX") || json.has("panY")) {
-                    float panX = Math.max(-1f, Math.min(1f, (float) json.optDouble("panX", 0.0)));
-                    float panY = Math.max(-1f, Math.min(1f, (float) json.optDouble("panY", 0.0)));
-                    intent.putExtra(com.fadcam.Constants.EXTRA_PAN_X, panX);
-                    intent.putExtra(com.fadcam.Constants.EXTRA_PAN_Y, panY);
+                if (hasPan) {
+                    intent.putExtra(com.fadcam.Constants.EXTRA_PAN_X, requestedPanX);
+                    intent.putExtra(com.fadcam.Constants.EXTRA_PAN_Y, requestedPanY);
                 }
                 com.fadcam.utils.ServiceStartPolicy.startRecordingAction(context, intent);
-                Log.i(TAG, "✅ Zoom dispatched (live): ratio=" + ratio);
+                Log.i(TAG, "✅ Zoom dispatched (live): ratio=" + ratio + " pan=" + effectivePanX + "," + effectivePanY);
             } else {
-                com.fadcam.CameraType cam = spManager.getCameraSelection();
-                spManager.setSpecificZoomRatio(cam, ratio);
-                float broadcastPanX = spManager.getSpecificPanX(cam);
-                float broadcastPanY = spManager.getSpecificPanY(cam);
-                if (json.has("panX") || json.has("panY")) {
-                    float panX = Math.max(-1f, Math.min(1f, (float) json.optDouble("panX", 0.0)));
-                    float panY = Math.max(-1f, Math.min(1f, (float) json.optDouble("panY", 0.0)));
-                    spManager.setSpecificPan(cam, panX, panY);
-                    broadcastPanX = panX;
-                    broadcastPanY = panY;
-                }
                 Log.i(TAG, "✅ Zoom saved (preference): ratio=" + ratio);
-                // Notify HomeFragment so pan overlay + zoom label refresh even when not recording
-                android.content.Intent zoomBcast = new android.content.Intent(com.fadcam.Constants.BROADCAST_ON_ZOOM_CHANGED);
-                zoomBcast.putExtra(com.fadcam.Constants.EXTRA_BROADCAST_ZOOM_RATIO, ratio);
-                zoomBcast.putExtra(com.fadcam.Constants.EXTRA_BROADCAST_PAN_X, broadcastPanX);
-                zoomBcast.putExtra(com.fadcam.Constants.EXTRA_BROADCAST_PAN_Y, broadcastPanY);
-                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context).sendBroadcast(zoomBcast);
             }
 
-            return jsonResponse(Response.Status.OK, "{\"status\": \"success\", \"ratio\": " + ratio + "}");
+            android.content.Intent zoomBcast = new android.content.Intent(com.fadcam.Constants.BROADCAST_ON_ZOOM_CHANGED);
+            zoomBcast.putExtra(com.fadcam.Constants.EXTRA_BROADCAST_ZOOM_RATIO, ratio);
+            zoomBcast.putExtra(com.fadcam.Constants.EXTRA_BROADCAST_PAN_X, effectivePanX);
+            zoomBcast.putExtra(com.fadcam.Constants.EXTRA_BROADCAST_PAN_Y, effectivePanY);
+            androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context).sendBroadcast(zoomBcast);
+
+            return jsonResponse(
+                    Response.Status.OK,
+                    String.format(
+                            java.util.Locale.US,
+                            "{\"status\": \"success\", \"ratio\": %.2f, \"panX\": %.3f, \"panY\": %.3f}",
+                            ratio,
+                            effectivePanX,
+                            effectivePanY));
         } catch (Exception e) {
             Log.e(TAG, "Error setting zoom", e);
             return jsonResponse(Response.Status.INTERNAL_ERROR,
@@ -1121,7 +1142,7 @@ import fi.iki.elonen.NanoHTTPD;
         }
     }
 
-    /** POST /config/exposure – set exposure compensation {ev: int -5..5}. */
+    /** POST /config/exposure – set exposure compensation using the active device AE range. */
     @NonNull
     private Response setExposure(IHTTPSession session) {
         try {
@@ -1129,22 +1150,62 @@ import fi.iki.elonen.NanoHTTPD;
             session.parseBody(files);
             String body = files.get("postData");
             if (body == null || body.isEmpty()) {
+                Log.w(TAG, "❌ [/config/exposure] Empty or missing body");
                 return jsonResponse(Response.Status.BAD_REQUEST, "{\"error\": \"No body\"}");
             }
 
             org.json.JSONObject json = new org.json.JSONObject(body);
-            int ev = Math.max(-5, Math.min(5, json.optInt("ev", 0)));
+            com.fadcam.SharedPreferencesManager spMgr = com.fadcam.SharedPreferencesManager.getInstance(context);
+            int exposureMin = spMgr != null ? spMgr.getExposureCompensationMin() : -12;
+            int exposureMax = spMgr != null ? spMgr.getExposureCompensationMax() : 12;
+            int ev = Math.max(exposureMin, Math.min(exposureMax, json.optInt("ev", 0)));
+            Log.i(TAG, "→ [/config/exposure] Received ev: " + ev);
+
+            // CRITICAL: Save exposure to SharedPreferences so status endpoint returns correct value
+            if (spMgr != null) {
+                try {
+                    spMgr.setSavedExposureCompensation(ev);
+                    // Verify write was successful
+                    int verify = spMgr.getSavedExposureCompensation();
+                    Log.i(TAG, "💾 Exposure saved: " + ev + ", verified read-back: " + verify);
+                    if (verify != ev) {
+                        Log.w(TAG, "⚠️ Exposure verification FAILED! Wrote: " + ev + ", Read: " + verify);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Error saving exposure to SharedPreferences: " + e.getMessage(), e);
+                }
+            } else {
+                Log.e(TAG, "❌ SharedPreferencesManager is null!");
+            }
+
+                android.content.Intent exposureBroadcast = new android.content.Intent(
+                    com.fadcam.Constants.BROADCAST_ON_EXPOSURE_CHANGED);
+                exposureBroadcast.putExtra(
+                    com.fadcam.Constants.EXTRA_BROADCAST_EXPOSURE_COMPENSATION,
+                    ev);
+                androidx.localbroadcastmanager.content.LocalBroadcastManager
+                    .getInstance(context)
+                    .sendBroadcast(exposureBroadcast);
 
             android.content.Intent intent = new android.content.Intent(
                     context, com.fadcam.services.RecordingService.class);
             intent.setAction(com.fadcam.Constants.INTENT_ACTION_SET_EXPOSURE_COMPENSATION);
             intent.putExtra(com.fadcam.Constants.EXTRA_EXPOSURE_COMPENSATION, ev);
             com.fadcam.utils.ServiceStartPolicy.startRecordingAction(context, intent);
-            Log.i(TAG, "✅ Exposure compensation set to: " + ev);
+            Log.i(TAG, "✅ Exposure compensation intent sent: " + ev);
+            
+            // CRITICAL: Invalidate status cache so next /status request returns new exposure value
+            Log.d(TAG, "🗑️ [setExposure] Invalidating status cache due to exposure change from " + json.optInt("ev", -999) + " to " + ev);
+            RemoteStreamManager.getInstance().invalidateStatusCache();
 
-            return jsonResponse(Response.Status.OK, "{\"status\": \"success\", \"ev\": " + ev + "}");
+            // Compute display EV value for web confirmation (so web doesn't have to guess)
+            float stepValue = (spMgr != null) ? spMgr.getExposureCompensationStep() : 0.33f;
+            float displayEv = ev * stepValue;
+            
+            // Return actual display value so web can confirm immediately without unit confusion
+            return jsonResponse(Response.Status.OK, "{\"status\": \"success\", \"ev\": " + ev + ", \"evDisplay\": " + String.format("%.2f", displayEv) + "}");
         } catch (Exception e) {
-            Log.e(TAG, "Error setting exposure", e);
+            Log.e(TAG, "❌ [/config/exposure] Exception: " + e.getMessage(), e);
             return jsonResponse(Response.Status.INTERNAL_ERROR,
                     "{\"status\": \"error\", \"message\": \"" + e.getMessage() + "\"}");
         }
@@ -1177,6 +1238,12 @@ import fi.iki.elonen.NanoHTTPD;
                 enabled = !spManager.isFrontVideoMirrorEnabled();
             }
 
+            // CRITICAL: Save mirror state to SharedPreferences so status endpoint returns correct value
+            if (spManager != null) {
+                spManager.setFrontVideoMirrorEnabled(enabled);
+                Log.i(TAG, "💾 Mirror state saved to SharedPreferences: " + enabled);
+            }
+
             android.content.Intent intent = new android.content.Intent(
                     context, com.fadcam.services.RecordingService.class);
             intent.setAction(com.fadcam.Constants.INTENT_ACTION_SET_FRONT_VIDEO_MIRROR);
@@ -1197,9 +1264,33 @@ import fi.iki.elonen.NanoHTTPD;
     @NonNull
     private Response toggleAeLock(IHTTPSession session) {
         try {
+            // CRITICAL: Consume the POST body to keep HTTP stream clean
+            // Without this, the next request may fail with 400 Bad Request
+            java.util.Map<String, String> files = new java.util.HashMap<>();
+            try { session.parseBody(files); } catch (Exception ignored) {}
+            
             com.fadcam.SharedPreferencesManager spManager =
                     com.fadcam.SharedPreferencesManager.getInstance(context);
+            if (spManager == null) {
+                Log.e(TAG, "❌ SharedPreferencesManager is null in toggleAeLock!");
+                return jsonResponse(Response.Status.INTERNAL_ERROR,
+                        "{\"status\": \"error\", \"message\": \"SharedPreferencesManager unavailable\"}");
+            }
+            
             boolean newLocked = !spManager.isAeLockedSaved();
+
+            // CRITICAL: Save AE lock state to SharedPreferences so status endpoint returns correct value
+            try {
+                spManager.setSavedAeLock(newLocked);
+                // Verify write was successful
+                boolean verify = spManager.isAeLockedSaved();
+                Log.i(TAG, "💾 AE lock saved: " + newLocked + ", verified read-back: " + verify);
+                if (verify != newLocked) {
+                    Log.w(TAG, "⚠️ AE lock verification FAILED! Wrote: " + newLocked + ", Read: " + verify);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "❌ Error saving AE lock to SharedPreferences: " + e.getMessage(), e);
+            }
 
             android.content.Intent intent = new android.content.Intent(
                     context, com.fadcam.services.RecordingService.class);
@@ -1207,11 +1298,14 @@ import fi.iki.elonen.NanoHTTPD;
             intent.putExtra(com.fadcam.Constants.EXTRA_AE_LOCK, newLocked);
             com.fadcam.utils.ServiceStartPolicy.startRecordingAction(context, intent);
             Log.i(TAG, "✅ AE lock set to: " + newLocked);
+            
+            // CRITICAL: Invalidate status cache so next /status request returns new AE lock state
+            RemoteStreamManager.getInstance().invalidateStatusCache();
 
             return jsonResponse(Response.Status.OK,
                     "{\"status\": \"success\", \"aeLockEnabled\": " + newLocked + "}");
         } catch (Exception e) {
-            Log.e(TAG, "Error toggling AE lock", e);
+            Log.e(TAG, "❌ [/config/aeLock] Exception: " + e.getMessage(), e);
             return jsonResponse(Response.Status.INTERNAL_ERROR,
                     "{\"status\": \"error\", \"message\": \"" + e.getMessage() + "\"}");
         }

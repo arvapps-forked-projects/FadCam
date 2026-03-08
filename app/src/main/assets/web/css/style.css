@@ -199,7 +199,8 @@ body {
 }
 
 .hamburger-btn:hover .hamburger-line {
-    background: var(--accent-red);
+    background: #f85149;
+    opacity: 1;
 }
 
 .top-bar h1 {
@@ -214,7 +215,7 @@ body {
 }
 
 .top-bar svg {
-    stroke: var(--accent-red);
+    stroke: #8b949e;
 }
 
 /* Header Actions Container */
@@ -326,8 +327,8 @@ body {
 }
 
 .footer-link:hover {
-    background: rgba(248, 81, 73, 0.1);
-    color: var(--accent-red);
+    background: rgba(248, 81, 73, 0.15);
+    color: #f85149;
 }
 
 .footer-link i {
@@ -472,7 +473,7 @@ body {
 }
 
 .card-clickable:hover {
-    background: rgba(248, 81, 73, 0.05);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .card-arrow-sm {
@@ -485,7 +486,8 @@ body {
 }
 
 .card:hover .card-arrow-sm {
-    stroke: #a8b1ba;
+    stroke: #8b949e;
+    opacity: 0.8;
 }
 
 .card-content {
@@ -537,7 +539,7 @@ body {
 .card-icon {
     width: 40px;
     height: 40px;
-    background: rgba(248, 81, 73, 0.1);
+    background: rgba(255, 255, 255, 0.03);
     border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
@@ -556,8 +558,9 @@ body {
 }
 
 .card-clickable:hover .card-arrow {
-    color: var(--accent-red);
+    color: #a8b1ba;
     transform: translateX(2px);
+    opacity: 0.8;
 }
 
 .card-arrow-sm {
@@ -568,8 +571,9 @@ body {
 }
 
 .card-clickable:hover .card-arrow-sm {
-    color: var(--accent-red);
+    color: #a8b1ba;
     transform: translateX(2px);
+    opacity: 0.8;
 }
 
 /* Server Room Card */
@@ -680,7 +684,7 @@ body {
 
 .card-sm:hover {
     border-color: #3d4349;
-    background: rgba(248, 81, 73, 0.08);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .card-sm .card-clickable {
@@ -751,8 +755,8 @@ body {
 }
 
 .card-sm:hover .card-arrow-sm {
-    color: var(--accent-red);
     transform: translateX(2px);
+    color: var(--text-secondary);
 }
 
 /* Section Divider */
@@ -1257,8 +1261,8 @@ video {
 }
 
 .modal-option.selected {
-    background: rgba(248, 81, 73, 0.08);
-    border: 1px solid var(--primary-red);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid #3d4349;
 }
 
 .option-radio {
@@ -1975,7 +1979,7 @@ video {
     overflow: hidden;
     cursor: pointer;
     position: relative;
-    min-height: 38px;
+    min-height: 48px;
     transition: border-color 200ms ease;
 }
 
@@ -1987,6 +1991,9 @@ video {
     position: relative;
     padding: 10px 12px;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 /* Background Fill - Yellow when ON */
@@ -2014,17 +2021,19 @@ video {
     flex-direction: row;
     align-items: center;
     gap: 10px;
+    width: 100%;
+    min-width: 0;
 }
 
-/* Icon Container */
+/* Icon Container – proportional to card height */
 .torch-icon-fa {
-    width: 20px;
-    height: 20px;
-    font-size: 20px;
+    width: 24px;
+    height: 24px;
+    font-size: 24px;
     flex-shrink: 0;
     color: #8b949e;
     transition: color 300ms ease;
-    line-height: 20px;
+    line-height: 24px;
     text-align: center;
 }
 
@@ -2033,12 +2042,13 @@ video {
     text-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 0 4px rgba(255, 215, 0, 0.6);
 }
 
-/* Text Container */
+/* Text Container – ensure text doesn't wrap */
 .torch-text {
     display: flex;
     flex-direction: column;
     gap: 2px;
     flex: 1;
+    min-width: 0;
 }
 
 .torch-label {
@@ -2058,6 +2068,16 @@ video {
 
 .torch-card.on .torch-value {
     color: #ffffff;
+}
+
+/* Torch card press effect */
+.torch-card {
+    transition: transform 100ms ease, border-color 200ms ease;
+    cursor: pointer;
+}
+
+.torch-card:active {
+    transform: scale(0.97);
 }
 
 /* -------- RECORDING CARD -------- */
@@ -2125,9 +2145,16 @@ video {
 }
 
 /* Pause/Resume button on recording card */
-.recording-pause-btn {
+.recording-card {
     position: relative;
-    z-index: 2;
+}
+
+.recording-pause-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2139,18 +2166,22 @@ video {
     color: #ffffff;
     font-size: 12px;
     cursor: pointer;
-    transition: background 200ms ease, transform 100ms ease;
+    transition: background 200ms ease, transform 100ms ease, opacity 200ms ease;
     flex-shrink: 0;
-    margin-left: auto;
 }
 
-.recording-pause-btn:hover {
-    background: rgba(255, 255, 255, 0.35);
-    transform: scale(1.1);
+.recording-pause-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-50%) scale(1.08);
 }
 
-.recording-pause-btn:active {
-    transform: scale(0.95);
+.recording-pause-btn:active:not(:disabled) {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.recording-pause-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
 /* -------- CAMERA SWITCH CARD -------- */
@@ -2236,7 +2267,7 @@ video {
     background: #171717;
     border: 1px solid #2d3439;
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 12px;
 }
 
 .zoom-label-group {
@@ -2244,6 +2275,14 @@ video {
     flex-direction: column;
     gap: 1px;
     min-width: 54px;
+}
+
+.zoom-slider-group {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .zoom-label {
@@ -2269,14 +2308,52 @@ video {
     display: none; /* shown only when zoom > 1 */
     background: #171717;
     border: 1px solid #2d3439;
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: 12px;
+    padding: 12px 14px;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.95);
+    pointer-events: none;
+    transition: opacity 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                pointer-events 280ms ease;
 }
 
 .pan-container.visible {
     display: flex;
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    pointer-events: auto;
+    animation: pan-enter 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pan-container.hiding {
+    opacity: 0;
+    transform: translateY(8px) scaleY(0.93);
+    animation: pan-exit 280ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes pan-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-12px) scaleY(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scaleY(1);
+    }
+}
+
+@keyframes pan-exit {
+    from {
+        opacity: 1;
+        transform: translateY(0) scaleY(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(8px) scaleY(0.92);
+    }
 }
 
 .pan-header {
@@ -2292,66 +2369,206 @@ video {
 }
 
 .pan-reset-btn {
-    font-size: 11px;
-    color: #8b949e;
-    background: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
     border: 1px solid #30363d;
-    border-radius: 4px;
-    padding: 2px 8px;
+    background: #0d1117;
+    color: #8b949e;
+    font-size: 12px;
     cursor: pointer;
-    transition: color 150ms, border-color 150ms;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 150ms, border-color 150ms, color 150ms, transform 100ms;
+    flex-shrink: 0;
+    padding: 0;
 }
 
-.pan-reset-btn:hover {
-    color: #ffffff;
+.pan-reset-btn:hover:not(:disabled) {
+    background: #21262d;
     border-color: #8b949e;
+    color: #ffffff;
+}
+
+.pan-reset-btn:active:not(:disabled) {
+    transform: scale(0.90);
+}
+
+.pan-reset-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    color: #443d3d;
 }
 
 .pan-area {
     position: relative;
     width: 100%;
     aspect-ratio: 1;
-    max-width: 120px;
-    background: #0d1117;
-    border: 1px solid #30363d;
-    border-radius: 8px;
+    max-width: 140px;
+    background: linear-gradient(135deg, #0d1117 0%, #0f1419 100%);
+    border: 1.5px solid #30363d;
+    border-radius: 12px;
     cursor: crosshair;
     touch-action: none;
     align-self: center;
     overflow: hidden;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* crosshair lines */
+/* Grid pattern for pan area - helps visualize position */
 .pan-area::before {
     content: '';
     position: absolute;
-    left: 50%; top: 0; bottom: 0;
-    width: 1px;
-    background: #30363d;
-    transform: translateX(-50%);
+    inset: 0;
+    background-image: 
+        /* Vertical center line */
+        linear-gradient(to right, transparent 49.5%, rgba(239, 83, 80, 0.6) 49.5%, rgba(239, 83, 80, 0.6) 50.5%, transparent 50.5%),
+        /* Horizontal center line */
+        linear-gradient(to bottom, transparent 49.5%, rgba(239, 83, 80, 0.6) 49.5%, rgba(239, 83, 80, 0.6) 50.5%, transparent 50.5%),
+        /* Grid lines - vertical */
+        repeating-linear-gradient(to right, 
+            rgba(139, 148, 158, 0.15) 0px, 
+            rgba(139, 148, 158, 0.15) 1px, 
+            transparent 1px, 
+            transparent 20px),
+        /* Grid lines - horizontal */
+        repeating-linear-gradient(to bottom, 
+            rgba(139, 148, 158, 0.15) 0px, 
+            rgba(139, 148, 158, 0.15) 1px, 
+            transparent 1px, 
+            transparent 20px);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+    pointer-events: none;
+    z-index: 5;
 }
 
+/* Center point indicator */
 .pan-area::after {
     content: '';
     position: absolute;
-    top: 50%; left: 0; right: 0;
-    height: 1px;
-    background: #30363d;
-    transform: translateY(-50%);
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background: rgba(239, 83, 80, 0.8);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(239, 83, 80, 0.6);
+    z-index: 8;
+    pointer-events: none;
 }
 
 .pan-thumb {
     position: absolute;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: #ef5350;
-    box-shadow: 0 0 6px rgba(239, 83, 80, 0.6);
+    box-shadow: 0 0 8px rgba(239, 83, 80, 0.8),
+                inset 0 1px 2px rgba(255, 255, 255, 0.2);
     transform: translate(-50%, -50%);
     left: 50%;
     top: 50%;
     pointer-events: none;
-    transition: left 80ms, top 80ms;
+    z-index: 30;
+    transition: left 60ms, top 60ms;
+}
+
+.pan-area:active .pan-thumb {
+    box-shadow: 0 0 12px rgba(239, 83, 80, 1),
+                0 0 20px rgba(239, 83, 80, 0.4),
+                inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+
+/* Direction labels for pan area - positioned outside the grid */
+.pan-label {
+    position: absolute;
+    font-size: 11px;
+    font-weight: 700;
+    color: #f0f6fc;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 20;
+    transition: color 200ms ease, transform 200ms ease;
+    opacity: 0.8;
+}
+
+/* -------- PRESS/CLICK EFFECTS FOR ALL SIDEBAR BUTTONS -------- */
+/* Torch card press effect */
+.torch-card:active {
+    transform: scale(0.96);
+    transition: transform 100ms ease;
+}
+
+/* Recording card press effect */
+.recording-card:active {
+    transform: scale(0.96);
+    transition: transform 100ms ease;
+}
+
+/* Camera control card press effect */
+.camera-card:active,
+.cam-ctrl-card:active {
+    transform: scale(0.96);
+    transition: transform 100ms ease;
+}
+
+/* Small card press effect */
+.card-sm:active {
+    transform: scale(0.97);
+    transition: transform 100ms ease;
+}
+
+/* Exposure card press effect */
+.exposure-card:active {
+    transform: scale(0.96);
+    transition: transform 100ms ease;
+}
+
+/* Volume card press effect */
+.volume-card:active {
+    transform: scale(0.96);
+    transition: transform 100ms ease;
+}
+
+/* Zoom row press effect */
+.zoom-row:active {
+    transform: scale(0.98);
+    transition: transform 100ms ease;
+}
+
+/* iOS-style cards press effect */
+.card-storage-ios:active,
+.card-memory-ios:active,
+.card-network-ios:active,
+.card-battery-ios:active {
+    transform: scale(0.97);
+    transition: transform 100ms ease;
+}
+
+.pan-label-up {
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.pan-label-down {
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.pan-label-left {
+    left: -14px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.pan-label-right {
+    right: -14px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* Exposure row */
@@ -2365,26 +2582,50 @@ video {
     padding: 10px 12px;
 }
 
-/* Exposure compact card (2-row: icon+label top, buttons bottom) */
+/* Exposure compact card - match other cards (horizontal layout) */
 .exposure-card {
+    display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-    cursor: default;
+    align-items: stretch;
+    gap: 12px;
+    padding: 10px 12px;
+    min-height: 0;
 }
 
 .exp-top-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    position: relative;
+    z-index: 20;
 }
 
-/* Align +/- buttons under the text (icon 18px + gap 8px = 26px indent) */
+.exposure-card .cam-ctrl-text {
+    min-width: 0;
+    flex: 1;
+}
+
+/* Buttons should be aligned right, match torch-value spacing */
 .exp-btn-row {
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding-left: 26px;
+    justify-content: flex-end;
+    gap: 8px;
+    width: 100%;
+    flex-wrap: wrap;
+}
+
+.exposure-icon-fa {
+    width: 24px;
+    height: 24px;
+    font-size: 24px;
+    flex-shrink: 0;
+    color: #8b949e;
+    transition: color 200ms ease;
+    line-height: 24px;
+    text-align: center;
 }
 
 .exposure-label-group {
@@ -2414,8 +2655,8 @@ video {
 }
 
 .exposure-btn {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: 1px solid #30363d;
     background: #0d1117;
@@ -2470,7 +2711,7 @@ video {
 /* -------- CAM-CTRL CARDS (Camera compact toggle) -------- */
 .cam-ctrl-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -2490,6 +2731,10 @@ video {
     -webkit-tap-highlight-color: transparent;
 }
 
+.camera-utility-card {
+    min-height: 72px;
+}
+
 .cam-ctrl-card:hover {
     border-color: #3d4349;
     background: #1d1d1d;
@@ -2505,6 +2750,8 @@ video {
     background: linear-gradient(135deg, rgba(239, 83, 80, 0.13), rgba(183, 28, 28, 0.07));
     opacity: 0;
     transition: opacity 300ms ease;
+    z-index: 1;
+    pointer-events: none;
 }
 
 .cam-ctrl-card.active .cam-ctrl-fill {
@@ -2530,13 +2777,16 @@ video {
     flex-direction: column;
     gap: 1px;
     min-width: 0;
+    z-index: 10;
+    position: relative;
 }
 
 .cam-ctrl-label {
     font-size: 11px;
     font-weight: 600;
     color: #e6edf3;
-    white-space: nowrap;
+    white-space: normal;
+    line-height: 1.15;
 }
 
 .cam-ctrl-value {
@@ -2550,7 +2800,6 @@ video {
     color: #ef5350;
 }
 
-/* Camera card special: switching animation */
 .cam-ctrl-card.switching .cam-ctrl-icon {
     animation: spin-once 400ms ease-in-out;
 }
@@ -2562,23 +2811,23 @@ video {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #30363d;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.10);
+    background: #0d1117;
     color: #8b949e;
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
-    transition: background 200ms ease, transform 100ms ease, color 200ms ease;
+    transition: background 150ms, border-color 150ms, color 150ms, transform 100ms;
     flex-shrink: 0;
     margin-left: auto;
 }
 
 .cam-ctrl-sub-btn:hover {
-    background: rgba(255, 255, 255, 0.22);
+    background: #21262d;
+    border-color: #8b949e;
     color: #ffffff;
-    transform: scale(1.08);
 }
 
 .cam-ctrl-sub-btn:active {
@@ -2586,14 +2835,15 @@ video {
 }
 
 .cam-ctrl-sub-btn.active {
-    background: rgba(239, 83, 80, 0.18);
+    border-color: #ef5350;
+    background: rgba(239, 83, 80, 0.12);
     color: #ef5350;
 }
 
 /* AE Lock button inside exposure row */
 .ae-lock-btn {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: 1px solid #30363d;
     background: #0d1117;
@@ -2624,81 +2874,189 @@ video {
 }
 
 /* -------- MATERIAL 3 ZOOM SLIDER -------- */
-/* Outer wrapper provides the 44px touch target (M3 spec) without distorting the track */
 .zoom-slider-track {
-    flex: 1;
-    height: 44px;
+    height: 60px;
     display: flex;
     align-items: center;
     cursor: pointer;
     min-width: 0;
+    padding: 4px 0;
+    position: relative;
+}
+
+/* Snap dots removed - using discrete snapping without visual indicators */
+.zoom-slider-track::before {
+    display: none;
 }
 
 input[type="range"].zoom-slider {
     width: 100%;
     -webkit-appearance: none;
     appearance: none;
-    height: 4px;
-    background: linear-gradient(to right, #ef5350 var(--zoom-pct, 5.6%), #2d333b var(--zoom-pct, 5.6%));
-    border-radius: 2px;
+    height: 40px;
+    background: transparent;
+    border-radius: 999px;
     outline: none;
     cursor: pointer;
     margin: 0;
     padding: 0;
+    touch-action: pan-x;
+    overflow: visible;
 }
 
-/* M3 thumb – 20dp circle, elevation shadow, no border */
+/* WebKit track styling */
+input[type="range"].zoom-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(to right, #ef5350 var(--zoom-pct, 0%), #2d333b var(--zoom-pct, 0%));
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+/* WebKit thumb styling */
 input[type="range"].zoom-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
+    width: 4px;
+    height: 32px;
+    border-radius: 999px;
     background: #ef5350;
     cursor: pointer;
+    border: none;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
-    transition: box-shadow 200ms cubic-bezier(0.2, 0, 0, 1);
+    transition: width 200ms cubic-bezier(0.2, 0, 0, 1),
+                box-shadow 200ms cubic-bezier(0.2, 0, 0, 1),
+                height 200ms cubic-bezier(0.2, 0, 0, 1);
+    margin-top: -12px; /* Center thumb on track */
 }
 
-/* M3 hover state layer */
 input[type="range"].zoom-slider:hover::-webkit-slider-thumb {
-    box-shadow: 0 0 0 8px rgba(239, 83, 80, 0.12),
+    width: 2px;
+    height: 32px;
+    box-shadow: 0 0 0 3px rgba(239, 83, 80, 0.2),
                 0 1px 3px rgba(0, 0, 0, 0.55);
+    margin-top: -12px;
 }
 
-/* M3 focus state layer */
 input[type="range"].zoom-slider:focus::-webkit-slider-thumb {
-    box-shadow: 0 0 0 10px rgba(239, 83, 80, 0.14),
+    width: 2px;
+    height: 32px;
+    box-shadow: 0 0 0 6px rgba(239, 83, 80, 0.2),
+                0 0 0 10px rgba(239, 83, 80, 0.1),
                 0 1px 3px rgba(0, 0, 0, 0.55);
+    margin-top: -12px;
 }
 
-/* M3 pressed state layer */
 input[type="range"].zoom-slider:active::-webkit-slider-thumb {
-    box-shadow: 0 0 0 12px rgba(239, 83, 80, 0.18),
+    width: 4px;
+    height: 32px;
+    box-shadow: 0 0 0 8px rgba(239, 83, 80, 0.15),
+                0 0 0 12px rgba(239, 83, 80, 0.08),
                 0 1px 3px rgba(0, 0, 0, 0.55);
+    margin-top: -12px;
 }
 
-/* Firefox */
+/* Firefox track styling */
+input[type="range"].zoom-slider::-moz-range-track {
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(to right, #ef5350 var(--zoom-pct, 0%), #2d333b var(--zoom-pct, 0%));
+    border-radius: 999px;
+}
+
+/* Firefox thumb styling */
 input[type="range"].zoom-slider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
+    width: 4px;
+    height: 32px;
+    border-radius: 999px;
     background: #ef5350;
     cursor: pointer;
     border: none;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+    transition: width 200ms cubic-bezier(0.2, 0, 0, 1),
+                box-shadow 200ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-input[type="range"].zoom-slider::-moz-range-track {
-    height: 4px;
-    border-radius: 2px;
-    background: #2d333b;
+input[type="range"].zoom-slider:hover::-moz-range-thumb {
+    width: 2px;
+    height: 32px;
+    box-shadow: 0 0 0 8px rgba(239, 83, 80, 0.15),
+                0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
+input[type="range"].zoom-slider:active::-moz-range-thumb {
+    width: 4px;
+    height: 32px;
+    box-shadow: 0 0 0 12px rgba(239, 83, 80, 0.12),
+                0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* Firefox progress fill */
 input[type="range"].zoom-slider::-moz-range-progress {
-    height: 4px;
-    border-radius: 2px;
+    height: 8px;
     background: #ef5350;
+    border-radius: 999px;
+}
+
+.zoom-slider-presets {
+    position: relative;
+    height: 30px;
+}
+
+.zoom-slider-preset {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    border: none;
+    background: none;
+    padding: 2px 4px;
+    min-width: 34px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    color: #8b949e;
+    transition: color 160ms ease;
+}
+
+.zoom-slider-preset.is-edge-start {
+    transform: none;
+    align-items: flex-start;
+}
+
+.zoom-slider-preset.is-edge-end {
+    transform: translateX(-100%);
+    align-items: flex-end;
+}
+
+.zoom-slider-preset-tick {
+    width: 2px;
+    height: 8px;
+    border-radius: 999px;
+    background: #3b4248;
+    transition: background 160ms ease, transform 160ms ease;
+}
+
+.zoom-slider-preset-label {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+.zoom-slider-preset:hover,
+.zoom-slider-preset:focus-visible,
+.zoom-slider-preset.is-active {
+    color: #ef5350;
+}
+
+.zoom-slider-preset:hover .zoom-slider-preset-tick,
+.zoom-slider-preset:focus-visible .zoom-slider-preset-tick,
+.zoom-slider-preset.is-active .zoom-slider-preset-tick {
+    background: #ef5350;
+    transform: scaleY(1.15);
 }
 
 /* Zoom reset icon button */
@@ -2724,6 +3082,162 @@ input[type="range"].zoom-slider::-moz-range-progress {
 }
 .zoom-reset-btn:active {
     transform: scale(0.90);
+}
+.zoom-reset-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    color: #443d3d;
+    border-color: transparent;
+    background: #0d1117;
+}
+
+.cam-ctrl-card.volume-card {
+    position: relative;
+}
+
+.cam-ctrl-card.volume-card .cam-ctrl-fill {
+    inset: 0 auto 0 0;
+    width: 0;
+    opacity: 1;
+    background: linear-gradient(90deg, #6e7681 0%, #8b949e 100%);
+    transition: width 180ms ease, background 180ms ease;
+}
+
+.cam-ctrl-card.volume-card {
+    background: linear-gradient(135deg, #24292f 0%, #30363d 100%);
+}
+
+.cam-ctrl-card.volume-card.muted .cam-ctrl-fill {
+    background: linear-gradient(90deg, #6e7681 0%, #8b949e 100%);
+}
+
+.cam-ctrl-card.volume-card.low .cam-ctrl-fill {
+    background: linear-gradient(90deg, #3fb950 0%, #56d364 100%);
+}
+
+.cam-ctrl-card.volume-card.medium .cam-ctrl-fill {
+    background: linear-gradient(90deg, #fb8500 0%, #ffb703 100%);
+}
+
+.cam-ctrl-card.volume-card.high .cam-ctrl-fill {
+    background: linear-gradient(90deg, #f85149 0%, #ff7b72 100%);
+}
+
+.cam-ctrl-card.volume-card.muted {
+    background: linear-gradient(135deg, #24292f 0%, #30363d 100%) !important;
+}
+
+.cam-ctrl-card.volume-card.low {
+    background: linear-gradient(135deg, #1a4d2e 0%, #2d5a3d 100%) !important;
+}
+
+.cam-ctrl-card.volume-card.medium {
+    background: linear-gradient(135deg, #4d3a1a 0%, #5d4a2d 100%) !important;
+}
+
+.cam-ctrl-card.volume-card.high {
+    background: linear-gradient(135deg, #4d1a1a 0%, #5d2d2d 100%) !important;
+}
+
+.volume-compact-icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.volume-compact-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.cam-ctrl-card.volume-card .volume-label,
+.cam-ctrl-card.volume-card .volume-percentage {
+    color: #ffffff !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+}
+
+.cam-ctrl-card.volume-card .volume-percentage {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+}
+
+.cam-ctrl-card.volume-card .volume-compact-icon {
+    color: #ffffff;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+@media (max-width: 640px) {
+    .cam-ctrl-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .zoom-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "label reset"
+            "slider slider";
+        row-gap: 10px;
+        align-items: start;
+    }
+
+    .zoom-label-group {
+        grid-area: label;
+        min-width: 0;
+    }
+
+    .zoom-slider-group {
+        grid-area: slider;
+    }
+
+    .zoom-reset-btn {
+        grid-area: reset;
+        justify-self: end;
+    }
+
+    .zoom-slider-track {
+        height: 56px;
+        padding: 0;
+    }
+
+    .zoom-slider-presets {
+        height: 28px;
+    }
+
+    .exp-btn-row {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .zoom-row {
+        padding: 12px;
+    }
+
+    .zoom-label {
+        font-size: 13px;
+    }
+
+    .zoom-value {
+        font-size: 13px;
+    }
+
+    .exposure-card {
+        padding: 12px;
+    }
+
+    .exp-btn-row {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .exposure-btn,
+    .ae-lock-btn {
+        width: 32px;
+        height: 32px;
+    }
 }
 
 /* -------- NETWORK CARD -------- */
@@ -3199,7 +3713,7 @@ input[type="range"].zoom-slider::-moz-range-progress {
 /* Volume Card Styling */
 .volume-card {
     position: relative;
-    min-height: 60px;
+    min-height: 0;
 }
 
 .volume-card .card-clickable {
@@ -3259,8 +3773,8 @@ input[type="range"].zoom-slider::-moz-range-progress {
 }
 
 .volume-btn:hover {
-    border-color: #f85149;
-    color: #f85149;
+    border-color: #3d4349;
+    color: #a8b1ba;
     background: rgba(248, 81, 73, 0.1);
 }
 
@@ -3269,23 +3783,59 @@ input[type="range"].zoom-slider::-moz-range-progress {
     transform: scale(0.95);
 }
 
-/* Muted State - Gray */
-.volume-card.muted {
-    /* Inherits default card background */
-    background: inherit;
+/* Mute button specific styles */
+.volume-btn-mute {
+    border-color: #3d4349;
+    color: #8b949e;
 }
 
-.volume-card.muted .card-ios-fill {
-    background: linear-gradient(90deg, #6e7681 0%, #8b949e 100%) !important;
+.volume-btn-mute.is-muted {
+    border-color: #30363d;
+    color: #f0f6fc;
+    background: rgba(10, 15, 20, 0.8);
+}
+
+.volume-btn-mute.is-muted:hover {
+    background: rgba(20, 25, 30, 0.9);
+    border-color: #404850;
+}
+
+/* Muted State - Dark with Badge (matching battery card style) */
+.volume-card.muted {
+    background: linear-gradient(135deg, #0a0f14 0%, #121820 100%) !important;
+    position: relative;
+}
+
+.volume-card.muted::after {
+    content: 'MUTED';
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #f0f6fc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    text-transform: uppercase;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.volume-card.muted .cam-ctrl-fill {
+    background: linear-gradient(135deg, rgba(30, 35, 40, 0.3), rgba(20, 25, 30, 0.2)) !important;
+    opacity: 0.5;
 }
 
 .volume-card.muted .battery-label {
-    color: #e6edf3 !important;
+    color: #8b949e !important;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .volume-card.muted .battery-percentage {
-    color: #e6edf3 !important;
+    color: #8b949e !important;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
@@ -3412,23 +3962,23 @@ input[type="range"].zoom-slider::-moz-range-progress {
     position: relative;
     z-index: 15;
     pointer-events: auto;
-    margin-left: auto;
+    margin-left: 0;
 }
 
 .volume-btn {
     width: 32px;
     height: 32px;
-    border-radius: 6px;
-    border: 1.5px solid #3d4349;
-    background: rgba(29, 30, 32, 0.95);
-    color: #e6edf3;
+    border-radius: 50%;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #ffffff;
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 120ms ease;
+    transition: background 150ms, border-color 150ms, color 150ms, transform 100ms;
     padding: 0;
     line-height: 1;
     position: relative;
@@ -3437,23 +3987,13 @@ input[type="range"].zoom-slider::-moz-range-progress {
 }
 
 .volume-btn:hover {
-    background: rgba(248, 81, 73, 0.15);
-    border-color: #f85149;
-    color: #f85149;
-    transform: scale(1.08);
+    background: #21262d;
+    border-color: #8b949e;
+    color: #ffffff;
 }
 
 .volume-btn:active {
-    transform: scale(0.92);
-    background: rgba(248, 81, 73, 0.25);
-}
-
-.volume-btn-minus:hover {
-    color: #f85149;
-}
-
-.volume-btn-plus:hover {
-    color: #f85149;
+    transform: scale(0.90);
 }
 
 

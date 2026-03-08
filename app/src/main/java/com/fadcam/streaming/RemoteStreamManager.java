@@ -144,6 +144,16 @@ public class RemoteStreamManager {
     }
     
     /**
+     * Invalidate the status JSON cache. Call this when control state changes (exposure, AE lock, etc.)
+     * to ensure next /status request reflects the new values.
+     */
+    public void invalidateStatusCache() {
+        cachedStatusJson = null;
+        lastStatusJsonTime = 0;
+        Log.d(TAG, "🔄 Status cache invalidated - next request will generate fresh JSON");
+    }
+    
+    /**
      * Enable or disable streaming.
      * Note: Cloud status push is now handled by CloudStatusManager, which is started
      * by RemoteStreamService when server starts. This method only manages video streaming state.
@@ -835,9 +845,20 @@ public class RemoteStreamManager {
             SharedPreferencesManager spMgr = context != null ? SharedPreferencesManager.getInstance(context) : null;
             com.fadcam.CameraType activeCam = spMgr != null ? spMgr.getCameraSelection() : com.fadcam.CameraType.BACK;
             float zoomRatio = spMgr != null ? spMgr.getSpecificZoomRatio(activeCam) : 1.0f;
+            float zoomRatioMin = 0.5f;
+            float zoomRatioMax = spMgr != null ? spMgr.getMaxSupportedZoomRatio(activeCam) : 5.0f;
             float panX = spMgr != null ? spMgr.getSpecificPanX(activeCam) : 0.0f;
             float panY = spMgr != null ? spMgr.getSpecificPanY(activeCam) : 0.0f;
+            if (zoomRatio <= 1.0f) {
+                panX = 0.0f;
+                panY = 0.0f;
+            }
             int exposureCompensation = spMgr != null ? spMgr.getSavedExposureCompensation() : 0;
+            float exposureCompensationStep = spMgr != null ? spMgr.getExposureCompensationStep() : 0.33f;
+            // Compute display EV for web dashboard (backend is single source of truth)
+            float exposureCompensationDisplay = exposureCompensation * exposureCompensationStep;
+            // DIAGNOSTIC: Log exposure values before inserting into JSON
+            Log.d(TAG, "🔍 [getStatusJson] EXPOSURE DEBUG: ev=" + exposureCompensation + ", step=" + exposureCompensationStep + ", display=" + exposureCompensationDisplay);
             int exposureCompensationMin = spMgr != null ? spMgr.getExposureCompensationMin() : -12;
             int exposureCompensationMax = spMgr != null ? spMgr.getExposureCompensationMax() : 12;
             boolean mirrorEnabled = spMgr != null && spMgr.isFrontVideoMirrorEnabled();
@@ -876,8 +897,8 @@ public class RemoteStreamManager {
                 "\"streamQuality\": %s, " +
                 "\"videoCodec\": %s, " +
                 "\"cameraType\": %s, " +
-                "\"zoomRatio\": %.2f, \"panX\": %.3f, \"panY\": %.3f, " +
-                "\"exposureCompensation\": %d, \"exposureCompensationMin\": %d, \"exposureCompensationMax\": %d, " +
+                "\"zoomRatio\": %.2f, \"zoomRatioMin\": %.2f, \"zoomRatioMax\": %.2f, \"panX\": %.3f, \"panY\": %.3f, " +
+                "\"exposureCompensation\": %d, \"exposureCompensationDisplay\": %.2f, \"exposureCompensationMin\": %d, \"exposureCompensationMax\": %d, \"exposureCompensationStep\": %.2f, " +
                 "\"mirrorEnabled\": %s, \"aeLockEnabled\": %s, " +
                 "\"torchState\": %s, " +
                 "\"volume\": %d, \"maxVolume\": %d, \"volumePercentage\": %.1f, " +
@@ -912,11 +933,15 @@ public class RemoteStreamManager {
                 com.fadcam.streaming.util.JsonEscaper.escapeToJsonString(codecName),
                 com.fadcam.streaming.util.JsonEscaper.escapeToJsonString(cameraTypeName),
                 zoomRatio,
+                zoomRatioMin,
+                zoomRatioMax,
                 panX,
                 panY,
                 exposureCompensation,
+                exposureCompensationDisplay,
                 exposureCompensationMin,
                 exposureCompensationMax,
+                exposureCompensationStep,
                 mirrorEnabled,
                 aeLockEnabled,
                 isTorchOn(),  // Read from SharedPreferences to get current actual state
@@ -938,6 +963,17 @@ public class RemoteStreamManager {
                 totalDataMB
             );
             
+            // ULTRA-CRITICAL DIAGNOSTIC: Check String.format output immediately
+            if (result.length() < 100) {
+                Log.e(TAG, "❌ String.format produced tiny response: " + result.length() + " bytes");
+                Log.e(TAG, "Full result: " + result);
+            } else if (!result.contains("exposureCompensation")) {
+                Log.e(TAG, "❌ String.format result missing exposureCompensation!");
+                Log.e(TAG, "First 500 chars: " + result.substring(0, Math.min(500, result.length())));
+            } else {
+                Log.d(TAG, "✅ String.format executed, result size: " + result.length() + " bytes");
+            }
+            
             // OPTIMIZATION: Store result in cache for 1 second
             // This avoids expensive String.format() calls for repeated /status requests
             // Impact: 9 out of 10 status polls now served from cache (80% CPU reduction)
@@ -946,6 +982,23 @@ public class RemoteStreamManager {
             
             long generationTime = System.currentTimeMillis() - startTime;
             Log.d(TAG, "📊 [getStatusJson] JSON generated successfully in " + generationTime + "ms, size: " + result.length() + " bytes");
+            
+            // DIAGNOSTIC: Check if exposure fields are actually in the response
+            if (result.contains("\"exposureCompensationDisplay\"")) {
+                Log.d(TAG, "✅ [getStatusJson] exposureCompensationDisplay IS in JSON response");
+            } else {
+                Log.e(TAG, "❌ [getStatusJson] CRITICAL BUG: exposureCompensationDisplay MISSING from JSON response!");
+                Log.e(TAG, "❌ Response length: " + result.length());
+            }
+            
+            // ULTRA-DEBUG: Log the part of JSON that SHOULD contain exposure fields
+            int expIdx = result.indexOf("\"exposureCompensation\"");
+            if (expIdx > 0) {
+                String snippet = result.substring(expIdx, Math.min(expIdx + 300, result.length()));
+                Log.d(TAG, "📋 [getStatusJson] Exposure snippet:\n" + snippet);
+            } else {
+                Log.e(TAG, "❌ exposureCompensation field not found at all!");
+            }
             
             // DEBUG: Log first 350 chars to help identify JSON errors
             String preview = result.substring(0, Math.min(350, result.length()));

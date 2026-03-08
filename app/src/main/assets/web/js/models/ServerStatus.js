@@ -129,11 +129,20 @@ class ServerStatus {
 
         // Zoom and pan state
         this.zoomRatio = data.zoomRatio ?? 1.0;
+        this.zoomRatioMin = Number.isFinite(data.zoomRatioMin) ? data.zoomRatioMin : undefined;
+        this.zoomRatioMax = Number.isFinite(data.zoomRatioMax) ? data.zoomRatioMax : undefined;
         this.panX = data.panX ?? 0.0;
         this.panY = data.panY ?? 0.0;
 
-        // Exposure compensation (integer EV steps)
+        // Exposure compensation and backend-computed display value.
+        // The dashboard UI reads these normalized fields from ServerStatus,
+        // so we must preserve the raw response values instead of dropping them.
         this.exposureCompensation = data.exposureCompensation ?? 0;
+        this.exposureCompensationDisplay = data.exposureCompensationDisplay;
+        this.exposureCompensationMin = data.exposureCompensationMin;
+        this.exposureCompensationMax = data.exposureCompensationMax;
+        this.exposureCompensationStep = data.exposureCompensationStep;
+        this.aeLockEnabled = data.aeLockEnabled || false;
 
         // Front-camera mirror
         this.mirrorEnabled = data.mirrorEnabled || false;

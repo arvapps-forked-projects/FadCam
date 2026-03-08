@@ -343,49 +343,30 @@
                                 <div class="torch-label">Recording</div>
                                 <div class="torch-value" id="recordingState">STOPPED</div>
                             </div>
-                            <!-- Pause/Resume Button (visible only when recording or paused) -->
-                            <button class="recording-pause-btn" id="recordingPauseBtn" onclick="event.stopPropagation(); togglePauseRecording();" style="display: none;">
+                            <!-- Pause/Resume Button (always visible, disabled when not recording) -->
+                            <button class="recording-pause-btn" id="recordingPauseBtn" onclick="event.stopPropagation(); togglePauseRecording();" disabled title="Pause recording">
                                 <i class="fas fa-pause" id="recordingPauseBtnIcon"></i>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Volume Control Card -->
-                <div class="card-sm card-battery-ios volume-card">
-                    <div class="card-clickable battery-card-display" style="cursor: default;">
-                        <!-- Background Fill -->
-                        <div class="card-ios-fill" id="volumeFill"></div>
-                        
-                        <!-- Content Layer -->
-                        <div class="card-ios-content">
-                            <!-- Volume Icon -->
-                            <div class="card-ios-icon volume-icon">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <!-- Speaker -->
-                                    <path d="M11 5 6 9H2v6h4l5 4V5z" stroke="currentColor" stroke-width="1.5" fill="currentColor" stroke-linejoin="round"/>
-                                    <!-- Sound waves -->
-                                    <path class="volume-wave volume-wave-1" d="M15.54 8.46a5 5 0 0 1 0 7.07" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                    <path class="volume-wave volume-wave-2" d="M18.37 5.63a9 9 0 0 1 0 12.73" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            
-                            <!-- Volume Info -->
-                            <div class="battery-info-container">
-                                <div class="battery-label volume-label">Volume</div>
-                                <div class="battery-percentage volume-percentage" id="volumePercentage">0%</div>
-                            </div>
-                            
-                            <!-- Volume Control Buttons (right-aligned) -->
-                            <div class="volume-button-group">
-                                <button id="volumeMinus" class="volume-btn volume-btn-minus" onclick="volumeDecrease()" title="Decrease volume">−</button>
-                                <button id="volumePlus" class="volume-btn volume-btn-plus" onclick="volumeIncrease()" title="Increase volume">+</button>
-                            </div>
-                        </div>
+                <!-- Camera Control Card -->
+                <div class="cam-ctrl-card camera-utility-card" id="cameraCard" onclick="toggleCamera()">
+                    <div class="cam-ctrl-fill" id="cameraFill"></div>
+                    <i class="fas fa-camera-rotate cam-ctrl-icon" id="cameraIcon"></i>
+                    <div class="cam-ctrl-text">
+                        <div class="cam-ctrl-label">Camera</div>
+                        <div class="cam-ctrl-value" id="cameraState">BACK</div>
                     </div>
+                    <button class="cam-ctrl-sub-btn" id="mirrorBtn"
+                            onclick="event.stopPropagation(); toggleMirror();"
+                            style="display:none;" title="Toggle mirror">
+                        <i class="fas fa-arrows-left-right" id="mirrorIcon"></i>
+                    </button>
                 </div>
 
-                <!-- Alarm Control Card (moved to same row) -->
+                <!-- Alarm Control Card -->
                 <div class="card-sm" onclick="showAlarmModal()" id="alarmCard" style="transition: all 300ms ease; cursor: pointer;">
                     <div class="card-clickable">
                         <i class="fas fa-bell card-icon-sm" style="color: #ef4444; font-size: 18px;" id="alarmIcon"></i>
@@ -404,22 +385,31 @@
             <!-- Camera Controls: Camera Switch, Mirror, AE Lock, Zoom, Pan, Exposure -->
             <div class="camera-controls-section">
 
-                <!-- 2-column: Camera toggle card + Exposure compact card -->
+                <!-- 2-column: Volume compact card + Exposure compact card -->
                 <div class="cam-ctrl-grid">
-                    <!-- Camera toggle card -->
-                    <div class="cam-ctrl-card" id="cameraCard" onclick="toggleCamera()">
-                        <div class="cam-ctrl-fill" id="cameraFill"></div>
-                        <i class="fas fa-camera-rotate cam-ctrl-icon" id="cameraIcon"></i>
-                        <div class="cam-ctrl-text">
-                            <div class="cam-ctrl-label">Camera</div>
-                            <div class="cam-ctrl-value" id="cameraState">BACK</div>
+                    <!-- Volume compact card -->
+                    <div class="cam-ctrl-card exposure-card volume-card" id="volumeCard">
+                        <div class="cam-ctrl-fill" id="volumeFill"></div>
+                        <div class="exp-top-row">
+                            <div class="cam-ctrl-icon volume-compact-icon">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M11 5 6 9H2v6h4l5 4V5z" stroke="currentColor" stroke-width="1.5" fill="currentColor" stroke-linejoin="round"/>
+                                    <path class="volume-wave volume-wave-1" d="M15.54 8.46a5 5 0 0 1 0 7.07" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                    <path class="volume-wave volume-wave-2" d="M18.37 5.63a9 9 0 0 1 0 12.73" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="cam-ctrl-text">
+                                <div class="cam-ctrl-label volume-label">Volume</div>
+                                <div class="cam-ctrl-value volume-percentage" id="volumePercentage">0%</div>
+                            </div>
                         </div>
-                        <!-- Mirror sub-button (front camera only, like pause inside recording card) -->
-                        <button class="cam-ctrl-sub-btn" id="mirrorBtn"
-                                onclick="event.stopPropagation(); toggleMirror();"
-                                style="display:none;" title="Toggle mirror">
-                            <i class="fas fa-arrows-left-right" id="mirrorIcon"></i>
-                        </button>
+                        <div class="exp-btn-row volume-button-group">
+                            <button id="volumeMute" class="volume-btn volume-btn-mute" onclick="event.stopPropagation(); toggleVolumeMute()" title="Mute/Unmute">
+                                <i class="fas fa-volume-mute" id="volumeMuteIcon"></i>
+                            </button>
+                            <button id="volumeMinus" class="volume-btn volume-btn-minus" onclick="event.stopPropagation(); volumeDecrease()" title="Decrease volume">−</button>
+                            <button id="volumePlus" class="volume-btn volume-btn-plus" onclick="event.stopPropagation(); volumeIncrease()" title="Increase volume">+</button>
+                        </div>
                     </div>
 
                     <!-- Exposure compact card (2-row: icon+label top, buttons bottom) -->
@@ -448,14 +438,18 @@
                         <div class="zoom-label">Zoom</div>
                         <div class="zoom-value" id="zoomValue">1.0×</div>
                     </div>
-                    <div class="zoom-slider-track">
-                        <input type="range" class="zoom-slider" id="zoomSlider"
-                               min="0.5" max="10.0" step="0.1" value="1.0"
-                               oninput="onZoomSliderInput(this.value)"
-                               onchange="onZoomSliderCommit(this.value)">
+                    <div class="zoom-slider-group">
+                        <div class="zoom-slider-track">
+                            <input type="range" class="zoom-slider" id="zoomSlider"
+                                   data-static-min="0.5"
+                                   min="0" max="100" step="0.1" value="24.0"
+                                   oninput="onZoomSliderInput(this.value)"
+                                   onchange="onZoomSliderCommit(this.value)">
+                        </div>
+                        <div class="zoom-slider-presets" id="zoomSliderPresets"></div>
                     </div>
                     <button class="zoom-reset-btn" onclick="resetZoom()" title="Reset zoom">
-                        <i class="fas fa-compress-alt"></i>
+                        <i class="fas fa-undo"></i>
                     </button>
                 </div>
 
@@ -463,9 +457,15 @@
                 <div class="pan-container" id="panContainer">
                     <div class="pan-header">
                         <span class="pan-header-label">Pan</span>
-                        <button class="pan-reset-btn" onclick="resetPan()">Reset</button>
+                        <button class="pan-reset-btn" onclick="resetPan()" title="Reset pan">
+                            <i class="fas fa-undo"></i>
+                        </button>
                     </div>
                     <div class="pan-area" id="panArea">
+                        <div class="pan-label pan-label-up">↑</div>
+                        <div class="pan-label pan-label-down">↓</div>
+                        <div class="pan-label pan-label-left">←</div>
+                        <div class="pan-label pan-label-right">→</div>
                         <div class="pan-thumb" id="panThumb"></div>
                     </div>
                 </div>
@@ -1221,15 +1221,49 @@
             checkConfirmation(field, incomingValue) {
                 const entry = this.entries[field];
                 if (!entry) return false;
-                
-                // For percentages, allow small tolerance (±5%)
-                const tolerance = typeof entry.expectedValue === 'number' ? 5 : 0;
-                const matches = typeof entry.expectedValue === 'number' 
-                    ? Math.abs(incomingValue - entry.expectedValue) <= tolerance
-                    : incomingValue === entry.expectedValue;
+
+                const getTolerance = (targetField, key = null) => {
+                    if (targetField === 'volumePercentage') return 5;
+                    if (targetField === 'zoomRatio') {
+                        return key === 'ratio' ? 0.05 : 0.05;
+                    }
+                    return 0;
+                };
+
+                let matches = false;
+                if (typeof entry.expectedValue === 'number' && typeof incomingValue === 'number') {
+                    matches = Math.abs(incomingValue - entry.expectedValue) <= getTolerance(field);
+                } else if (
+                    typeof entry.expectedValue === 'number' &&
+                    incomingValue &&
+                    typeof incomingValue === 'object' &&
+                    typeof incomingValue.ratio === 'number'
+                ) {
+                    matches = Math.abs(incomingValue.ratio - entry.expectedValue) <= getTolerance(field, 'ratio');
+                } else if (
+                    entry.expectedValue &&
+                    typeof entry.expectedValue === 'object' &&
+                    incomingValue &&
+                    typeof incomingValue === 'object'
+                ) {
+                    const expected = entry.expectedValue;
+                    matches = true;
+
+                    if (typeof expected.ratio === 'number') {
+                        matches = matches && Math.abs((incomingValue.ratio ?? NaN) - expected.ratio) <= getTolerance(field, 'ratio');
+                    }
+                    if (typeof expected.panX === 'number') {
+                        matches = matches && Math.abs((incomingValue.panX ?? NaN) - expected.panX) <= getTolerance(field, 'panX');
+                    }
+                    if (typeof expected.panY === 'number') {
+                        matches = matches && Math.abs((incomingValue.panY ?? NaN) - expected.panY) <= getTolerance(field, 'panY');
+                    }
+                } else {
+                    matches = incomingValue === entry.expectedValue;
+                }
                 
                 if (matches) {
-                    console.log(`[Executing] ${field} CONFIRMED! Expected: ${entry.expectedValue}, Got: ${incomingValue}`);
+                    console.log(`[Executing] ${field} CONFIRMED! Expected:`, entry.expectedValue, 'Got:', incomingValue);
                     this.stop(field);
                     return true;
                 }
@@ -1452,6 +1486,8 @@
             const volumeFill = document.getElementById('volumeFill');
             const volumePercentage = document.getElementById('volumePercentage');
             const volumeWaves = document.querySelectorAll('.volume-wave');
+            const muteBtnIcon = document.getElementById('volumeMuteIcon');
+            const muteBtn = document.getElementById('volumeMute');
             
             // Return early if elements don't exist yet
             if (!volumeFill || !volumePercentage) {
@@ -1466,6 +1502,17 @@
             
             // Update text displays
             volumePercentage.textContent = Math.round(percent) + '%';
+            
+            // Update mute button icon and state
+            if (muteBtn && muteBtnIcon) {
+                if (percent === 0) {
+                    muteBtnIcon.className = 'fas fa-volume-off';
+                    muteBtn.classList.add('is-muted');
+                } else {
+                    muteBtnIcon.className = 'fas fa-volume-mute';
+                    muteBtn.classList.remove('is-muted');
+                }
+            }
             
             // Determine color based on volume level: Green (0-33%) → Orange (33-66%) → Red (66%+)
             const volumeCard = document.querySelector('.volume-card');
@@ -1807,6 +1854,25 @@
             const currentPercent = parseInt(volumePercentageEl.textContent) || 0;
             const newPercent = Math.min(100, currentPercent + 5);
             setVolume(newPercent);
+        }
+
+        /**
+         * Toggle volume mute - saves previous volume or restores it
+         */
+        let lastNonZeroVolume = 50; // Default to medium if not set
+        async function toggleVolumeMute() {
+            const volumePercentageEl = document.getElementById('volumePercentage');
+            if (!volumePercentageEl) return;
+            const currentPercent = parseInt(volumePercentageEl.textContent) || 0;
+            
+            if (currentPercent === 0) {
+                // Unmute - restore last non-zero volume or use default
+                setVolume(lastNonZeroVolume);
+            } else {
+                // Mute - save current volume and set to 0
+                lastNonZeroVolume = currentPercent;
+                setVolume(0);
+            }
         }
 
         async function setBatteryWarning() {
@@ -2272,6 +2338,11 @@
 
             const currentIsFront = currentStatus?.cameraType?.toLowerCase() === 'front';
             const expectedNew = currentIsFront ? 'back' : 'front';
+            
+            // Add switching animation class
+            cameraCard.classList.add('switching');
+            setTimeout(() => cameraCard.classList.remove('switching'), 400);
+            
             executingState.start('cameraType', expectedNew, '#cameraCard');
 
             try {
@@ -2280,6 +2351,7 @@
             } catch (error) {
                 console.error('[Camera] Failed to switch:', error);
                 executingState.stop('cameraType');
+                cameraCard.classList.remove('switching');
                 showToast('Failed to switch camera');
             }
         }
@@ -2288,28 +2360,271 @@
 
         let _zoomDebounce = null;
         let _pendingPanX = 0, _pendingPanY = 0;
+        let _lastConfirmedPanX = 0, _lastConfirmedPanY = 0;
+
+        /**
+         * Update pan reset button disabled state based on whether pan has changed from center
+         */
+        function updatePanResetButtonState() {
+            const panResetBtn = document.querySelector('.pan-reset-btn');
+            if (panResetBtn) {
+                const isPanChanged = Math.abs(_pendingPanX) > 0.01 || Math.abs(_pendingPanY) > 0.01;
+                panResetBtn.disabled = !isPanChanged;
+            }
+        }
+
+        function getZoomPresetValues(min, max) {
+            const midpoint = Math.round((((min + max) / 2) * 2)) / 2;
+            const candidates = [min];
+
+            if (min < 1 && max >= 1) {
+                candidates.push(1.0);
+            }
+
+            if (midpoint > min + 0.001 && midpoint < max - 0.001) {
+                candidates.push(midpoint);
+            }
+
+            candidates.push(max);
+
+            return [...new Set(candidates
+                .map(value => Number(value.toFixed(1)))
+                .filter(value => value >= min - 0.001 && value <= max + 0.001))]
+                .sort((left, right) => left - right);
+        }
+
+        function getZoomPresetLayout(min, max) {
+            const presetValues = getZoomPresetValues(min, max);
+            let presetPositions = presetValues.map((value) => ({
+                value,
+                pct: max > min ? ((value - min) / (max - min) * 100) : 0
+            }));
+
+            if (
+                presetValues.length === 4 &&
+                Math.abs(presetValues[0] - 0.5) < 0.001 &&
+                Math.abs(presetValues[1] - 1.0) < 0.001
+            ) {
+                const anchorPositions = [0, 24, 64, 100];
+                presetPositions = presetValues.map((value, index) => ({
+                    value,
+                    pct: anchorPositions[index]
+                }));
+            } else if (presetPositions.length > 1) {
+                const minGapPct = 14;
+                presetPositions[0].pct = 0;
+                presetPositions[presetPositions.length - 1].pct = 100;
+
+                for (let index = 1; index < presetPositions.length; index += 1) {
+                    presetPositions[index].pct = Math.max(
+                        presetPositions[index].pct,
+                        presetPositions[index - 1].pct + minGapPct
+                    );
+                }
+
+                for (let index = presetPositions.length - 2; index >= 0; index -= 1) {
+                    presetPositions[index].pct = Math.min(
+                        presetPositions[index].pct,
+                        presetPositions[index + 1].pct - minGapPct
+                    );
+                }
+
+                presetPositions[0].pct = 0;
+                presetPositions[presetPositions.length - 1].pct = 100;
+            }
+
+            return presetPositions;
+        }
+
+        function mapSliderPositionToZoomValue(position, min, max) {
+            const layout = getZoomPresetLayout(min, max);
+            const clampedPosition = Math.max(0, Math.min(100, position));
+
+            if (layout.length === 0) {
+                return min;
+            }
+
+            if (clampedPosition <= layout[0].pct) {
+                return layout[0].value;
+            }
+
+            for (let index = 1; index < layout.length; index += 1) {
+                const previous = layout[index - 1];
+                const current = layout[index];
+                if (clampedPosition <= current.pct) {
+                    if (
+                        index === 1 &&
+                        Math.abs(previous.value - 0.5) < 0.001 &&
+                        Math.abs(current.value - 1.0) < 0.001
+                    ) {
+                        const midPoint = previous.pct + ((current.pct - previous.pct) / 2);
+                        return clampedPosition < midPoint ? previous.value : current.value;
+                    }
+                    const pctRange = Math.max(0.001, current.pct - previous.pct);
+                    const t = (clampedPosition - previous.pct) / pctRange;
+                    return previous.value + (current.value - previous.value) * t;
+                }
+            }
+
+            return layout[layout.length - 1].value;
+        }
+
+        function mapZoomValueToSliderPosition(value, min, max) {
+            const layout = getZoomPresetLayout(min, max);
+            const clampedValue = Math.max(min, Math.min(max, value));
+
+            if (layout.length === 0) {
+                return 0;
+            }
+
+            if (clampedValue <= layout[0].value) {
+                return layout[0].pct;
+            }
+
+            for (let index = 1; index < layout.length; index += 1) {
+                const previous = layout[index - 1];
+                const current = layout[index];
+                if (clampedValue <= current.value) {
+                    const valueRange = Math.max(0.001, current.value - previous.value);
+                    const t = (clampedValue - previous.value) / valueRange;
+                    return previous.pct + (current.pct - previous.pct) * t;
+                }
+            }
+
+            return layout[layout.length - 1].pct;
+        }
+
+        function getZoomMarkerLeftCss(pct) {
+            const thumbWidthPx = 16;
+            const centerOffsetPx = (thumbWidthPx / 2) - ((pct / 100) * thumbWidthPx);
+            return 'calc(' + pct.toFixed(1) + '% + ' + centerOffsetPx.toFixed(1) + 'px)';
+        }
+
+        function normalizeZoomSliderValue(value, snapToPreset = false) {
+            const slider = document.getElementById('zoomSlider');
+            const min = parseFloat(slider?.dataset.staticMin || '0.5') || 0.5;
+            const max = parseFloat(slider?.dataset.zoomMax || '10') || 10.0;
+            const sliderPosition = Math.max(0, Math.min(100, parseFloat(value) || 0));
+            let normalized = mapSliderPositionToZoomValue(sliderPosition, min, max);
+
+            if (snapToPreset) {
+                const snapThreshold = 4;
+                for (const preset of getZoomPresetLayout(min, max)) {
+                    if (Math.abs(sliderPosition - preset.pct) <= snapThreshold) {
+                        normalized = preset.value;
+                        break;
+                    }
+                }
+            }
+
+            return Math.round(normalized * 10) / 10;
+        }
+
+        function normalizeActualZoomValue(value, snapToPreset = false) {
+            const slider = document.getElementById('zoomSlider');
+            const min = parseFloat(slider?.dataset.staticMin || '0.5') || 0.5;
+            const max = parseFloat(slider?.dataset.zoomMax || '10') || 10.0;
+            let normalized = Math.max(min, Math.min(max, parseFloat(value) || min));
+
+            if (normalized < 1.0) {
+                normalized = normalized < 0.75 ? 0.5 : 1.0;
+            }
+
+            if (snapToPreset) {
+                const snapThreshold = 0.05;
+                for (const preset of getZoomPresetLayout(min, max)) {
+                    if (Math.abs(normalized - preset.value) <= snapThreshold) {
+                        normalized = preset.value;
+                        break;
+                    }
+                }
+            }
+
+            return Math.round(normalized * 10) / 10;
+        }
+
+        function updateZoomPresetState(value) {
+            const normalized = Number(value.toFixed(1));
+            document.querySelectorAll('.zoom-slider-preset').forEach((button) => {
+                const presetValue = parseFloat(button.dataset.value || '0');
+                button.classList.toggle('is-active', Math.abs(presetValue - normalized) < 0.05);
+            });
+        }
+
+        function updateZoomSliderVisuals(value, snapToPreset = false) {
+            const slider = document.getElementById('zoomSlider');
+            const normalized = normalizeActualZoomValue(value, snapToPreset);
+            const zoomValueEl = document.getElementById('zoomValue');
+            const resetBtn = document.querySelector('.zoom-reset-btn');
+
+            if (zoomValueEl) {
+                zoomValueEl.textContent = normalized.toFixed(1) + '×';
+            }
+
+            // Toggle pan container visibility and auto-scroll to it when it appears
+            const panContainer = document.getElementById('panContainer');
+            const wasHidden = panContainer && !panContainer.classList.contains('visible');
+            const shouldShow = normalized > 1.0;
+            
+            panContainer?.classList.toggle('visible', shouldShow);
+            
+            // Auto-scroll to pan container when it becomes visible
+            if (wasHidden && shouldShow && panContainer) {
+                setTimeout(() => {
+                    panContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
+
+            if (resetBtn) {
+                resetBtn.disabled = Math.abs(normalized - 1.0) < 0.01;
+            }
+
+            if (slider) {
+                const min = parseFloat(slider.dataset.staticMin || '0.5') || 0.5;
+                const max = parseFloat(slider.dataset.zoomMax || '10') || 10.0;
+                const sliderPosition = mapZoomValueToSliderPosition(normalized, min, max);
+                slider.value = sliderPosition.toFixed(1);
+                slider.style.setProperty('--zoom-pct', sliderPosition.toFixed(1) + '%');
+            }
+
+            updateZoomPresetState(normalized);
+            return normalized;
+        }
+
+        function renderZoomSliderPresets() {
+            const slider = document.getElementById('zoomSlider');
+            const presets = document.getElementById('zoomSliderPresets');
+            if (!slider || !presets) {
+                return;
+            }
+
+            const min = parseFloat(slider.dataset.staticMin || '0.5') || 0.5;
+            const max = parseFloat(slider.dataset.zoomMax || '10') || 10.0;
+            const presetPositions = getZoomPresetLayout(min, max);
+
+            presets.innerHTML = presetPositions
+                .map((preset, index) => {
+                    const edgeClass = preset.pct <= 0.1 ? ' is-edge-start' : (preset.pct >= 99.9 ? ' is-edge-end' : '');
+                    return '<button type="button" class="zoom-slider-preset' + edgeClass + '" data-value="' + preset.value.toFixed(1) + '" style="left:' + getZoomMarkerLeftCss(preset.pct) + '" onclick="setZoomPreset(' + preset.value.toFixed(1) + ')"><span class="zoom-slider-preset-tick"></span><span class="zoom-slider-preset-label">' + preset.value.toFixed(1) + '×</span></button>';
+                })
+                .join('');
+
+            updateZoomPresetState(normalizeZoomSliderValue(slider.value, false));
+        }
+
+        async function setZoomPreset(value) {
+            const ratio = updateZoomSliderVisuals(value, true);
+            await onZoomSliderCommit(ratio);
+        }
 
         /** Called continuously while slider is dragged – just updates label/track, no API call. */
         function onZoomSliderInput(value) {
-            const v = parseFloat(value);
-            // Show target value during drag (not sent to server yet)
-            const el = document.getElementById('zoomValue');
-            if (el) el.textContent = v.toFixed(1) + '×';
-            // Pan container visible only when zoom > 1
-            document.getElementById('panContainer')?.classList.toggle('visible', v > 1.0);
-            // Update filled-track CSS variable
-            const slider = document.getElementById('zoomSlider');
-            if (slider) {
-                const min = parseFloat(slider.min) || 0.5;
-                const max = parseFloat(slider.max) || 10.0;
-                const pct = ((v - min) / (max - min) * 100).toFixed(1);
-                slider.style.setProperty('--zoom-pct', pct + '%');
-            }
+            updateZoomSliderVisuals(normalizeZoomSliderValue(value, true), true);
         }
 
         /** Called on slider mouseup/touchend – commits ONLY zoom (no pan – preserves phone’s saved pan). */
         async function onZoomSliderCommit(value) {
-            const ratio = parseFloat(value);
+            const ratio = updateZoomSliderVisuals(normalizeZoomSliderValue(value, true), true);
             clearTimeout(_zoomDebounce);
             _zoomDebounce = null;
             // Wait for server confirmation before allowing updateUI to overwrite slider
@@ -2345,14 +2660,15 @@
                 thumb.style.top  = (ry * 100) + '%';
                 _pendingPanX = panX;
                 _pendingPanY = panY;
+                updatePanResetButtonState();
             }
 
             function onDragEnd() {
                 if (!dragging) return;
                 dragging = false;
                 // Commit zoom + pan together; executingState guards against updateUI snapback
-                const ratio = parseFloat(document.getElementById('zoomSlider')?.value || 1);
-                executingState.start('zoomRatio', ratio, '.zoom-row');
+                const ratio = normalizeZoomSliderValue(document.getElementById('zoomSlider')?.value || 0, false);
+                executingState.start('zoomRatio', { ratio, panX: _pendingPanX, panY: _pendingPanY }, '.zoom-row');
                 dashboardViewModel.setZoom(ratio, _pendingPanX, _pendingPanY)
                     .catch(() => {
                         executingState.stop('zoomRatio');
@@ -2373,8 +2689,9 @@
             _pendingPanX = 0; _pendingPanY = 0;
             const thumb = document.getElementById('panThumb');
             if (thumb) { thumb.style.left = '50%'; thumb.style.top = '50%'; }
-            const ratio = parseFloat(document.getElementById('zoomSlider')?.value || 1);
-            executingState.start('zoomRatio', ratio, '.zoom-row');
+            updatePanResetButtonState();
+            const ratio = normalizeZoomSliderValue(document.getElementById('zoomSlider')?.value || 0, false);
+            executingState.start('zoomRatio', { ratio, panX: 0, panY: 0 }, '.zoom-row');
             try {
                 await dashboardViewModel.setZoom(ratio, 0, 0);
             } catch (e) {
@@ -2386,17 +2703,10 @@
         /** Reset zoom to 1× and centre pan. */
         async function resetZoom() {
             _pendingPanX = 0; _pendingPanY = 0;
-            const slider = document.getElementById('zoomSlider');
             const thumb = document.getElementById('panThumb');
-            if (slider) {
-                slider.value = 1.0;
-                slider.style.setProperty('--zoom-pct', '5.6%');
-            }
-            const zoomValEl = document.getElementById('zoomValue');
-            if (zoomValEl) zoomValEl.textContent = '1.0×';
+            updateZoomSliderVisuals(1.0);
             if (thumb) { thumb.style.left = '50%'; thumb.style.top = '50%'; }
-            document.getElementById('panContainer')?.classList.remove('visible');
-            executingState.start('zoomRatio', 1.0, '.zoom-row');
+            executingState.start('zoomRatio', { ratio: 1.0, panX: 0, panY: 0 }, '.zoom-row');
             try {
                 await dashboardViewModel.setZoom(1.0, 0, 0);
             } catch (e) {
@@ -2407,25 +2717,37 @@
 
         // ─── Exposure ──────────────────────────────────────────────────────────
 
-        let _currentEv = 0;
-        let _evMin = -12;  // Updated from status when device reports range
-        let _evMax = 12;
+        let _currentEv = 0;           // Current index for state tracking only
+        let _evMin = -5;              // Min index (updated from status)
+        let _evMax = 5;               // Max index (updated from status)
+        let _evStep = 0.33;           // EV per index (updated from status)
+        let _currentDisplayEv = 0;    // Current display value from server (this is what we display)
 
         async function adjustExposure(delta) {
             // Compute target EV (don’t write to _currentEv yet – wait for backend confirmation)
-            const targetEv = Math.max(_evMin, Math.min(_evMax, _currentEv + delta));
+            const targetIndex = Math.max(_evMin, Math.min(_evMax, _currentEv + delta));
             const el = document.getElementById('exposureValue');
-            // Show target value as visual feedback (like torch shows intended state)
-            if (el) el.textContent = (targetEv > 0 ? '+' : '') + targetEv;
-            executingState.start('exposureCompensation', targetEv, '.exposure-card');
+            // Show loading state while waiting for server
+            if (el) el.textContent = '...';
+            executingState.start('exposureCompensation', targetIndex, '#exposureCard');
             try {
-                await dashboardViewModel.setExposure(targetEv);
-                _currentEv = targetEv; // Mark confirmed locally too
+                const result = await dashboardViewModel.setExposure(targetIndex);
+                // Server response is authoritative - use display value directly
+                if (result && result.evDisplay !== undefined) {
+                    _currentDisplayEv = parseFloat(result.evDisplay);
+                    _currentEv = targetIndex;
+                    executingState.stop('exposureCompensation');
+                    if (el) el.textContent = (_currentDisplayEv > 0 ? '+' : '') + _currentDisplayEv.toFixed(1);
+                    console.log('[Exposure] Display from POST response: ' + _currentDisplayEv.toFixed(1) + ' EV');
+                } else {
+                    _currentEv = targetIndex;
+                    if (el) el.textContent = '?';
+                    console.warn('[Exposure] Waiting for status poll...');
+                }
             } catch (e) {
-                // Revert label display on failure
-                if (el) el.textContent = (_currentEv > 0 ? '+' : '') + _currentEv;
+                if (el) el.textContent = _currentDisplayEv > 0 ? '+' + _currentDisplayEv.toFixed(1) : _currentDisplayEv.toFixed(1);
                 executingState.stop('exposureCompensation');
-                showToast('Failed to set exposure');
+                showToast('Failed to adjust exposure');
             }
         }
 
@@ -2447,9 +2769,25 @@
 
         async function toggleAeLock() {
             const newState = !currentStatus?.aeLockEnabled;
-            executingState.start('aeLockEnabled', newState, '#aeLockBtn');
+            // Show overlay on the main exposure card (not just the lock icon button)
+            executingState.start('aeLockEnabled', newState, '#exposureCard');
             try {
-                await dashboardViewModel.toggleAeLock();
+                const result = await dashboardViewModel.toggleAeLock();
+                
+                // If server returned actual state in response, use it immediately (avoids 8s timeout)
+                // This matches how toggleTorch works - no need to wait for status poll
+                if (result && result.aeLockEnabled !== undefined) {
+                    const actualState = result.aeLockEnabled;
+                    executingState.stop('aeLockEnabled');
+                    if (currentStatus) {
+                        currentStatus.aeLockEnabled = actualState;
+                    }
+                    console.log('[AE Lock] Server confirmed:', actualState);
+                    updateUI(currentStatus);
+                } else {
+                    // No state in response - will wait for status poll confirmation
+                    console.log('[AE Lock] No aeLockEnabled in response, waiting for status poll...');
+                }
             } catch (e) {
                 executingState.stop('aeLockEnabled');
                 showToast('Failed to toggle AE lock');
@@ -2848,16 +3186,13 @@
 
             // Zoom / Pan / Exposure / Mirror / AE Lock – reset when offline
             const sliderEl = document.getElementById('zoomSlider');
-            if (sliderEl) { sliderEl.value = 1.0; sliderEl.style.setProperty('--zoom-pct', '10.5%'); }
-            const zoomValEl = document.getElementById('zoomValue');
-            if (zoomValEl) zoomValEl.textContent = '1.0×';
-            document.getElementById('panContainer')?.classList.remove('visible');
+            if (sliderEl) { updateZoomSliderVisuals(1.0); }
             const panThumbEl = document.getElementById('panThumb');
             if (panThumbEl) { panThumbEl.style.left = '50%'; panThumbEl.style.top = '50%'; }
             _pendingPanX = 0; _pendingPanY = 0;
             _currentEv = 0;
             const evEl = document.getElementById('exposureValue');
-            if (evEl) evEl.textContent = 'EV 0';
+            if (evEl) evEl.textContent = '+0.0';
             const mirrorBtnOffline = document.getElementById('mirrorBtn');
             if (mirrorBtnOffline) { mirrorBtnOffline.style.display = 'none'; mirrorBtnOffline.classList.remove('active'); }
             // AE lock – reset
@@ -2971,7 +3306,11 @@
                 }
             }
             if (executingState.isExecuting('zoomRatio')) {
-                if (executingState.checkConfirmation('zoomRatio', parseFloat(status.zoomRatio))) {
+                if (executingState.checkConfirmation('zoomRatio', {
+                    ratio: parseFloat(status.zoomRatio),
+                    panX: parseFloat(status.panX),
+                    panY: parseFloat(status.panY)
+                })) {
                     console.log('[Status] Zoom CONFIRMED by server poll');
                 }
             }
@@ -3330,9 +3669,9 @@
                         if (recordingIcon) {
                             recordingIcon.className = 'fas fa-pause recording-icon-fa';
                         }
-                        // Show resume button
+                        // Enable resume button
                         if (pauseBtn) {
-                            pauseBtn.style.display = '';
+                            pauseBtn.disabled = false;
                             pauseBtn.title = 'Resume recording';
                         }
                         if (pauseBtnIcon) {
@@ -3345,9 +3684,9 @@
                         if (recordingIcon) {
                             recordingIcon.className = 'fas fa-circle recording-icon-fa';
                         }
-                        // Show pause button
+                        // Enable pause button
                         if (pauseBtn) {
-                            pauseBtn.style.display = '';
+                            pauseBtn.disabled = false;
                             pauseBtn.title = 'Pause recording';
                         }
                         if (pauseBtnIcon) {
@@ -3360,9 +3699,9 @@
                         if (recordingIcon) {
                             recordingIcon.className = 'fas fa-circle recording-icon-fa';
                         }
-                        // Hide pause button when not recording
+                        // Disable pause button when not recording
                         if (pauseBtn) {
-                            pauseBtn.style.display = 'none';
+                            pauseBtn.disabled = true;
                         }
                     }
                 }
@@ -3388,17 +3727,24 @@
                 // Sync zoom slider — skip if we're still waiting for server confirmation
                 if (status.zoomRatio !== undefined && !executingState.isExecuting('zoomRatio')) {
                     const sliderEl = document.getElementById('zoomSlider');
-                    const zoomValEl = document.getElementById('zoomValue');
                     if (sliderEl) {
-                        sliderEl.value = status.zoomRatio;
-                        // Update Material fill via CSS variable
-                        const min = parseFloat(sliderEl.min) || 0.5;
-                        const max = parseFloat(sliderEl.max) || 10.0;
-                        const pct = ((parseFloat(status.zoomRatio) - min) / (max - min) * 100).toFixed(1);
-                        sliderEl.style.setProperty('--zoom-pct', pct + '%');
+                        const nextSliderMin = '0';
+                        const nextSliderMax = '100';
+                        const nextZoomMax = Number.isFinite(Number(status.zoomRatioMax))
+                            ? Number(status.zoomRatioMax).toFixed(1)
+                            : (sliderEl.dataset.zoomMax || '10.0');
+                        if (
+                            sliderEl.min !== nextSliderMin ||
+                            sliderEl.max !== nextSliderMax ||
+                            sliderEl.dataset.zoomMax !== nextZoomMax
+                        ) {
+                            sliderEl.min = nextSliderMin;
+                            sliderEl.max = nextSliderMax;
+                            sliderEl.dataset.zoomMax = nextZoomMax;
+                            renderZoomSliderPresets();
+                        }
+                        updateZoomSliderVisuals(parseFloat(status.zoomRatio));
                     }
-                    if (zoomValEl) zoomValEl.textContent = parseFloat(status.zoomRatio).toFixed(1) + '×';
-                    document.getElementById('panContainer')?.classList.toggle('visible', status.zoomRatio > 1.0);
                 }
 
                 // Sync pan thumb — skip while zoom is executing (pan could also be in-flight)
@@ -3412,13 +3758,22 @@
                     }
                 }
 
-                // Sync exposure — always update EV range; skip display if still executing
+                // Sync exposure — always update EV range and step; use backend display value directly
                 if (status.exposureCompensationMin !== undefined) _evMin = status.exposureCompensationMin;
                 if (status.exposureCompensationMax !== undefined) _evMax = status.exposureCompensationMax;
+                if (status.exposureCompensationStep !== undefined) _evStep = status.exposureCompensationStep;
                 if (status.exposureCompensation !== undefined && !executingState.isExecuting('exposureCompensation')) {
                     _currentEv = status.exposureCompensation;
+                    _currentDisplayEv = status.exposureCompensationDisplay || 0;  // Store the display value from server
                     const evEl = document.getElementById('exposureValue');
-                    if (evEl) evEl.textContent = (_currentEv > 0 ? '+' : '') + _currentEv;
+                    // CRITICAL: Use ONLY what server sends - no client-side conversion
+                    if (status.exposureCompensationDisplay !== undefined) {
+                        const displayEv = status.exposureCompensationDisplay;
+                        if (evEl) evEl.textContent = (displayEv > 0 ? '+' : '') + displayEv.toFixed(1);
+                        console.log('[Exposure] Status tells us: Display=' + displayEv.toFixed(1) + ' EV');
+                    } else {
+                        console.warn('[Exposure] WARNING: Server did not send exposureCompensationDisplay! Using Index=' + _currentEv);
+                    }
                 }
 
                 // AE lock button (in exposure row)
@@ -4545,6 +4900,12 @@
                 return;
             }
 
+            const zoomSlider = document.getElementById('zoomSlider');
+            if (zoomSlider) {
+                zoomSlider.dataset.zoomMax = '10.0';
+            }
+            renderZoomSliderPresets();
+            updateZoomSliderVisuals(1.0);
             dashboardViewModel = new DashboardViewModel();
             
             // Track last activity time for auto-lock timeout
