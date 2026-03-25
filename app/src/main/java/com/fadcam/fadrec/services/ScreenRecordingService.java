@@ -1,5 +1,7 @@
 package com.fadcam.fadrec.services;
 
+import com.fadcam.Log;
+import com.fadcam.FLog;
 import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -9,6 +11,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.content.pm.PackageManager;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
@@ -19,13 +22,13 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.WindowManager;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.fadcam.Constants;
@@ -70,6 +73,8 @@ public class ScreenRecordingService extends Service {
     private long recordingStartTime;
     private long pauseStartTime; // Track when pause started
     private long totalPausedTime; // Accumulate total paused duration
+    private boolean forceNoAudioForThisStart = false;
+    private boolean enableAudioForSession = false;
     
     // Configuration
     private SharedPreferencesManager sharedPreferencesManager;
@@ -92,7 +97,7 @@ public class ScreenRecordingService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "onCreate: ScreenRecordingService creating...");
+        FLog.d(TAG, "onCreate: ScreenRecordingService creating...");
         
         // Initialize SharedPreferencesManager
         sharedPreferencesManager = SharedPreferencesManager.getInstance(getApplicationContext());
@@ -100,7 +105,7 @@ public class ScreenRecordingService extends Service {
         // Initialize MediaProjectionManager
         mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         if (mediaProjectionManager == null) {
-            Log.e(TAG, "Failed to get MediaProjectionManager");
+            FLog.e(TAG, "Failed to get MediaProjectionManager");
             stopSelf();
             return;
         }
@@ -118,25 +123,25 @@ public class ScreenRecordingService extends Service {
             screenWidth = metrics.widthPixels;
             screenHeight = metrics.heightPixels;
             screenDensity = metrics.densityDpi;
-            Log.d(TAG, String.format("Screen metrics: %dx%d @%ddpi", screenWidth, screenHeight, screenDensity));
+            FLog.d(TAG, String.format("Screen metrics: %dx%d @%ddpi", screenWidth, screenHeight, screenDensity));
         }
         
         // Create notification channel
         createNotificationChannel();
         
-        Log.d(TAG, "ScreenRecordingService created successfully");
+        FLog.d(TAG, "ScreenRecordingService created successfully");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) {
-            Log.w(TAG, "onStartCommand: null intent, stopping service");
+            FLog.w(TAG, "onStartCommand: null intent, stopping service");
             stopSelf();
             return START_NOT_STICKY;
         }
 
         String action = intent.getAction();
-        // Log.d(TAG, "onStartCommand: action=" + action);
+        // FLog.d(TAG, "onStartCommand: action=" + action);
 
         if (action == null) {
             stopSelf();
@@ -169,7 +174,7 @@ public class ScreenRecordingService extends Service {
                 break;
                 
             default:
-                Log.w(TAG, "Unknown action: " + action);
+                FLog.w(TAG, "Unknown action: " + action);
                 break;
         }
 
@@ -181,7 +186,7 @@ public class ScreenRecordingService extends Service {
      * Used by UI to reconcile stale persisted state after app updates/crashes.
      */
     private void handleQueryRecordingState() {
-        Log.d(TAG, "handleQueryRecordingState: state=" + recordingState);
+        FLog.d(TAG, "handleQueryRecordingState: state=" + recordingState);
 
         // Broadcast current state
         Intent stateIntent = new Intent(Constants.BROADCAST_ON_SCREEN_RECORDING_STATE_CALLBACK);
@@ -194,10 +199,10 @@ public class ScreenRecordingService extends Service {
      * Initializes MediaProjection and starts screen recording.
      */
     private void handleStartRecording(Intent intent) {
-        Log.d(TAG, "handleStartRecording: Starting screen recording");
+        FLog.d(TAG, "handleStartRecording: Starting screen recording");
         
         if (recordingState != ScreenRecordingState.NONE) {
-            Log.w(TAG, "Recording already in progress, ignoring start request");
+            FLog.w(TAG, "Recording already in progress, ignoring start request");
             return;
         }
         
@@ -213,16 +218,20 @@ public class ScreenRecordingService extends Service {
         
         // Get MediaProjection result data from intent
         int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
+        forceNoAudioForThisStart = intent.getBooleanExtra(
+            Constants.EXTRA_SCREEN_RECORDING_FORCE_NO_AUDIO,
+            false
+        );
         
         // RESULT_OK is -1, RESULT_CANCELED is 0
         if (resultCode != Activity.RESULT_OK) {
-            Log.e(TAG, "MediaProjection permission denied - resultCode: " + resultCode);
+            FLog.e(TAG, "MediaProjection permission denied - resultCode: " + resultCode);
             Toast.makeText(this, "Screen recording permission required", Toast.LENGTH_SHORT).show();
             stopSelf();
             return;
         }
         
-        Log.d(TAG, "Got resultCode: " + resultCode + " (RESULT_OK), creating MediaProjection");
+        FLog.d(TAG, "Got resultCode: " + resultCode + " (RESULT_OK), creating MediaProjection");
         
         // Initialize MediaProjection using the intent data
         try {
@@ -231,38 +240,38 @@ public class ScreenRecordingService extends Service {
             
             if (permissionIntent == null) {
                 // Fallback: Use the original intent (if extras were copied correctly)
-                Log.d(TAG, "permissionData not found, using intent extras directly");
+                FLog.d(TAG, "permissionData not found, using intent extras directly");
                 permissionIntent = intent;
             }
             
-            Log.d(TAG, "Creating MediaProjection with intent: " + (permissionIntent != null ? "valid" : "null"));
+            FLog.d(TAG, "Creating MediaProjection with intent: " + (permissionIntent != null ? "valid" : "null"));
             
             mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, permissionIntent);
             if (mediaProjection == null) {
                 String error = "MediaProjectionManager.getMediaProjection() returned null (permission may have been revoked)";
-                Log.e(TAG, error);
+                FLog.e(TAG, error);
                 throw new RuntimeException(error);
             }
             
-            Log.d(TAG, "MediaProjection created successfully");
+            FLog.d(TAG, "MediaProjection created successfully");
             
             // Set up callback for when MediaProjection stops
             mediaProjection.registerCallback(new MediaProjection.Callback() {
                 @Override
                 public void onStop() {
-                    Log.d(TAG, "MediaProjection stopped externally");
+                    FLog.d(TAG, "MediaProjection stopped externally");
                     handleStopRecording();
                 }
             }, backgroundHandler);
             
         } catch (SecurityException e) {
-            Log.e(TAG, "SecurityException creating MediaProjection - permission may have been revoked", e);
+            FLog.e(TAG, "SecurityException creating MediaProjection - permission may have been revoked", e);
             Toast.makeText(this, "Permission error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             stopSelf();
             return;
         } catch (Exception e) {
             String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            Log.e(TAG, "Error creating MediaProjection: " + errorMsg, e);
+            FLog.e(TAG, "Error creating MediaProjection: " + errorMsg, e);
             Toast.makeText(this, "MediaProjection error: " + errorMsg, Toast.LENGTH_SHORT).show();
             stopSelf();
             return;
@@ -274,14 +283,14 @@ public class ScreenRecordingService extends Service {
                 startScreenRecording();
             } catch (IOException e) {
                 String errorMsg = e.getMessage() != null ? e.getMessage() : "I/O error";
-                Log.e(TAG, "IOException starting screen recording: " + errorMsg, e);
+                FLog.e(TAG, "IOException starting screen recording: " + errorMsg, e);
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Recording failed: " + errorMsg, Toast.LENGTH_SHORT).show();
                     stopSelf();
                 });
             } catch (Exception e) {
                 String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                Log.e(TAG, "Error starting screen recording: " + errorMsg, e);
+                FLog.e(TAG, "Error starting screen recording: " + errorMsg, e);
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Recording failed: " + errorMsg, Toast.LENGTH_SHORT).show();
                     stopSelf();
@@ -295,7 +304,7 @@ public class ScreenRecordingService extends Service {
      * Initializes ScreenRecordingPipeline using MediaCodec + FragmentedMp4Muxer for crash-safe fMP4 output.
      */
     private void startScreenRecording() throws IOException {
-        Log.d(TAG, "startScreenRecording: Initializing ScreenRecordingPipeline");
+        FLog.d(TAG, "startScreenRecording: Initializing ScreenRecordingPipeline");
         
         // Validate MediaProjection
         if (mediaProjection == null) {
@@ -311,13 +320,26 @@ public class ScreenRecordingService extends Service {
         
         // Get audio config
         String audioSource = sharedPreferencesManager.getScreenRecordingAudioSource();
-        boolean enableAudio = Constants.AUDIO_SOURCE_MIC.equals(audioSource);
+        boolean prefersAudio = Constants.AUDIO_SOURCE_MIC.equals(audioSource);
+        boolean hasMicPermission = ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED;
+        boolean enableAudio = prefersAudio && !forceNoAudioForThisStart && hasMicPermission;
+        enableAudioForSession = enableAudio;
         boolean initialMuted = sharedPreferencesManager.isScreenRecordingMuted();
+        if (prefersAudio && !hasMicPermission) {
+            FLog.w(TAG, "Mic permission missing - forcing muted screen recording");
+            sharedPreferencesManager.setScreenRecordingMuted(true);
+        }
+        if (forceNoAudioForThisStart) {
+            FLog.d(TAG, "Force-no-audio flag set for this recording session");
+        }
         
         // Calculate bitrate based on resolution
         int calculatedBitrate = calculateBitrate(screenWidth, screenHeight);
         
-        Log.d(TAG, String.format("Video config: %dx%d @%dfps, bitrate=%d, audio=%s",
+        FLog.d(TAG, String.format("Video config: %dx%d @%dfps, bitrate=%d, audio=%s",
             screenWidth, screenHeight,
             Constants.DEFAULT_SCREEN_RECORDING_FPS,
             calculatedBitrate,
@@ -334,20 +356,20 @@ public class ScreenRecordingService extends Service {
             
             // Use FileDescriptor for SAF mode, file path for internal storage
             if (safRecordingPfd != null) {
-                Log.d(TAG, "Using SAF FileDescriptor for output");
+                FLog.d(TAG, "Using SAF FileDescriptor for output");
                 pipelineBuilder.setOutputFileDescriptor(safRecordingPfd.getFileDescriptor());
             } else {
-                Log.d(TAG, "Using internal storage file path for output");
+                FLog.d(TAG, "Using internal storage file path for output");
                 pipelineBuilder.setOutputFile(outputFile.getAbsolutePath());
             }
             
             recordingPipeline = pipelineBuilder.build();
             recordingPipeline.setAudioMuted(initialMuted);
             
-            Log.d(TAG, "ScreenRecordingPipeline built successfully");
+            FLog.d(TAG, "ScreenRecordingPipeline built successfully");
             
         } catch (IOException e) {
-            Log.e(TAG, "Failed to build ScreenRecordingPipeline", e);
+            FLog.e(TAG, "Failed to build ScreenRecordingPipeline", e);
             throw new IOException("Pipeline build error: " + e.getMessage(), e);
         }
         
@@ -369,7 +391,7 @@ public class ScreenRecordingService extends Service {
                 .putLong("screen_recording_start_time", recordingStartTime)
                 .apply();
             
-            // Log.i(TAG, "Screen recording started successfully");
+            // FLog.i(TAG, "Screen recording started successfully");
             
             // Update UI on main thread
             mainHandler.post(() -> {
@@ -377,9 +399,11 @@ public class ScreenRecordingService extends Service {
                 acquireWakeLock();
                 
                 // Start foreground service with notification
-                startForeground(NOTIFICATION_ID, createNotification(), 
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION | 
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+                int fgTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION;
+                if (enableAudioForSession) {
+                    fgTypes |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+                }
+                startForeground(NOTIFICATION_ID, createNotification(), fgTypes);
                 
                 // Start notification updates
                 startNotificationUpdates();
@@ -396,20 +420,20 @@ public class ScreenRecordingService extends Service {
             if (outputFile != null) {
                 try {
                     com.fadcam.streaming.RemoteStreamManager.getInstance().startRecording(outputFile);
-                    Log.i(TAG, "🎬 RemoteStreamManager notified: screen recording started");
+                    FLog.i(TAG, "🎬 RemoteStreamManager notified: screen recording started");
                 } catch (Exception e) {
-                    Log.e(TAG, "Failed to notify RemoteStreamManager", e);
+                    FLog.e(TAG, "Failed to notify RemoteStreamManager", e);
                 }
             }
             
         } catch (IllegalStateException e) {
-            Log.e(TAG, "IllegalStateException - Pipeline in wrong state: " + e.getMessage(), e);
+            FLog.e(TAG, "IllegalStateException - Pipeline in wrong state: " + e.getMessage(), e);
             cleanupPipeline();
             recordingState = ScreenRecordingState.NONE;
             sharedPreferencesManager.setScreenRecordingState(ScreenRecordingState.NONE.name());
             throw new IOException("Pipeline error: " + e.getMessage(), e);
         } catch (Exception e) {
-            Log.e(TAG, "Unexpected error starting pipeline: " + e.getMessage(), e);
+            FLog.e(TAG, "Unexpected error starting pipeline: " + e.getMessage(), e);
             cleanupPipeline();
             recordingState = ScreenRecordingState.NONE;
             sharedPreferencesManager.setScreenRecordingState(ScreenRecordingState.NONE.name());
@@ -426,7 +450,7 @@ public class ScreenRecordingService extends Service {
         Intent broadcast = new Intent(Constants.BROADCAST_ON_SCREEN_RECORDING_MUTE_CHANGED);
         broadcast.putExtra(Constants.EXTRA_SCREEN_RECORDING_MUTED, muted);
         LocalBroadcastManager.getInstance(this).sendBroadcast(broadcast);
-        Log.d(TAG, "Screen recording mute updated: " + muted);
+        FLog.d(TAG, "Screen recording mute updated: " + muted);
     }
     
     /**
@@ -448,7 +472,7 @@ public class ScreenRecordingService extends Service {
             try {
                 recordingPipeline.release();
             } catch (Exception e) {
-                Log.e(TAG, "Error releasing pipeline", e);
+                FLog.e(TAG, "Error releasing pipeline", e);
             }
             recordingPipeline = null;
         }
@@ -457,7 +481,7 @@ public class ScreenRecordingService extends Service {
             try {
                 mediaProjection.stop();
             } catch (Exception e) {
-                Log.e(TAG, "Error stopping MediaProjection", e);
+                FLog.e(TAG, "Error stopping MediaProjection", e);
             }
             mediaProjection = null;
         }
@@ -466,9 +490,9 @@ public class ScreenRecordingService extends Service {
         if (safRecordingPfd != null) {
             try {
                 safRecordingPfd.close();
-                Log.d(TAG, "SAF ParcelFileDescriptor closed");
+                FLog.d(TAG, "SAF ParcelFileDescriptor closed");
             } catch (Exception e) {
-                Log.e(TAG, "Error closing SAF ParcelFileDescriptor", e);
+                FLog.e(TAG, "Error closing SAF ParcelFileDescriptor", e);
             }
             safRecordingPfd = null;
         }
@@ -478,10 +502,10 @@ public class ScreenRecordingService extends Service {
      * Handles stop recording request.
      */
     private void handleStopRecording() {
-        Log.d(TAG, "handleStopRecording: Stopping screen recording");
+        FLog.d(TAG, "handleStopRecording: Stopping screen recording");
         
         if (recordingState == ScreenRecordingState.NONE) {
-            Log.w(TAG, "No recording in progress");
+            FLog.w(TAG, "No recording in progress");
             return;
         }
         
@@ -494,28 +518,30 @@ public class ScreenRecordingService extends Service {
      * Stops the screen recording and releases resources.
      */
     private void stopScreenRecording() {
-        Log.d(TAG, "stopScreenRecording: Finalizing recording");
+        FLog.d(TAG, "stopScreenRecording: Finalizing recording");
         
         try {
             // Stop recording pipeline
             if (recordingPipeline != null) {
                 try {
                     recordingPipeline.stopRecording();
-                    Log.d(TAG, "Recording pipeline stopped");
+                    FLog.d(TAG, "Recording pipeline stopped");
                 } catch (RuntimeException e) {
-                    Log.w(TAG, "Pipeline stop failed: " + e.getMessage());
+                    FLog.w(TAG, "Pipeline stop failed: " + e.getMessage());
                 }
             }
             
             // Cleanup resources
             cleanupPipeline();
+            forceNoAudioForThisStart = false;
+            enableAudioForSession = false;
 
             // Persist state on background thread before any UI callbacks.
             sharedPreferencesManager.setScreenRecordingState(ScreenRecordingState.NONE.name());
             
             // Calculate duration
             long duration = SystemClock.elapsedRealtime() - recordingStartTime;
-            Log.i(TAG, String.format("Recording stopped. Duration: %.1f seconds", duration / 1000.0));
+            FLog.i(TAG, String.format("Recording stopped. Duration: %.1f seconds", duration / 1000.0));
             
             // Update UI on main thread
             mainHandler.post(() -> {
@@ -551,9 +577,9 @@ public class ScreenRecordingService extends Service {
                             recordingCompleteIntent.putExtra("videoUri", safRecordingUri.toString());
                         }
                         sendBroadcast(recordingCompleteIntent);
-                        Log.d(TAG, "Broadcasted ACTION_RECORDING_COMPLETE for list refresh");
+                        FLog.d(TAG, "Broadcasted ACTION_RECORDING_COMPLETE for list refresh");
                     } catch (Exception e) {
-                        Log.e(TAG, "Error broadcasting recording complete", e);
+                        FLog.e(TAG, "Error broadcasting recording complete", e);
                     }
                     
                     // Show completion notification with action to view recording
@@ -570,7 +596,7 @@ public class ScreenRecordingService extends Service {
             });
             
         } catch (Exception e) {
-            Log.e(TAG, "Error stopping screen recording", e);
+            FLog.e(TAG, "Error stopping screen recording", e);
             sharedPreferencesManager.setScreenRecordingState(ScreenRecordingState.NONE.name());
             mainHandler.post(() -> stopSelf());
         }
@@ -580,10 +606,10 @@ public class ScreenRecordingService extends Service {
      * Handles pause recording request.
      */
     private void handlePauseRecording() {
-        Log.d(TAG, "handlePauseRecording: Pausing screen recording");
+        FLog.d(TAG, "handlePauseRecording: Pausing screen recording");
         
         if (recordingState != ScreenRecordingState.IN_PROGRESS) {
-            Log.w(TAG, "Cannot pause: not in progress");
+            FLog.w(TAG, "Cannot pause: not in progress");
             return;
         }
         
@@ -597,7 +623,7 @@ public class ScreenRecordingService extends Service {
                 
                 // Record when pause started
                 pauseStartTime = SystemClock.elapsedRealtime();
-                Log.d(TAG, "Pause started at: " + pauseStartTime);
+                FLog.d(TAG, "Pause started at: " + pauseStartTime);
                 
                 // Stop notification updates while paused
                 stopNotificationUpdates();
@@ -608,12 +634,12 @@ public class ScreenRecordingService extends Service {
                 // Broadcast paused
                 broadcastRecordingPaused();
                 
-                Log.i(TAG, "Screen recording paused");
+                FLog.i(TAG, "Screen recording paused");
             } catch (Exception e) {
-                Log.e(TAG, "Error pausing recording", e);
+                FLog.e(TAG, "Error pausing recording", e);
             }
         } else {
-            Log.w(TAG, "Pause not supported on Android < N");
+            FLog.w(TAG, "Pause not supported on Android < N");
         }
     }
 
@@ -621,10 +647,10 @@ public class ScreenRecordingService extends Service {
      * Handles resume recording request.
      */
     private void handleResumeRecording() {
-        Log.d(TAG, "handleResumeRecording: Resuming screen recording");
+        FLog.d(TAG, "handleResumeRecording: Resuming screen recording");
         
         if (recordingState != ScreenRecordingState.PAUSED) {
-            Log.w(TAG, "Cannot resume: not paused");
+            FLog.w(TAG, "Cannot resume: not paused");
             return;
         }
         
@@ -650,8 +676,8 @@ public class ScreenRecordingService extends Service {
                         .putLong("screen_recording_start_time", recordingStartTime)
                         .apply();
                     
-                    Log.d(TAG, "Pause duration: " + pauseDuration + "ms, total paused: " + totalPausedTime + "ms");
-                    Log.d(TAG, "Adjusted start time to: " + recordingStartTime);
+                    FLog.d(TAG, "Pause duration: " + pauseDuration + "ms, total paused: " + totalPausedTime + "ms");
+                    FLog.d(TAG, "Adjusted start time to: " + recordingStartTime);
                     
                     pauseStartTime = 0; // Reset
                 }
@@ -665,9 +691,9 @@ public class ScreenRecordingService extends Service {
                 // Broadcast resumed
                 broadcastRecordingResumed();
                 
-                Log.i(TAG, "Screen recording resumed");
+                FLog.i(TAG, "Screen recording resumed");
             } catch (Exception e) {
-                Log.e(TAG, "Error resuming recording", e);
+                FLog.e(TAG, "Error resuming recording", e);
             }
         }
     }
@@ -710,7 +736,7 @@ public class ScreenRecordingService extends Service {
             if (SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode)) {
                 String customUriString = sharedPreferencesManager.getCustomStorageUri();
                 if (customUriString == null) {
-                    Log.e(TAG, "Custom storage selected but URI is null, falling back to internal");
+                    FLog.e(TAG, "Custom storage selected but URI is null, falling back to internal");
                     // Fall through to internal storage
                 } else {
                     androidx.documentfile.provider.DocumentFile pickedDir =
@@ -722,7 +748,7 @@ public class ScreenRecordingService extends Service {
                         );
                     
                     if (pickedDir == null || !pickedDir.canWrite()) {
-                        Log.e(TAG, "Cannot write to custom directory, falling back to internal");
+                        FLog.e(TAG, "Cannot write to custom directory, falling back to internal");
                         Toast.makeText(this, "Cannot write to custom directory", Toast.LENGTH_LONG).show();
                         // Fall through to internal storage
                     } else {
@@ -731,20 +757,20 @@ public class ScreenRecordingService extends Service {
                             pickedDir.createFile("video/" + Constants.RECORDING_FILE_EXTENSION, baseFilename);
                         
                         if (videoFile == null) {
-                            Log.e(TAG, "Failed to create SAF file");
+                            FLog.e(TAG, "Failed to create SAF file");
                             Toast.makeText(this, "Failed to create file in custom location", Toast.LENGTH_LONG).show();
                             // Fall through to internal storage
                         } else {
                             // Open ParcelFileDescriptor for the SAF file
                             safRecordingPfd = getContentResolver().openFileDescriptor(videoFile.getUri(), "w");
                             if (safRecordingPfd == null) {
-                                Log.e(TAG, "Failed to open ParcelFileDescriptor for SAF URI");
+                                FLog.e(TAG, "Failed to open ParcelFileDescriptor for SAF URI");
                                 Toast.makeText(this, "Failed to open file for writing", Toast.LENGTH_LONG).show();
                                 // Fall through to internal storage
                             } else {
                                 // Store SAF URI for completion notification/broadcasting
                                 safRecordingUri = videoFile.getUri();
-                                Log.d(TAG, "SAF output file created: " + safRecordingUri);
+                                FLog.d(TAG, "SAF output file created: " + safRecordingUri);
                                 // Return null to indicate SAF mode (use safRecordingPfd instead)
                                 return null;
                             }
@@ -760,16 +786,16 @@ public class ScreenRecordingService extends Service {
                 true
             );
             if (videoDir == null) {
-                Log.e(TAG, "Cannot create Screen directory in recording root");
+                FLog.e(TAG, "Cannot create Screen directory in recording root");
                 Toast.makeText(this, "Error creating recording directory", Toast.LENGTH_LONG).show();
                 return null;
             }
             
             File file = new File(videoDir, baseFilename);
-            Log.d(TAG, "Output file (internal): " + file.getAbsolutePath());
+            FLog.d(TAG, "Output file (internal): " + file.getAbsolutePath());
             return file;
         } catch (Exception e) {
-            Log.e(TAG, "Error creating output file", e);
+            FLog.e(TAG, "Error creating output file", e);
             return null;
         }
     }
@@ -790,7 +816,7 @@ public class ScreenRecordingService extends Service {
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             if (notificationManager != null) {
                 notificationManager.createNotificationChannel(channel);
-                Log.d(TAG, "Notification channel created");
+                FLog.d(TAG, "Notification channel created");
             }
         }
     }
@@ -857,7 +883,7 @@ public class ScreenRecordingService extends Service {
             (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         
         if (notificationManager == null) {
-            Log.e(TAG, "NotificationManager is null, cannot show completion notification");
+            FLog.e(TAG, "NotificationManager is null, cannot show completion notification");
             return;
         }
         
@@ -888,7 +914,7 @@ public class ScreenRecordingService extends Service {
         
         // Show notification with unique ID (not the ongoing recording notification ID)
         notificationManager.notify(NOTIFICATION_ID + 1, builder.build());
-        Log.d(TAG, "Completion notification shown");
+        FLog.d(TAG, "Completion notification shown");
     }
 
     /**
@@ -961,7 +987,7 @@ public class ScreenRecordingService extends Service {
                     "FadCam:ScreenRecordingWakeLock"
                 );
                 recordingWakeLock.acquire(10 * 60 * 60 * 1000L); // 10 hours max
-                Log.d(TAG, "WakeLock acquired");
+                FLog.d(TAG, "WakeLock acquired");
             }
         }
     }
@@ -973,7 +999,7 @@ public class ScreenRecordingService extends Service {
         if (recordingWakeLock != null && recordingWakeLock.isHeld()) {
             recordingWakeLock.release();
             recordingWakeLock = null;
-            Log.d(TAG, "WakeLock released");
+            FLog.d(TAG, "WakeLock released");
         }
     }
 
@@ -1022,7 +1048,7 @@ public class ScreenRecordingService extends Service {
 
     @Override
     public void onDestroy() {
-        Log.d(TAG, "onDestroy: Cleaning up");
+        FLog.d(TAG, "onDestroy: Cleaning up");
         
         // Stop recording if still in progress
         if (recordingState != ScreenRecordingState.NONE) {
@@ -1039,13 +1065,13 @@ public class ScreenRecordingService extends Service {
             try {
                 backgroundThread.join();
             } catch (InterruptedException e) {
-                Log.e(TAG, "Error joining background thread", e);
+                FLog.e(TAG, "Error joining background thread", e);
             }
             backgroundThread = null;
             backgroundHandler = null;
         }
         
-        Log.d(TAG, "ScreenRecordingService destroyed");
+        FLog.d(TAG, "ScreenRecordingService destroyed");
         super.onDestroy();
     }
 
