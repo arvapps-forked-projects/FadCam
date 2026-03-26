@@ -1649,6 +1649,16 @@ public class RecordingService extends Service {
                 }
                 safRecordingPfd = null;
             }
+            // ⚠️ Also close segment PFD if it exists
+            if (currentSegmentParcelFileDescriptor != null) {
+                try {
+                    currentSegmentParcelFileDescriptor.close();
+                    FLog.d(TAG, "Closed current segment ParcelFileDescriptor during early cleanup");
+                } catch (Exception e) {
+                    FLog.e(TAG, "Error closing segment PFD during early cleanup", e);
+                }
+                currentSegmentParcelFileDescriptor = null;
+            }
             isStopping = false; // Reset stopping flag if we're already stopped
             return;
         }
@@ -1824,6 +1834,18 @@ public class RecordingService extends Service {
                             FLog.e(TAG, "Error closing SAF ParcelFileDescriptor (background thread)", e);
                         }
                         safRecordingPfd = null;
+                    }
+                    
+                    // ⚠️ CRITICAL: Close current segment PFD for video splitting (SAF mode)
+                    // This keeps the PFD alive during segment rollover to prevent EBADF errors
+                    if (currentSegmentParcelFileDescriptor != null) {
+                        try {
+                            currentSegmentParcelFileDescriptor.close();
+                            FLog.d(TAG, "Closed current segment ParcelFileDescriptor after recording");
+                        } catch (Exception e) {
+                            FLog.e(TAG, "Error closing current segment PFD", e);
+                        }
+                        currentSegmentParcelFileDescriptor = null;
                     }
                     // -----
                     // Check if service can stop
@@ -2231,6 +2253,17 @@ public class RecordingService extends Service {
                 FLog.e(TAG, "Error closing SAF ParcelFileDescriptor (resource cleanup)", e);
             }
             safRecordingPfd = null;
+        }
+        
+        // ⚠️ CRITICAL: Close segment PFD for video splitting (SAF mode)
+        if (currentSegmentParcelFileDescriptor != null) {
+            try {
+                currentSegmentParcelFileDescriptor.close();
+                FLog.d(TAG, "Closed current segment ParcelFileDescriptor (resource cleanup)");
+            } catch (Exception e) {
+                FLog.e(TAG, "Error closing segment PFD (resource cleanup)", e);
+            }
+            currentSegmentParcelFileDescriptor = null;
         }
         // -----
         recordingState = RecordingState.NONE;
@@ -5699,6 +5732,16 @@ public class RecordingService extends Service {
     private String currentSegmentPath;
     private String currentSegmentUriString;
     
+    // ⚠️ CRITICAL: Track ParcelFileDescriptors for SAF segments to prevent premature closure
+    // The try-with-resources was auto-closing the PFD while the raw FileDescriptor was still
+    // being used by the GL pipeline, causing EBADF (Bad File Descriptor) errors on write.
+    // Keep TWO references:
+    // - currentSegmentParcelFileDescriptor: NEW PFD that GL pipeline will use
+    // - previousSegmentParcelFileDescriptor: OLD PFD that old muxer is still finalizing
+    // Only close previousSegmentParcelFileDescriptor AFTER old muxer is completely stopped
+    private ParcelFileDescriptor currentSegmentParcelFileDescriptor;
+    private ParcelFileDescriptor previousSegmentParcelFileDescriptor;
+    
     // Track all temporary files created during STREAM_ONLY mode for cleanup
     // In STREAM_ONLY, 0-byte segment files are created (GL pipeline needs a handle)
     // but no data is written. All of them must be deleted when recording stops.
@@ -5777,21 +5820,57 @@ public class RecordingService extends Service {
                     streamOnlySafUris.add(safUri.toString());
                     FLog.i(TAG, "📺 STREAM_ONLY (SAF rollover): Tracking temp URI: " + safUri);
                 }
-                try (ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(safUri, "w")) {
+                
+                // ⚠️ CRITICAL FIX v2: Defer closing old PFD until muxer is completely done
+                // Timeline:
+                // 1. onSegmentRollover(N) called - GL pipeline switches to new segment
+                // 2. Old muxer (segment N-1) still needs its PFD for async finalization
+                // 3. onSegmentRollover(N+1) called - NOW it's safe to close segment N-1's PFD
+                //    because GLRecordingPipeline has already completed rollover for segment N
+                
+                // Close the PREVIOUS segment's PFD (segment N-1)
+                // Safe because GL pipeline finished handling it during the last transition
+                if (previousSegmentParcelFileDescriptor != null) {
+                    try {
+                        previousSegmentParcelFileDescriptor.close();
+                        FLog.d(TAG, "Closed previous-previous segment's ParcelFileDescriptor (deferred close)");
+                    } catch (Exception e) {
+                        FLog.w(TAG, "Error closing deferred PFD", e);
+                    }
+                    previousSegmentParcelFileDescriptor = null;
+                }
+                
+                // Move current PFD to previous before opening new one
+                previousSegmentParcelFileDescriptor = currentSegmentParcelFileDescriptor;
+                currentSegmentParcelFileDescriptor = null;
+                
+                // Now open the new PFD for the new segment
+                try {
+                    ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(safUri, "w");
                     if (pfd == null) {
                         FLog.e(TAG, "Segment rollover: Failed to open ParcelFileDescriptor for SAF URI");
                         stopRecording();
                         return;
                     }
+                    
+                    // Store the NEW PFD as current
+                    currentSegmentParcelFileDescriptor = pfd;
                     FLog.d(TAG, "Successfully created new segment file with SAF: " + videoFile.getName());
+                    
                     if (glRecordingPipeline != null) {
+                        // Pass the raw FileDescriptor to the pipeline
+                        // The ParcelFileDescriptor wrapper stays alive in currentSegmentParcelFileDescriptor
                         glRecordingPipeline.setNextOutput(null, pfd.getFileDescriptor());
                         FLog.d(TAG, "Set next output to file descriptor for segment " + nextSegmentNumber);
                     } else {
                         FLog.e(TAG, "glRecordingPipeline is null, cannot set next output");
+                        // Clean up the PFD if we can't use it
+                        pfd.close();
+                        currentSegmentParcelFileDescriptor = null;
                     }
                 } catch (Exception e) {
                     FLog.e(TAG, "Segment rollover: Exception opening PFD for SAF URI", e);
+                    currentSegmentParcelFileDescriptor = null;
                     stopRecording();
                 }
             } else {
