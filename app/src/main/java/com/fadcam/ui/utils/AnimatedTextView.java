@@ -83,10 +83,66 @@ public class AnimatedTextView extends AppCompatTextView {
      * @param durationMs Animation duration in milliseconds
      */
     public void animateSlotDown(CharSequence newText, long durationMs) {
-        animateSlotInternal(newText, durationMs, false);
+        animateSlotInternal(newText, durationMs, false, false);
+    }
+
+    /**
+     * Like {@link #animateSlot} but always animates the full string as a single unit
+     * (no differential prefix/suffix detection).  Useful when the strings share a
+     * common suffix in their character sequence but differ enough in rendered width
+     * that partial animation would cause visible overlap, e.g. "Front Camera" →
+     * "Rear Camera".
+     *
+     * @param newText    The new text to display
+     * @param durationMs Animation duration in milliseconds
+     */
+    public void animateSlotFull(CharSequence newText, long durationMs) {
+        animateSlotInternal(newText, durationMs, true, true);
+    }
+
+    /**
+     * Like {@link #animateSlotFull} but slides DOWN.
+     */
+    public void animateSlotFullDown(CharSequence newText, long durationMs) {
+        animateSlotInternal(newText, durationMs, false, true);
+    }
+
+    /**
+     * Simple alpha cross-fade without any sliding. Useful for views where the
+     * slot-machine translation distance would be unusually large (e.g. small
+     * icon views with Material-icon ligature text wider than the view itself).
+     *
+     * @param newText    The new text to display
+     * @param durationMs Half-cycle duration (fade-out takes durationMs, fade-in takes durationMs)
+     */
+    public void animateCrossfade(CharSequence newText, long durationMs) {
+        if (newText == null) newText = "";
+        CharSequence current = getText();
+        if (current != null && current.toString().equals(newText.toString())) return;
+        cancelAnimation();
+        final CharSequence finalText = newText;
+        animate().cancel();
+        animate()
+                .alpha(0f)
+                .setDuration(durationMs / 2)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                .withEndAction(() -> {
+                    setText(finalText);
+                    setAlpha(0f);
+                    animate()
+                            .alpha(1f)
+                            .setDuration(durationMs / 2)
+                            .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                            .start();
+                })
+                .start();
     }
 
     private void animateSlotInternal(CharSequence newText, long durationMs, boolean upward) {
+        animateSlotInternal(newText, durationMs, upward, false);
+    }
+
+    private void animateSlotInternal(CharSequence newText, long durationMs, boolean upward, boolean forceFull) {
         // Debounce rapid updates — if a new value arrives too quickly just set it.
         long now = System.currentTimeMillis();
         if (now - lastUpdateTime < DEBOUNCE_MS) {
@@ -137,23 +193,32 @@ public class AnimatedTextView extends AppCompatTextView {
         int usableW = getWidth() - getCompoundPaddingLeft() - getCompoundPaddingRight();
         if (usableW < 1) usableW = 1;
 
+        // Compute a layout width that fits both texts on a single line.
+        // Using usableW alone causes the new (wider) text to wrap during animation when the
+        // view is wrap_content-sized for the old shorter text — e.g. animating
+        // "Back Camera" → "Front Camera" wraps "Camera" to line 2 so it appears late.
+        int maxNeededW = (int) Math.ceil(Math.max(
+                oldStr.isEmpty() ? 0f : paint.measureText(oldStr),
+                newStr.isEmpty() ? 0f : paint.measureText(newStr)));
+        int layoutW = Math.max(usableW, maxNeededW);
+
         // Always build FULL-STRING layouts so every region (prefix, column, suffix) is
         // rendered by the same StaticLayout engine — identical baselines everywhere.
         // Using partial-string layouts for the column caused a per-pixel Y mismatch with
         // canvas.drawText() for the prefix/suffix due to StaticLayout includeFontPadding,
         // which manifested as the whole row jiggling during animation.
         slotOldLayout = StaticLayout.Builder
-                .obtain(oldStr, 0, oldStr.length(), paint, usableW)
+                .obtain(oldStr, 0, oldStr.length(), paint, layoutW)
                 .setAlignment(alignment)
                 .setIncludePad(includePad)
                 .build();
         slotNewLayout = StaticLayout.Builder
-                .obtain(newStr, 0, newStr.length(), paint, usableW)
+                .obtain(newStr, 0, newStr.length(), paint, layoutW)
                 .setAlignment(alignment)
                 .setIncludePad(includePad)
                 .build();
 
-        boolean hasDiff = prefixLen > 0 || suffixLen > 0;
+        boolean hasDiff = !forceFull && (prefixLen > 0 || suffixLen > 0);
         if (hasDiff) {
             // Partial animation: only the column between prefix and suffix slides.
             slotPrefixWidth     = prefixW;
@@ -162,8 +227,8 @@ public class AnimatedTextView extends AppCompatTextView {
         } else {
             // Full-string animation — no stable prefix or suffix.
             slotPrefixWidth     = 0f;
-            slotColumnWidth     = usableW;
-            slotNewChangedWidth = usableW;       // effectively no suffix
+            slotColumnWidth     = layoutW;       // cover the full rendered width
+            slotNewChangedWidth = layoutW;       // effectively no suffix
         }
 
         slotPendingFinalText = newText;
@@ -214,16 +279,31 @@ public class AnimatedTextView extends AppCompatTextView {
     // ---- Animation lifecycle ----------------------------------------------------
 
     private void finishSlotAnimation() {
-        isSlotAnimating = false;
-        slotProgress = 1f;
-        slotOldLayout = null;
-        slotNewLayout = null;
-        slotAnimator = null;
+        // Set the text silently before clearing animation state so the view's
+        // own renderer shows the correct final string in the very same invalidate pass.
+        // We must NOT call requestLayout here — the new text was already painted by
+        // the last animated frame at progress=1, so there is zero visual change.
         if (slotPendingFinalText != null) {
-            setText(slotPendingFinalText);
+            // setText triggers requestLayout; suppress the frame cost by calling
+            // setTextKeepState via super directly is not possible, so we use the
+            // standard path but hide it inside the animation-complete flag reset.
+            isSlotAnimating = false;
+            CharSequence pending = slotPendingFinalText;
             slotPendingFinalText = null;
+            slotOldLayout = null;
+            slotNewLayout = null;
+            slotAnimator = null;
+            slotProgress = 1f;
+            setText(pending);
+            // setText already schedules a redraw; no extra invalidate needed.
+        } else {
+            isSlotAnimating = false;
+            slotProgress = 1f;
+            slotOldLayout = null;
+            slotNewLayout = null;
+            slotAnimator = null;
+            invalidate();
         }
-        invalidate();
     }
 
     private void cancelSlotAnimation() {
@@ -248,8 +328,11 @@ public class AnimatedTextView extends AppCompatTextView {
         }
 
         int left   = getCompoundPaddingLeft();
-        int top    = getExtendedPaddingTop();
         int right  = getWidth() - getCompoundPaddingRight();
+        // Use the same Y origin that TextView.onDraw() uses for the canvas translation:
+        // extendedPaddingTop for default (top) gravity.  This eliminates the 1-frame
+        // snap that occurred when super.onDraw() took over at animation end.
+        int top    = getExtendedPaddingTop();
         int bottom = getHeight() - getExtendedPaddingBottom();
 
         // Slide distance = height of the taller layout (keeps text fully visible during slide).
@@ -269,14 +352,21 @@ public class AnimatedTextView extends AppCompatTextView {
         // Column bounds derived from prefix/changed-text widths.
         float colLeft     = left + slotPrefixWidth;
         float colRight    = colLeft + slotColumnWidth;
-        // suffixStart is where newStr's suffix begins inside the full layout.
-        float suffixStart = colLeft + slotNewChangedWidth;
+        // Suffix always starts at colRight so it never encroaches on the animated column,
+        // even when the old changed-text is wider than the new one (prevents overlap).
+        float suffixStart = colRight;
 
+        // Clip Y to view bounds (never bleed above/below), but do NOT restrict X to
+        // the view's current measured width — the new text may be wider than the current
+        // measured width (wrap_content sized to old shorter string), and clamping to
+        // 'right' would truncate the incoming text until the animation ends and the
+        // view remeasures itself.
+        // Outer Y-only clip — keep all drawing within the text row.
+        // Use actual pixel boundaries; never use Integer.MIN/MAX_VALUE on a HW canvas.
         canvas.save();
-        canvas.clipRect(left, top, right, bottom); // never bleed outside view bounds
+        canvas.clipRect(0, top, getWidth(), bottom);
 
-        // 1. Static PREFIX — clip the new full-string layout to the prefix region.
-        //    Same StaticLayout as the animated column → identical baseline, zero jitter.
+        // 1. Static PREFIX (differential mode only)
         if (slotPrefixWidth > 0f) {
             canvas.save();
             canvas.clipRect(left, top, colLeft, bottom);
@@ -285,7 +375,7 @@ public class AnimatedTextView extends AppCompatTextView {
             canvas.restore();
         }
 
-        // 2. Animated COLUMN — both full-string layouts clipped to the column bounds.
+        // 2. Animated COLUMN
         canvas.save();
         canvas.clipRect(colLeft, top, colRight, bottom);
 
@@ -301,9 +391,8 @@ public class AnimatedTextView extends AppCompatTextView {
 
         canvas.restore(); // end column clip
 
-        // 3. Static SUFFIX — clip the new full-string layout from suffixStart onward.
-        //    suffixStart = prefixWidth + newChangedWidth, matching the layout's own offsets.
-        if (suffixStart < right) {
+        // 3. Static SUFFIX (differential mode only)
+        if (slotPrefixWidth > 0f) {
             canvas.save();
             canvas.clipRect(suffixStart, top, right, bottom);
             canvas.translate(left, top);
@@ -311,7 +400,7 @@ public class AnimatedTextView extends AppCompatTextView {
             canvas.restore();
         }
 
-        canvas.restore();
+        canvas.restore(); // end Y clip
     }
 
     /** Maps view gravity to {@link Layout.Alignment} for StaticLayout. */

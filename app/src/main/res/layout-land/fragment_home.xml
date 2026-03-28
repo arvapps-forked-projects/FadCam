@@ -110,13 +110,13 @@
                         <!-- Camera Row -->
                         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
 
-                            <TextView android:id="@+id/ivCameraIcon" android:layout_width="28dp" android:layout_height="28dp" android:layout_marginEnd="4dp" android:fontFamily="@font/materialicons" android:text="camera_alt" android:textColor="#4CAF50" android:textSize="20sp" android:gravity="center" />
+                            <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/ivCameraIcon" android:layout_width="28dp" android:layout_height="28dp" android:layout_marginEnd="4dp" android:fontFamily="@font/materialicons" android:text="camera_alt" android:textColor="#4CAF50" android:textSize="20sp" android:gravity="center" />
 
                             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="4dp">
 
-                                <TextView android:id="@+id/tvCameraTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Rear Camera" android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" />
+                                <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/tvCameraTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Rear Camera" android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" />
 
-                                <TextView android:id="@+id/tvCameraSubtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="4K • 60fps" android:textColor="#B0B0B0" android:textSize="11sp" />
+                                <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/tvCameraSubtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="4K • 60fps" android:textColor="#B0B0B0" android:textSize="11sp" />
                             </LinearLayout>
                         </LinearLayout>
 
@@ -127,7 +127,7 @@
 
                             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="4dp">
 
-                                <TextView android:id="@+id/tvEstimateTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="1h 30min" android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" />
+                                <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/tvEstimateTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="1h 30min" android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" />
 
                                 <TextView android:id="@+id/tvEstimateSubtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/recording_estimated_time" android:textColor="#B0B0B0" android:textSize="11sp" />
                             </LinearLayout>
@@ -207,12 +207,12 @@
 
                             <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="4dp">
                                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
-                                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/stats_label_videos" android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:layout_marginEnd="4dp" android:tag="preserve_color" />
-                                    <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/tvVideoCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#D3D3D3" android:textSize="11sp" android:tag="preserve_color" />
+                                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/stats_label_videos" android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" android:layout_marginEnd="4dp" android:tag="preserve_color" />
+                                    <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/tvVideoCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#D3D3D3" android:textSize="13sp" android:tag="preserve_color" />
                                 </LinearLayout>
                                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="1dp">
-                                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/stats_label_used" android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:layout_marginEnd="4dp" android:tag="preserve_color" />
-                                    <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/tvVideoSize" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 B" android:textColor="#D3D3D3" android:textSize="11sp" android:tag="preserve_color" />
+                                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/stats_label_used" android:textColor="#FFFFFF" android:textSize="13sp" android:textStyle="bold" android:layout_marginEnd="4dp" android:tag="preserve_color" />
+                                    <com.fadcam.ui.utils.AnimatedTextView android:id="@+id/tvVideoSize" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 B" android:textColor="#D3D3D3" android:textSize="13sp" android:tag="preserve_color" />
                                 </LinearLayout>
                             </LinearLayout>
                         </LinearLayout>
@@ -448,11 +448,22 @@
         <TextView android:id="@+id/tvPreviewHint" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:layout_marginTop="4dp" android:layout_marginBottom="4dp" android:text="@string/preview_enable_hint" android:textColor="?attr/colorHeading" android:textSize="13sp" android:alpha="0.75" android:letterSpacing="0.05" />
 
         <!-- Main Action Buttons -->
-        <LinearLayout android:id="@+id/layoutControls" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="72dp" android:gravity="center" android:orientation="horizontal">
+        <LinearLayout android:id="@+id/layoutControls" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="72dp" android:gravity="center" android:orientation="horizontal" android:clipChildren="false" android:clipToPadding="false">
 
             <com.google.android.material.button.MaterialButton android:id="@+id/buttonTorchSwitch" android:layout_width="48dp" android:layout_height="41dp" android:layout_marginEnd="4dp" style="@style/Widget.MaterialComponents.Button.OutlinedButton" app:icon="@drawable/ic_flashlight_on" app:iconSize="24dp" app:iconTint="@color/button_icon_tint_selector" app:iconGravity="textStart" app:iconPadding="0dp" android:insetLeft="0dp" android:insetTop="0dp" android:insetRight="0dp" android:insetBottom="0dp" android:paddingStart="0dp" android:paddingEnd="0dp" app:rippleColor="@android:color/transparent" app:backgroundTint="@android:color/transparent" android:enabled="false" app:cornerRadius="15dp" />
 
-            <com.google.android.material.button.MaterialButton android:id="@+id/buttonStartStop" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="4dp" app:icon="@drawable/play_button_rounded" app:iconSize="14dp" android:enabled="false" app:backgroundTint="@color/button_start" app:iconTint="@color/white" android:textColor="@color/white" android:text="@string/button_start" />
+                <com.fadcam.ui.utils.AnimatedMaterialButton
+                    android:id="@+id/buttonStartStop"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    app:icon="@drawable/play_button_rounded"
+                    app:iconSize="14dp"
+                    android:enabled="false"
+                    app:backgroundTint="@color/button_start"
+                    app:iconTint="@color/white"
+                    android:textColor="@color/white"
+                    android:text="@string/button_start" />
 
             <com.google.android.material.button.MaterialButton android:id="@+id/buttonPauseResume" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="4dp" app:icon="@drawable/pause_rounded" app:iconSize="16dp" app:iconGravity="textStart" app:iconPadding="0dp" android:enabled="false" app:backgroundTint="@color/button_pause" app:iconTint="@color/white" app:cornerRadius="15dp" />
 

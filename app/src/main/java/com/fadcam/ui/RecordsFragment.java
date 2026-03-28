@@ -353,30 +353,30 @@ public class RecordsFragment extends BaseFragment implements
     private View selectAllContainer;
     private android.widget.ImageView selectAllCheck;
     private CharSequence originalToolbarTitle;
-    private Chip chipFilterAll;
-    private Chip chipFilterCamera;
-    private Chip chipFilterScreen;
-    private Chip chipFilterFaditor;
-    private Chip chipFilterStream;
-    private Chip chipFilterShot;
+    private com.fadcam.ui.utils.AnimatedChip chipFilterAll;
+    private com.fadcam.ui.utils.AnimatedChip chipFilterCamera;
+    private com.fadcam.ui.utils.AnimatedChip chipFilterScreen;
+    private com.fadcam.ui.utils.AnimatedChip chipFilterFaditor;
+    private com.fadcam.ui.utils.AnimatedChip chipFilterStream;
+    private com.fadcam.ui.utils.AnimatedChip chipFilterShot;
     private ChipGroup chipGroupRecordsFilter;
     private View cameraFilterRow;
     private ChipGroup chipGroupCameraFilter;
-    private Chip chipCameraAll;
-    private Chip chipCameraBack;
-    private Chip chipCameraFront;
-    private Chip chipCameraDual;
+    private com.fadcam.ui.utils.AnimatedChip chipCameraAll;
+    private com.fadcam.ui.utils.AnimatedChip chipCameraBack;
+    private com.fadcam.ui.utils.AnimatedChip chipCameraFront;
+    private com.fadcam.ui.utils.AnimatedChip chipCameraDual;
     private View faditorFilterRow;
     private ChipGroup chipGroupFaditorFilter;
-    private Chip chipFaditorAll;
-    private Chip chipFaditorConverted;
-    private Chip chipFaditorMerge;
+    private com.fadcam.ui.utils.AnimatedChip chipFaditorAll;
+    private com.fadcam.ui.utils.AnimatedChip chipFaditorConverted;
+    private com.fadcam.ui.utils.AnimatedChip chipFaditorMerge;
     private View shotFilterRow;
     private ChipGroup chipGroupShotFilter;
-    private Chip chipShotAll;
-    private Chip chipShotBack;
-    private Chip chipShotSelfie;
-    private Chip chipShotFadrec;
+    private com.fadcam.ui.utils.AnimatedChip chipShotAll;
+    private com.fadcam.ui.utils.AnimatedChip chipShotBack;
+    private com.fadcam.ui.utils.AnimatedChip chipShotSelfie;
+    private com.fadcam.ui.utils.AnimatedChip chipShotFadrec;
     private TextView filterHelperText;
     private TextView filterChecklistButton;
     private View selectionActionsRow;
@@ -538,6 +538,42 @@ public class RecordsFragment extends BaseFragment implements
             }
         });
         FLog.d(TAG, "onMoveToTrashFinished. Success: " + success + ", Msg: " + message);
+    }
+
+    private void applyDeletedItemsToUi(@NonNull List<Uri> deletedUris) {
+        if (deletedUris.isEmpty()) {
+            updateUiVisibility();
+            return;
+        }
+
+        HashSet<String> deletedUriStrings = new HashSet<>(deletedUris.size());
+        for (Uri uri : deletedUris) {
+            if (uri != null) {
+                deletedUriStrings.add(uri.toString());
+            }
+        }
+
+        if (deletedUriStrings.isEmpty()) {
+            updateUiVisibility();
+            return;
+        }
+
+        allLoadedItems.removeIf(item ->
+                item == null || item.uri == null || deletedUriStrings.contains(item.uri.toString()));
+        videoItems.removeIf(item ->
+                item == null || item.uri == null || deletedUriStrings.contains(item.uri.toString()));
+        selectedUris.removeIf(uri -> uri != null && deletedUriStrings.contains(uri.toString()));
+
+        totalItems = allLoadedItems.size();
+
+        if (recordsAdapter != null) {
+            recordsAdapter.evictCachesForUris(deletedUris);
+        }
+
+        com.fadcam.utils.VideoSessionCache.updateSessionCache(allLoadedItems);
+        applyActiveFilterToUi();
+        FLog.d(TAG, "applyDeletedItemsToUi: removed " + deletedUriStrings.size()
+                + " items without forcing a full records reload");
     }
 
     // *** Register in onStart ***
@@ -2933,9 +2969,12 @@ public class RecordsFragment extends BaseFragment implements
         setChipLabelWithCount(chipFaditorMerge, R.string.records_filter_faditor_merge, merge);
     }
 
-    private void setChipLabelWithCount(@Nullable Chip chip, int baseLabelRes, int count) {
+    private void setChipLabelWithCount(@Nullable com.fadcam.ui.utils.AnimatedChip chip, int baseLabelRes, int count) {
         if (chip == null) return;
-        chip.setText(getString(baseLabelRes) + " (" + count + ")");
+        String newLabel = getString(baseLabelRes) + " (" + count + ")";
+        CharSequence current = chip.getText();
+        if (current != null && current.toString().equals(newLabel)) return;
+        chip.animateSlot(newLabel, 300);
     }
 
     private int getShotSubtypeCount(@NonNull VideoItem.ShotSubtype subtype) {
@@ -3592,6 +3631,7 @@ public class RecordsFragment extends BaseFragment implements
             int failCount = 0;
             List<VideoItem> allCurrentItems = new ArrayList<>(videoItems); // Copy for safe iteration
             List<String> trashedUris = new ArrayList<>();
+            List<Uri> successfullyDeletedUris = new ArrayList<>();
 
             for (Uri uri : itemsToDeleteUris) {
                 VideoItem itemToTrash = findVideoItemByUri(allCurrentItems, uri);
@@ -3599,6 +3639,7 @@ public class RecordsFragment extends BaseFragment implements
                     if (moveToTrashVideoItem(itemToTrash)) {
                         successCount++;
                         trashedUris.add(uri.toString());
+                        successfullyDeletedUris.add(uri);
                     } else {
                         failCount++;
                     }
@@ -3623,6 +3664,7 @@ public class RecordsFragment extends BaseFragment implements
             // Post results and UI refresh back to main thread
             final int finalSuccessCount = successCount;
             final int finalFailCount = failCount;
+            final List<Uri> finalDeletedUris = new ArrayList<>(successfullyDeletedUris);
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     // Hide the progress dialog
@@ -3633,13 +3675,7 @@ public class RecordsFragment extends BaseFragment implements
                             : getString(R.string.delete_videos_success_toast, finalSuccessCount);
                     Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
 
-                    // Perform a complete refresh of the data to ensure proper serial numbers
-                    FLog.d(TAG, "Performing full refresh after deletion to update serial numbers");
-                    if (recordsAdapter != null) {
-                        recordsAdapter.clearCaches(); // Clear any cached data
-                    }
-                    // Force reload to bypass the "already have data" guard and ensure UI updates
-                    loadRecordsList(true); // This will completely rebuild the list with proper serial numbers
+                    applyDeletedItemsToUi(finalDeletedUris);
                 });
             }
         });
@@ -3697,11 +3733,13 @@ public class RecordsFragment extends BaseFragment implements
             int successCount = 0;
             int failCount = 0;
             List<String> trashedUris = new ArrayList<>();
+            List<Uri> successfullyDeletedUris = new ArrayList<>();
             for (VideoItem item : itemsToTrash) {
                 if (item != null && item.uri != null) {
                     if (moveToTrashVideoItem(item)) { // Pass the whole VideoItem
                         successCount++;
                         trashedUris.add(item.uri.toString());
+                        successfullyDeletedUris.add(item.uri);
                     } else {
                         failCount++;
                     }
@@ -3725,6 +3763,7 @@ public class RecordsFragment extends BaseFragment implements
             // Final status update on main thread
             final int finalSuccessCount = successCount;
             final int finalFailCount = failCount;
+            final List<Uri> finalDeletedUris = new ArrayList<>(successfullyDeletedUris);
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     // Hide the progress dialog
@@ -3735,13 +3774,7 @@ public class RecordsFragment extends BaseFragment implements
                             : getString(R.string.delete_videos_success_toast, finalSuccessCount);
                     Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
 
-                    // Perform a complete refresh of the data to ensure proper serial numbers
-                    FLog.d(TAG, "Performing full refresh after deletion to update serial numbers");
-                    if (recordsAdapter != null) {
-                        recordsAdapter.clearCaches(); // Clear any cached data
-                    }
-                    // Force reload to bypass the "already have data" guard and ensure UI updates
-                    loadRecordsList(true); // This will completely rebuild the list with proper serial numbers
+                    applyDeletedItemsToUi(finalDeletedUris);
                 });
             }
         });
@@ -4244,9 +4277,31 @@ public class RecordsFragment extends BaseFragment implements
                 totalBytes += Math.max(0L, item.size);
             }
         }
-        if (statsPhotosText != null) statsPhotosText.setText(String.valueOf(photos));
-        if (statsVideosText != null) statsVideosText.setText(String.valueOf(videos));
-        if (statsSizeText != null) statsSizeText.setText(Formatter.formatShortFileSize(requireContext(), totalBytes));
+        String photosStr = String.valueOf(photos);
+        String videosStr = String.valueOf(videos);
+        String sizeStr   = Formatter.formatShortFileSize(requireContext(), totalBytes);
+
+        if (statsVideosText != null) {
+            if (statsVideosText instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                ((com.fadcam.ui.utils.AnimatedTextView) statsVideosText).animateSlotFull(videosStr, 350);
+            } else {
+                statsVideosText.setText(videosStr);
+            }
+        }
+        if (statsPhotosText != null) {
+            if (statsPhotosText instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                ((com.fadcam.ui.utils.AnimatedTextView) statsPhotosText).animateSlotFull(photosStr, 350);
+            } else {
+                statsPhotosText.setText(photosStr);
+            }
+        }
+        if (statsSizeText != null) {
+            if (statsSizeText instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                ((com.fadcam.ui.utils.AnimatedTextView) statsSizeText).animateSlotFull(sizeStr, 350);
+            } else {
+                statsSizeText.setText(sizeStr);
+            }
+        }
     }
 
     // Add the missing SpacesItemDecoration class back into the RecordsFragment
@@ -4512,10 +4567,11 @@ public class RecordsFragment extends BaseFragment implements
         // MMR returns incorrect values for FadCam's fragmented MP4 files (e.g. 26s for a 4s
         // recording). This async call resets them so the adapter's FFprobe path re-probes
         // and stores correct values. Runs once per app process, has no effect on next calls.
-        repository.clearStaleMMRDurationsOnce();
-        // Also clear the adapter's in-memory duration cache so the stale disk values loaded
-        // on construction are flushed and FFprobe gets a chance to re-probe this session.
-        if (recordsAdapter != null) {
+        boolean staleDurationsReset = repository.clearStaleMMRDurationsOnce();
+        // Only clear adapter duration caches when the one-time stale-duration cleanup actually runs.
+        // Flushing these caches on every reload causes unnecessary FFprobe work and makes delete
+        // refreshes much slower than they need to be.
+        if (staleDurationsReset && recordsAdapter != null) {
             recordsAdapter.invalidateDurationCache();
         }
 

@@ -1618,16 +1618,15 @@ public class HomeFragment extends BaseFragment {
         );
         buttonPauseResume.setEnabled(true);
 
-        buttonStartStop.setBackgroundTintList(
-            ColorStateList.valueOf(
-                ContextCompat.getColor(requireContext(), R.color.button_stop)
-            )
-        );
-        buttonStartStop.setText(getString(R.string.button_stop));
-        buttonStartStop.setIcon(
-            AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded)
-        );
-        buttonStartStop.setEnabled(true);
+        animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+                AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
+            buttonStartStop.setBackgroundTintList(
+                ColorStateList.valueOf(
+                    ContextCompat.getColor(requireContext(), R.color.button_stop)
+                )
+            );
+            buttonStartStop.setEnabled(true);
+        }, true);
 
         // Re-enable camera switch button (may have been disabled during WAITING_FOR_CAMERA)
         if (buttonCamSwitch != null) {
@@ -1660,15 +1659,14 @@ public class HomeFragment extends BaseFragment {
         // Keep camera switch button ENABLED for live switching even when paused
         // Don't disable it here
 
-        buttonStartStop.setBackgroundTintList(
-            ColorStateList.valueOf(
-                ContextCompat.getColor(requireContext(), R.color.button_stop)
-            )
-        );
-        buttonStartStop.setText(getString(R.string.button_stop));
-        buttonStartStop.setIcon(
-            AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded)
-        );
+        animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+                AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
+            buttonStartStop.setBackgroundTintList(
+                ColorStateList.valueOf(
+                    ContextCompat.getColor(requireContext(), R.color.button_stop)
+                )
+            );
+        }, true);
     }
 
     // --- Receiver for MediaRecorder Stopped signal ---
@@ -1769,21 +1767,17 @@ public class HomeFragment extends BaseFragment {
                 "Amoled".equalsIgnoreCase(themeName) ||
                 "Faded Night".equalsIgnoreCase(themeName);
             if (buttonStartStop != null) {
-                buttonStartStop.setText(R.string.button_start);
-                buttonStartStop.setIcon(
-                    AppCompatResources.getDrawable(
-                        getContext(),
-                        R.drawable.play_button_rounded
-                    )
-                );
-                // Always use green color for start button regardless of theme
-                int btnColor = Color.parseColor("#4CAF50"); // Always green
-                buttonStartStop.setBackgroundTintList(
-                    ColorStateList.valueOf(btnColor)
-                );
-                // Force enable the button when resetting to idle state, regardless of any debouncing
-                buttonStartStop.setEnabled(true);
-                buttonStartStop.setAlpha(1.0f);
+                animateButtonTransition(buttonStartStop, getString(R.string.button_start),
+                        AppCompatResources.getDrawable(getContext(), R.drawable.play_button_rounded), () -> {
+                    // Always use green color for start button regardless of theme
+                    int btnColor = Color.parseColor("#4CAF50"); // Always green
+                    buttonStartStop.setBackgroundTintList(
+                        ColorStateList.valueOf(btnColor)
+                    );
+                    // Force enable the button when resetting to idle state, regardless of any debouncing
+                    buttonStartStop.setEnabled(true);
+                    buttonStartStop.setAlpha(1.0f);
+                }, false);
                 FLog.d(TAG, "Start button force-enabled in resetUIButtonsToIdleState");
             }
             if (buttonPauseResume != null) {
@@ -2668,20 +2662,16 @@ public class HomeFragment extends BaseFragment {
         FLog.d(TAG, "Setting UI to: ACTIVE Recording");
         try {
             // Ensure interaction buttons reflect recording
-            buttonStartStop.setEnabled(true); // Enable STOP
-            buttonStartStop.setBackgroundTintList(
-                ContextCompat.getColorStateList(
-                    requireContext(),
-                    R.color.button_stop
-                )
-            );
-            buttonStartStop.setText(getString(R.string.button_stop));
-            buttonStartStop.setIcon(
-                AppCompatResources.getDrawable(
-                    requireContext(),
-                    R.drawable.stop_rounded
-                )
-            );
+            animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+                    AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
+                buttonStartStop.setEnabled(true); // Enable STOP
+                buttonStartStop.setBackgroundTintList(
+                    ContextCompat.getColorStateList(
+                        requireContext(),
+                        R.color.button_stop
+                    )
+                );
+            }, true);
 
             buttonPauseResume.setEnabled(true); // Enable PAUSE
             buttonPauseResume.setIcon(
@@ -2724,20 +2714,16 @@ public class HomeFragment extends BaseFragment {
         try {
             // Set buttons for Paused state (Stop ON, Resume(Play) ON, Switch OFF, Torch
             // OFF)
-            buttonStartStop.setEnabled(true); // Enable STOP
-            buttonStartStop.setBackgroundTintList(
-                ContextCompat.getColorStateList(
-                    requireContext(),
-                    R.color.button_stop
-                )
-            );
-            buttonStartStop.setText(getString(R.string.button_stop));
-            buttonStartStop.setIcon(
-                AppCompatResources.getDrawable(
-                    requireContext(),
-                    R.drawable.stop_rounded
-                )
-            );
+            animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+                    AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
+                buttonStartStop.setEnabled(true); // Enable STOP
+                buttonStartStop.setBackgroundTintList(
+                    ContextCompat.getColorStateList(
+                        requireContext(),
+                        R.color.button_stop
+                    )
+                );
+            }, true);
 
             buttonPauseResume.setEnabled(true); // Enable RESUME
             buttonPauseResume.setIcon(
@@ -2786,20 +2772,16 @@ public class HomeFragment extends BaseFragment {
         FLog.d(TAG, "Setting UI to: WAITING_FOR_CAMERA (camera interrupted)");
         try {
             // Similar to PAUSED state but indicates camera is being recaptured
-            buttonStartStop.setEnabled(true); // Enable STOP (user can still stop recording)
-            buttonStartStop.setBackgroundTintList(
-                ContextCompat.getColorStateList(
-                    requireContext(),
-                    R.color.button_stop
-                )
-            );
-            buttonStartStop.setText(getString(R.string.button_stop));
-            buttonStartStop.setIcon(
-                AppCompatResources.getDrawable(
-                    requireContext(),
-                    R.drawable.stop_rounded
-                )
-            );
+            animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+                    AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
+                buttonStartStop.setEnabled(true); // Enable STOP (user can still stop recording)
+                buttonStartStop.setBackgroundTintList(
+                    ContextCompat.getColorStateList(
+                        requireContext(),
+                        R.color.button_stop
+                    )
+                );
+            }, true);
 
             // Disable pause button during camera interruption (doesn't make sense)
             buttonPauseResume.setEnabled(false);
@@ -6629,32 +6611,64 @@ public class HomeFragment extends BaseFragment {
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
                     // Camera row
-                    if (tvCameraTitle != null) tvCameraTitle.setText(
-                        finalCameraLabel
-                    );
-                    if (tvCameraSubtitle != null) tvCameraSubtitle.setText(
-                        cameraSubtitle
-                    );
+                    if (tvCameraTitle != null) {
+                        String oldCamTitle = tvCameraTitle.getText() != null ? tvCameraTitle.getText().toString() : "";
+                        if (!oldCamTitle.equals(finalCameraLabel)) {
+                            if (tvCameraTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                ((com.fadcam.ui.utils.AnimatedTextView) tvCameraTitle).animateSlotFull(finalCameraLabel, 400);
+                            } else {
+                                tvCameraTitle.setText(finalCameraLabel);
+                            }
+                        }
+                    }
+                    if (tvCameraSubtitle != null) {
+                        String oldCamSub = tvCameraSubtitle.getText() != null ? tvCameraSubtitle.getText().toString() : "";
+                        if (!oldCamSub.equals(cameraSubtitle)) {
+                            if (tvCameraSubtitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                ((com.fadcam.ui.utils.AnimatedTextView) tvCameraSubtitle).animateSlotFull(cameraSubtitle, 400);
+                            } else {
+                                tvCameraSubtitle.setText(cameraSubtitle);
+                            }
+                        }
+                    }
 
                     // Update camera icon
                     try {
                         com.fadcam.CameraType camType =
                             sharedPreferencesManager.getCameraSelection();
                         if (ivCameraIcon != null) {
+                            String newIconText;
                             if (camType == com.fadcam.CameraType.FRONT) {
-                                ivCameraIcon.setText("camera_front");
+                                newIconText = "camera_front";
                             } else if (camType.isDual()) {
-                                ivCameraIcon.setText("switch_video");
+                                newIconText = "switch_video";
                             } else {
-                                ivCameraIcon.setText("camera_alt");
+                                newIconText = "camera_alt";
+                            }
+                            String oldIconText = ivCameraIcon.getText() != null
+                                    ? ivCameraIcon.getText().toString() : "";
+                            if (!oldIconText.equals(newIconText)) {
+                                if (ivCameraIcon instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                    ((com.fadcam.ui.utils.AnimatedTextView) ivCameraIcon)
+                                            .animateCrossfade(newIconText, 300);
+                                } else {
+                                    ivCameraIcon.setText(newIconText);
+                                }
                             }
                         }
                     } catch (Exception ignored) {}
 
                     // Estimate row
-                    if (tvEstimateTitle != null) tvEstimateTitle.setText(
-                        finalSelectedEstimate
-                    );
+                    if (tvEstimateTitle != null) {
+                        String oldEstimate = tvEstimateTitle.getText() != null ? tvEstimateTitle.getText().toString() : "";
+                        if (!oldEstimate.equals(finalSelectedEstimate)) {
+                            if (tvEstimateTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                ((com.fadcam.ui.utils.AnimatedTextView) tvEstimateTitle).animateSlot(finalSelectedEstimate, 400);
+                            } else {
+                                tvEstimateTitle.setText(finalSelectedEstimate);
+                            }
+                        }
+                    }
                     if (tvEstimateSubtitle != null) tvEstimateSubtitle.setText(
                         getString(R.string.recording_estimated_time)
                     );
@@ -6725,6 +6739,48 @@ public class HomeFragment extends BaseFragment {
                         }
                     }
                 });
+        }
+    }
+
+    /**
+     * Transitions the Start/Stop button between states.
+     *
+     * <p>The button icon and background tint are applied immediately via {@code applyChanges}.
+     * If the button is an {@link com.fadcam.ui.utils.AnimatedMaterialButton}, the text label
+     * animates with a slot-machine slide.  Otherwise {@link MaterialButton#setText} is called
+     * directly.
+     *
+     * @param button       The target button.
+     * @param newText      New label text.
+     * @param applyChanges Runnable that sets icon, backgroundTint, enabled state, etc.
+     * @param slideUp      {@code true} → label slides UP (Start → Stop); {@code false} → DOWN.
+     */
+    private void animateButtonTransition(
+            @NonNull MaterialButton button,
+            @NonNull CharSequence newText,
+            @Nullable android.graphics.drawable.Drawable newIcon,
+            @NonNull Runnable applyOtherChanges,
+            boolean slideUp) {
+        // Apply tint, enabled-state etc. immediately; icon is animated separately below.
+        applyOtherChanges.run();
+        if (button instanceof com.fadcam.ui.utils.AnimatedMaterialButton) {
+            com.fadcam.ui.utils.AnimatedMaterialButton animated =
+                    (com.fadcam.ui.utils.AnimatedMaterialButton) button;
+            // Animate icon crossfade alongside text slot machine.
+            if (newIcon != null) {
+                animated.animateIcon(newIcon, 300);
+            }
+            CharSequence current = animated.getText();
+            if (current == null || !current.toString().equals(newText.toString())) {
+                if (slideUp) {
+                    animated.animateSlotFull(newText, 300);
+                } else {
+                    animated.animateSlotFullDown(newText, 300);
+                }
+            }
+        } else {
+            if (newIcon != null) button.setIcon(newIcon);
+            button.setText(newText);
         }
     }
 
