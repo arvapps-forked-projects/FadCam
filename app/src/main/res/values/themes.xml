@@ -29,13 +29,30 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use base theme primary -->
         <item name="sectionHeaderColor">@color/colorPrimary</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#F44336</item>
+        <item name="homeRailSegmentActiveText">#FFF7F8</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#BFCBDA</item>
         <!-- Default picker component colors for base theme with proper contrast -->
         <item name="pickerButtonBackground">@color/colorPrimary</item>
         <item name="pickerButtonText">@android:color/white</item>
         <item name="pickerIconTint">@color/colorPrimary</item>
         <item name="pickerSliderActive">@color/colorPrimary</item>
         <item name="pickerSliderInactive">@color/base_theme_slider_inactive</item>
-    </style>
+    
+        <item name="android:colorBackground">@color/black</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item></style>
 
     <!-- Splash theme leveraging AndroidX SplashScreen attributes (Fix Start Theme.FadCam.Splash) -->
     <style name="Theme.FadCam.Splash" parent="Theme.Material3.DayNight.NoActionBar">
@@ -53,17 +70,17 @@
 
     <style name="Theme.FadCam.Amoled" parent="Theme.Material3.Dark.NoActionBar">
         <!-- Completely black background everywhere - using explicit black colors -->
-        <item name="android:colorBackground">@color/amoled_black_pure</item>
+        <item name="android:colorBackground">@color/black</item>
         <item name="colorSurface">@color/amoled_card</item>
-        <item name="backgroundColor">@color/amoled_black_pure</item>
-        <item name="android:windowBackground">@color/amoled_black_pure</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
 
         <!-- Force black backgrounds on all possible attributes -->
         <item name="android:windowBackgroundFallback">@color/amoled_black_pure</item>
         <item name="android:colorBackgroundFloating">@color/amoled_black_pure</item>
 
         <!-- Navigation and status bar -->
-        <item name="android:navigationBarColor">@color/amoled_black_pure</item>
+        <item name="android:navigationBarColor">@color/black</item>
         <item name="android:statusBarColor">@color/amoled_black_pure</item>
 
         <!-- Text and icon colors -->
@@ -104,6 +121,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use subtle gray for AMOLED -->
         <item name="sectionHeaderColor">#888888</item>
+        <item name="homeRailBgStart">#0E1012</item>
+        <item name="homeRailBgEnd">#0E1012</item>
+        <item name="homeRailCardSurface">#15191D</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#1D2228</item>
+        <item name="homeRailSegmentedSurface">#14171B</item>
+        <item name="homeRailSegmentedBorder">#262B31</item>
+        <item name="homeRailSegmentActive">#E14A3E</item>
+        <item name="homeRailSegmentActiveText">#FFF8F9</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#AFB4BA</item>
+        <item name="homeRailAccent">#C2CEDA</item>
         <!-- AMOLED theme picker colors with proper contrast for Faded Night -->
         <item name="pickerButtonBackground">@color/amoled_picker_button_background</item>
         <item name="pickerButtonText">@color/amoled_picker_button_text</item>
@@ -150,11 +180,11 @@
         <item name="colorSwitchTrack">@color/red_theme_primary_variant</item>
         <item name="colorDialog">@color/red_theme_dialog</item>
         <item name="colorStatusBar">@color/red_theme_primary_variant</item>
-        <item name="android:colorBackground">@color/red_theme_background_dark</item>
+        <item name="android:colorBackground">@color/black</item>
         <item name="colorSurface">@color/red_theme_surface_dark</item>
-        <item name="backgroundColor">@color/red_theme_background_dark</item>
-        <item name="android:windowBackground">@color/red_theme_background_dark</item>
-        <item name="android:navigationBarColor">@color/red_theme_background_dark</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
         <item name="colorPrimary">@color/red_theme_primary</item>
         <item name="colorPrimaryVariant">@color/red_theme_primary_variant</item>
         <item name="colorSecondary">@color/red_theme_secondary</item>
@@ -187,6 +217,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use red theme primary -->
         <item name="sectionHeaderColor">@color/red_theme_primary</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#F44336</item>
+        <item name="homeRailSegmentActiveText">#FFF7F8</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#F06B76</item>
         <!-- Red theme picker colors with proper contrast -->
         <item name="pickerButtonBackground">@color/red_theme_primary</item>
         <item name="pickerButtonText">@android:color/white</item>
@@ -229,11 +272,11 @@
         <item name="colorSwitchTrack">@color/gold_theme_primary_variant</item>
         <item name="colorDialog">@color/gold_theme_dialog</item>
         <item name="colorStatusBar">@color/gold_theme_primary_variant</item>
-        <item name="android:colorBackground">@color/gold_theme_background_dark</item>
+        <item name="android:colorBackground">@color/black</item>
         <item name="colorSurface">@color/gold_theme_surface_dark</item>
-        <item name="backgroundColor">@color/gold_theme_background_dark</item>
-        <item name="android:windowBackground">@color/gold_theme_background_dark</item>
-        <item name="android:navigationBarColor">@color/gold_theme_background_dark</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
         <item name="colorPrimary">@color/gold_theme_primary</item>
         <item name="colorPrimaryVariant">@color/gold_theme_primary_variant</item>
         <item name="colorSecondary">@color/gold_theme_secondary</item>
@@ -266,6 +309,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use gold theme primary -->
         <item name="sectionHeaderColor">@color/gold_theme_primary</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#D8AA48</item>
+        <item name="homeRailSegmentActiveText">#1B150B</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#E4BE66</item>
         <!-- Gold theme picker colors with proper contrast -->
         <item name="pickerButtonBackground">@color/gold_theme_primary</item>
         <item name="pickerButtonText">@color/gold_theme_on_primary</item>
@@ -302,11 +358,11 @@
         <item name="colorSwitchTrack">@color/silentforest_theme_primary_variant</item>
         <item name="colorDialog">@color/silentforest_theme_dialog</item>
         <item name="colorStatusBar">@color/silentforest_theme_primary_variant</item>
-        <item name="android:colorBackground">@color/silentforest_theme_background_dark</item>
+        <item name="android:colorBackground">@color/black</item>
         <item name="colorSurface">@color/silentforest_theme_surface_dark</item>
-        <item name="backgroundColor">@color/silentforest_theme_background_dark</item>
-        <item name="android:windowBackground">@color/silentforest_theme_background_dark</item>
-        <item name="android:navigationBarColor">@color/silentforest_theme_background_dark</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
         <item name="colorPrimary">@color/silentforest_theme_primary</item>
         <item name="colorPrimaryVariant">@color/silentforest_theme_primary_variant</item>
         <item name="colorSecondary">@color/silentforest_theme_secondary</item>
@@ -339,6 +395,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use forest theme primary -->
         <item name="sectionHeaderColor">@color/silentforest_theme_primary</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#58AA72</item>
+        <item name="homeRailSegmentActiveText">#07130A</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#84CC9B</item>
         <!-- Silent Forest theme picker colors with proper contrast -->
         <item name="pickerButtonBackground">@color/silentforest_theme_primary</item>
         <item name="pickerButtonText">@color/silentforest_theme_on_primary</item>
@@ -375,11 +444,11 @@
         <item name="colorSwitchTrack">@color/shadowalloy_theme_primary_variant</item>
         <item name="colorDialog">@color/shadowalloy_theme_dialog</item>
         <item name="colorStatusBar">@color/shadowalloy_theme_primary_variant</item>
-        <item name="android:colorBackground">@color/shadowalloy_theme_background_dark</item>
+        <item name="android:colorBackground">@color/black</item>
         <item name="colorSurface">@color/shadowalloy_theme_surface_dark</item>
-        <item name="backgroundColor">@color/shadowalloy_theme_background_dark</item>
-        <item name="android:windowBackground">@color/shadowalloy_theme_background_dark</item>
-        <item name="android:navigationBarColor">@color/shadowalloy_theme_background_dark</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
         <item name="colorPrimary">@color/shadowalloy_theme_primary</item>
         <item name="colorPrimaryVariant">@color/shadowalloy_theme_primary_variant</item>
         <item name="colorSecondary">@color/shadowalloy_theme_secondary</item>
@@ -412,6 +481,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use shadow alloy theme primary -->
         <item name="sectionHeaderColor">@color/shadowalloy_theme_primary</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#8AA0B9</item>
+        <item name="homeRailSegmentActiveText">#0E1318</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#B0C1D3</item>
         <!-- Shadow Alloy theme picker colors with proper contrast -->
         <item name="pickerButtonBackground">@color/shadowalloy_theme_primary</item>
         <item name="pickerButtonText">@color/shadowalloy_theme_on_primary</item>
@@ -448,11 +530,11 @@
         <item name="colorSwitchTrack">@color/pookiepink_theme_primary_variant</item>
         <item name="colorDialog">@color/pookiepink_theme_dialog</item>
         <item name="colorStatusBar">@color/pookiepink_theme_primary_variant</item>
-        <item name="android:colorBackground">@color/pookiepink_theme_background_dark</item>
+        <item name="android:colorBackground">@color/black</item>
         <item name="colorSurface">@color/pookiepink_theme_surface_dark</item>
-        <item name="backgroundColor">@color/pookiepink_theme_background_dark</item>
-        <item name="android:windowBackground">@color/pookiepink_theme_background_dark</item>
-        <item name="android:navigationBarColor">@color/pookiepink_theme_background_dark</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
         <item name="colorPrimary">@color/pookiepink_theme_primary</item>
         <item name="colorPrimaryVariant">@color/pookiepink_theme_primary_variant</item>
         <item name="colorSecondary">@color/pookiepink_theme_secondary</item>
@@ -485,6 +567,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use pookie pink theme primary -->
         <item name="sectionHeaderColor">@color/pookiepink_theme_primary</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#DE76A7</item>
+        <item name="homeRailSegmentActiveText">#180F14</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#E5A0C0</item>
         <!-- Pookie Pink theme picker colors with proper contrast -->
         <item name="pickerButtonBackground">@color/pookiepink_theme_primary</item>
         <item name="pickerButtonText">@color/pookiepink_theme_on_primary</item>
@@ -569,6 +664,19 @@
         <item name="pickerTextSecondary">#CCCCCC</item>
         <!-- Section header color - use snow veil theme primary -->
         <item name="sectionHeaderColor">@color/snowveil_theme_primary</item>
+        <item name="homeRailBgStart">#D9E2EB</item>
+        <item name="homeRailBgEnd">#D9E2EB</item>
+        <item name="homeRailCardSurface">#F3F7FB</item>
+        <item name="homeRailCardBorder">#C8D0DA</item>
+        <item name="homeRailCardStroke">#C8D0DA</item>
+        <item name="homeRailTileSurface">#E5ECF4</item>
+        <item name="homeRailSegmentedSurface">#EEF3F8</item>
+        <item name="homeRailSegmentedBorder">#C3D0DC</item>
+        <item name="homeRailSegmentActive">#5E7FA5</item>
+        <item name="homeRailSegmentActiveText">#FFFFFF</item>
+        <item name="homeRailTextPrimary">#121820</item>
+        <item name="homeRailTextSecondary">#4F5C6B</item>
+        <item name="homeRailAccent">#5E7FA5</item>
         <!-- Snow Veil theme picker colors with proper contrast for dark cards -->
         <item name="pickerButtonBackground">@color/snowveil_theme_primary</item>
         <item name="pickerButtonText">@android:color/white</item>
@@ -715,11 +823,11 @@
         <item name="bottomNavigationStyle">@style/Widget.FadCam.BottomNavigationView</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.FadCam.Dialog</item>
         <item name="bottomSheetDialogTheme">@style/CustomBottomSheetDialogTheme</item>
-        <item name="android:colorBackground">@color/midnight_dusk_bg</item>
+        <item name="android:colorBackground">@color/black</item>
         <item name="colorSurface">@color/midnight_dusk_bg</item>
-        <item name="backgroundColor">@color/midnight_dusk_bg</item>
-        <item name="android:windowBackground">@color/midnight_dusk_bg</item>
-        <item name="android:navigationBarColor">@color/gray</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryVariant">@color/colorPrimary</item>
         <item name="colorSecondary">@color/colorPrimary</item>
@@ -744,6 +852,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use purple accent for midnight dusk -->
         <item name="sectionHeaderColor">#cfbafd</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#8D6EE0</item>
+        <item name="homeRailSegmentActiveText">#FAF8FF</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#B8A3EF</item>
     </style>
     <!-- Fix End: Add always-dark Midnight Dusk theme -->
 

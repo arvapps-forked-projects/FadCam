@@ -9,12 +9,14 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.view.Surface;
+import androidx.annotation.Nullable;
 
 import com.fadcam.Constants;
 import com.fadcam.VideoCodec;
@@ -37,6 +39,11 @@ public class ScreenRecordingPipeline {
     private static final String TAG = "ScreenRecPipeline";
     private static final String VIDEO_MIME_TYPE = "video/avc";
     private static final int VIDEO_IFRAME_INTERVAL = 1;
+    private static volatile boolean preferSoftwareAvcEncoder = false;
+
+    public static boolean isPreferringSoftwareAvcEncoder() {
+        return preferSoftwareAvcEncoder;
+    }
     
     private final Context context;
     private final WatermarkInfoProvider watermarkInfoProvider;
@@ -58,10 +65,14 @@ public class ScreenRecordingPipeline {
     // MediaProjection components
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
-    
+    private VirtualDisplay previewVirtualDisplay;
+
     // Video encoding components
     private MediaCodec videoEncoder;
     private Surface encoderInputSurface;
+    private Surface previewSurface;
+    private int previewSurfaceWidth = -1;
+    private int previewSurfaceHeight = -1;
     private FragmentedMp4MuxerWrapper mediaMuxer;
     private int videoTrackIndex = -1;
     
@@ -288,16 +299,19 @@ public class ScreenRecordingPipeline {
         IOException lastException = null;
 
         int[][] candidates = buildEncoderSizeCandidates(displayWidth, displayHeight);
+        FLog.i(TAG, "Encoder init start: display=" + displayWidth + "x" + displayHeight
+                + " preferSoftware=" + preferSoftwareAvcEncoder);
 
-        // Try hardware encoder first with multiple same-aspect resolutions.
-        for (int[] candidate : candidates) {
-            int candidateWidth = candidate[0];
-            int candidateHeight = candidate[1];
+        if (!preferSoftwareAvcEncoder) {
+            // First-start churn was coming from retrying hardware across many resolutions.
+            // Try hardware only once at the native-sized target. If it fails, prefer software
+            // for the rest of this process lifetime.
+            int candidateWidth = candidates[0][0];
+            int candidateHeight = candidates[0][1];
             try {
                 MediaCodec encoder = MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
                 configureVideoEncoder(encoder, false, candidateWidth, candidateHeight);
 
-                // Success: adopt this encoder instance + dimensions.
                 videoEncoder = encoder;
                 screenWidth = candidateWidth;
                 screenHeight = candidateHeight;
@@ -306,16 +320,21 @@ public class ScreenRecordingPipeline {
                 return;
             } catch (Exception e) {
                 lastException = new IOException("Hardware encoder failed for " + candidateWidth + "x" + candidateHeight, e);
+                preferSoftwareAvcEncoder = true;
                 FLog.w(TAG, "Hardware encoder failed for " + candidateWidth + "x" + candidateHeight + ": " + e.getMessage());
             }
         }
 
         // Fallback to software encoder (more flexible). Prefer the largest (scale 1.0) size.
+        String softwareCodecName = findSoftwareAvcEncoderName();
+        FLog.i(TAG, "Falling back to software AVC encoder: " + softwareCodecName);
         for (int i = 0; i < candidates.length; i++) {
             int candidateWidth = candidates[i][0];
             int candidateHeight = candidates[i][1];
             try {
-                MediaCodec encoder = MediaCodec.createByCodecName("OMX.google.h264.encoder");
+                MediaCodec encoder = softwareCodecName != null
+                        ? MediaCodec.createByCodecName(softwareCodecName)
+                        : MediaCodec.createEncoderByType(VIDEO_MIME_TYPE);
                 configureVideoEncoder(encoder, true, candidateWidth, candidateHeight);
 
                 videoEncoder = encoder;
@@ -331,6 +350,26 @@ public class ScreenRecordingPipeline {
         }
 
         throw new IOException("Failed to initialize video encoder (tried hardware and software)", lastException);
+    }
+
+    @Nullable
+    private String findSoftwareAvcEncoderName() {
+        try {
+            MediaCodecList codecList = new MediaCodecList(MediaCodecList.ALL_CODECS);
+            for (MediaCodecInfo info : codecList.getCodecInfos()) {
+                if (!info.isEncoder()) {
+                    continue;
+                }
+                for (String type : info.getSupportedTypes()) {
+                    if (VIDEO_MIME_TYPE.equalsIgnoreCase(type) && info.isSoftwareOnly()) {
+                        return info.getName();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            FLog.w(TAG, "Failed to enumerate software AVC encoders: " + e.getMessage());
+        }
+        return "OMX.google.h264.encoder";
     }
     
     /**
@@ -440,6 +479,7 @@ public class ScreenRecordingPipeline {
         
         // Create VirtualDisplay
         createVirtualDisplay();
+        refreshPreviewVirtualDisplay();
         
         // Start timestamp tracking
         synchronized (timestampLock) {
@@ -481,6 +521,41 @@ public class ScreenRecordingPipeline {
         );
         
         // FLog.d(TAG, "VirtualDisplay created: " + screenWidth + "x" + screenHeight);
+    }
+
+    public synchronized void setPreviewSurface(@Nullable Surface surface, int width, int height) {
+        previewSurface = surface;
+        previewSurfaceWidth = width;
+        previewSurfaceHeight = height;
+        refreshPreviewVirtualDisplay();
+    }
+
+    private synchronized void refreshPreviewVirtualDisplay() {
+        if (previewVirtualDisplay != null) {
+            try {
+                previewVirtualDisplay.release();
+            } catch (Exception e) {
+                FLog.e(TAG, "Error releasing preview virtual display", e);
+            }
+            previewVirtualDisplay = null;
+        }
+
+        if (!isRecording || mediaProjection == null || previewSurface == null || !previewSurface.isValid()) {
+            return;
+        }
+
+        int targetWidth = previewSurfaceWidth > 0 ? previewSurfaceWidth : screenWidth;
+        int targetHeight = previewSurfaceHeight > 0 ? previewSurfaceHeight : screenHeight;
+        previewVirtualDisplay = mediaProjection.createVirtualDisplay(
+            "ScreenRecordingPreview",
+            targetWidth,
+            targetHeight,
+            screenDensity,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            previewSurface,
+            null,
+            null
+        );
     }
     
     /**
@@ -778,6 +853,10 @@ public class ScreenRecordingPipeline {
         if (virtualDisplay != null) {
             virtualDisplay.release();
             virtualDisplay = null;
+        }
+        if (previewVirtualDisplay != null) {
+            previewVirtualDisplay.release();
+            previewVirtualDisplay = null;
         }
         
         // Release video encoder

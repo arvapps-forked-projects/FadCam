@@ -4,6 +4,8 @@ import com.fadcam.Log;
 import com.fadcam.FLog;
 import android.Manifest;
 import android.app.Activity;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -12,8 +14,10 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
+import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -32,6 +36,7 @@ import com.fadcam.fadrec.MediaProjectionHelper;
 import com.fadcam.fadrec.ScreenRecordingState;
 import com.fadcam.fadrec.services.ScreenRecordingService;
 import com.fadcam.ui.HomeFragment;
+import com.fadcam.ui.utils.AnimatedTextView;
 import com.fadcam.utils.ServiceUtils;
 import com.fadcam.utils.StorageInfoCache;
 import com.google.android.material.button.MaterialButton;
@@ -41,10 +46,10 @@ import com.google.android.material.button.MaterialButton;
  * Uses inheritance to reuse camera recording UI while adapting for screen recording.
  * 
  * Key differences from parent HomeFragment:
- * - Hides camera-specific controls (camera switch, flash, zoom)
+ * - Reuses the same base HomeFragment layout/cards
+ * - Hides camera-only controls (camera switch, flash, zoom)
  * - Shows screen resolution instead of camera info
  * - Uses ScreenRecordingService instead of RecordingService
- * - No camera preview (TextureView hidden)
  */
 public class FadRecHomeFragment extends HomeFragment {
     
@@ -58,6 +63,19 @@ public class FadRecHomeFragment extends HomeFragment {
     
     // Screen recording state
     private ScreenRecordingState screenRecordingState = ScreenRecordingState.NONE;
+    private boolean isScreenPreviewEnabled = false;
+    private boolean isScreenPreviewOnlyActive = false;
+    private boolean pendingPreviewOnlyPermission = false;
+    private Surface previewSurface;
+    private int previewSurfaceWidth = -1;
+    private int previewSurfaceHeight = -1;
+    private final android.os.Handler previewUiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean previewOpenSequenceRunning = false;
+    private boolean previewCloseSequenceRunning = false;
+    private boolean deferredStopPreviewOnly = false;
+    private boolean deferredDetachPreviewSurface = false;
+    private boolean pendingPreviewOpenUntilSurfaceReady = false;
+    private boolean pendingPreviewCloseSleepAnimation = false;
     private SharedPreferencesManager sharedPreferencesManager;
     
     // Broadcast receivers for screen recording state
@@ -76,6 +94,8 @@ public class FadRecHomeFragment extends HomeFragment {
     private android.os.Handler timerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable timerUpdateRunnable;
     private MaterialButton buttonFadRecMute;
+    private boolean screenCardInfoInitialized = false;
+    private final Runnable pendingStopStateReconcileRunnable = this::queryScreenRecordingState;
     
     // Material loading dialog for annotation service startup
     private androidx.appcompat.app.AlertDialog loadingDialog;
@@ -132,14 +152,26 @@ public class FadRecHomeFragment extends HomeFragment {
                 //       " (RESULT_OK=" + Activity.RESULT_OK + "), data=" + (data != null ? "present" : "null"));
                 
                 if (resultCode == Activity.RESULT_OK && data != null) {
-                    // FLog.d(TAG, "Screen capture permission granted, starting recording");
-                    // RESULT_OK is -1, so we pass Activity.RESULT_OK constant instead
-                    boolean forceNoAudio = forceMutedNoAudioThisStart;
-                    isRecordingForcedMuted = forceNoAudio;
-                    forceMutedNoAudioThisStart = false;
-                    mediaProjectionHelper.startScreenRecording(Activity.RESULT_OK, data, forceNoAudio);
-                    syncMuteUiState();
+                    if (pendingPreviewOnlyPermission) {
+                        pendingPreviewOnlyPermission = false;
+                        Toast.makeText(
+                            requireContext(),
+                            com.fadcam.R.string.fullscreen_preview_not_recording,
+                            Toast.LENGTH_LONG
+                        ).show();
+                    } else {
+                        // FLog.d(TAG, "Screen capture permission granted, starting recording");
+                        // RESULT_OK is -1, so we pass Activity.RESULT_OK constant instead
+                        boolean forceNoAudio = forceMutedNoAudioThisStart;
+                        isRecordingForcedMuted = forceNoAudio;
+                        forceMutedNoAudioThisStart = false;
+                        mediaProjectionHelper.startScreenRecording(Activity.RESULT_OK, data, forceNoAudio);
+                        syncMuteUiState();
+                    }
                 } else {
+                    pendingPreviewOnlyPermission = false;
+                    updateUIForRecordingState();
+                    pendingPreviewOnlyPermission = false;
                     // FLog.w(TAG, "Screen capture permission denied: resultCode=" + resultCode);
                     Toast.makeText(requireContext(), 
                         com.fadcam.R.string.fadrec_permission_denied, 
@@ -189,6 +221,7 @@ public class FadRecHomeFragment extends HomeFragment {
         // Apply FadRec-specific UI customizations
         // FLog.d(TAG, "Customizing UI for screen recording...");
         customizeUIForScreenRecording(view);
+        view.post(this::updateScreenRecordingCardInfo);
         
         // Setup button click handlers
         // FLog.d(TAG, "Setting up button handlers...");
@@ -197,6 +230,7 @@ public class FadRecHomeFragment extends HomeFragment {
         
         // NOTE: Receiver registration moved to onStart() to avoid double-registration
         // on fragment recreation and to maintain proper lifecycle coordination
+        screenCardInfoInitialized = false;
     }
     
     @Override
@@ -210,6 +244,7 @@ public class FadRecHomeFragment extends HomeFragment {
         // FLog.e(TAG, "============================================");
         // Note: Broadcast receivers are now registered in onCreate()
         // to ensure they persist and are ready to receive state updates
+        reapplyScreenRecordingCardState(false);
     }
     
     /**
@@ -459,19 +494,9 @@ public class FadRecHomeFragment extends HomeFragment {
             FLog.d(TAG, "Torch button hidden");
         }
         
-        // Hide entire preview area (TextureView and placeholder from parent layout)
-        View textureView = rootView.findViewById(com.fadcam.R.id.textureView);
-        if (textureView != null) {
-            textureView.setVisibility(View.GONE);
-        }
-        
-        View tvPreviewPlaceholder = rootView.findViewById(com.fadcam.R.id.tvPreviewPlaceholder);
-        if (tvPreviewPlaceholder != null) {
-            tvPreviewPlaceholder.setVisibility(View.GONE);
-        }
-        
         // Update camera info card to show screen recording info instead
         updateCardForScreenRecording(rootView);
+        configurePreviewCardForScreenRecording(rootView);
         
         // Hide recording tiles (AF, exposure, zoom - camera specific)
         View tileAfToggle = rootView.findViewById(com.fadcam.R.id.tile_af_toggle);
@@ -498,10 +523,14 @@ public class FadRecHomeFragment extends HomeFragment {
         // Setup floating controls toggle card in the tiles area
         setupFloatingControlsCard(rootView);
         
-        // Replace preview card content with custom FadRec screen icon
-        replacePreviewWithScreenIcon(rootView);
-        
         FLog.d(TAG, "Camera controls hidden");
+    }
+
+    private void configurePreviewCardForScreenRecording(View rootView) {
+        TextView tvPreviewHint = rootView.findViewById(com.fadcam.R.id.tvPreviewHint);
+        if (tvPreviewHint != null) {
+            tvPreviewHint.setText(com.fadcam.R.string.fadrec_preview_enable_hint);
+        }
     }
     
     /**
@@ -562,6 +591,12 @@ public class FadRecHomeFragment extends HomeFragment {
                     startAnnotationService();
                 }
             }
+
+            cardFloatingControls.setOnClickListener(v -> {
+                if (switchFloatingControls != null) {
+                    switchFloatingControls.performClick();
+                }
+            });
             
             FLog.d(TAG, "Floating controls card added");
         }
@@ -726,56 +761,6 @@ public class FadRecHomeFragment extends HomeFragment {
     }
     
     /**
-     * Replace the preview card content with a custom screen recording icon layout.
-     * This completely overrides the parent's camera preview with FadRec-specific UI.
-     */
-    private void replacePreviewWithScreenIcon(View rootView) {
-        // Find the preview card container
-        android.view.ViewGroup previewCard = 
-            rootView.findViewById(com.fadcam.R.id.cardPreview);
-        
-        if (previewCard != null) {
-            // Make the parent card background transparent for FadRec
-            if (previewCard instanceof androidx.cardview.widget.CardView) {
-                ((androidx.cardview.widget.CardView) previewCard).setCardBackgroundColor(
-                    android.graphics.Color.TRANSPARENT
-                );
-            }
-            previewCard.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-            
-            // Remove all child views from the card
-            previewCard.removeAllViews();
-            
-            // Inflate custom FadRec screen icon layout
-            View screenIconView = getLayoutInflater().inflate(
-                com.fadcam.R.layout.fadrec_screen_icon, 
-                previewCard, 
-                false
-            );
-            
-            // Add the custom layout to the card
-            previewCard.addView(screenIconView);
-            previewCard.setVisibility(View.VISIBLE);
-            
-            // Start rotating bubble animation for modern visual effect
-            android.widget.ImageView bubbleBackground = screenIconView.findViewById(com.fadcam.R.id.ivBubbleBackground);
-            if (bubbleBackground != null) {
-                android.view.animation.Animation rotateAnimation = 
-                    android.view.animation.AnimationUtils.loadAnimation(requireContext(), com.fadcam.R.anim.rotate_slow_left);
-                bubbleBackground.startAnimation(rotateAnimation);
-                FLog.d(TAG, "Started FadRec bubble background rotation animation");
-            }
-            
-            // IMPORTANT: Disable long press listener from parent HomeFragment
-            // FadRec doesn't need camera preview toggle functionality
-            previewCard.setOnLongClickListener(null);
-            previewCard.setLongClickable(false);
-            
-            FLog.d(TAG, "Preview card replaced with screen recording icon, background transparent");
-        }
-    }
-
-    /**
      * Update the camera info card to show screen recording information.
      * Modifies icon, title, and subtitle to reflect screen recording mode.
      * Uses OOP inheritance - overrides parent's camera card with screen recording info.
@@ -815,12 +800,16 @@ public class FadRecHomeFragment extends HomeFragment {
                     android.graphics.PorterDuff.Mode.SRC_IN
                 );
                 
-                ivScreenRecordIcon.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+                ivScreenRecordIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
                 ivScreenRecordIcon.setPadding((int)(4*d), (int)(4*d), (int)(4*d), (int)(4*d));
                 
                 // Replace the old TextView with new ImageView
                 parent.removeViewAt(index);
                 parent.addView(ivScreenRecordIcon, index);
+                ivScreenRecordIcon.setAlpha(0f);
+                ivScreenRecordIcon.setScaleX(0.9f);
+                ivScreenRecordIcon.setScaleY(0.9f);
+                ivScreenRecordIcon.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).start();
                 
                 FLog.d(TAG, "Card icon replaced with screen_recorder.png");
             }
@@ -834,13 +823,21 @@ public class FadRecHomeFragment extends HomeFragment {
                     int height = metrics.heightPixels;
                     
                     // Update title to show screen recording info
-                    tvCameraTitle.setText("Screen Recording");
+                    if (tvCameraTitle instanceof AnimatedTextView) {
+                        ((AnimatedTextView) tvCameraTitle).animateSlotFull("Screen Recording", 400);
+                    } else {
+                        tvCameraTitle.setText("Screen Recording");
+                    }
                     FLog.d(TAG, "Card title updated to Screen Recording");
                     
                     // Update subtitle with device screen resolution and fps
                     if (tvCameraSubtitle != null) {
                         String subtitle = width + "x" + height + " • 30fps";
-                        tvCameraSubtitle.setText(subtitle);
+                        if (tvCameraSubtitle instanceof AnimatedTextView) {
+                            ((AnimatedTextView) tvCameraSubtitle).animateSlotFull(subtitle, 400);
+                        } else {
+                            tvCameraSubtitle.setText(subtitle);
+                        }
                         FLog.d(TAG, "Card subtitle updated to: " + subtitle);
                     }
                 }
@@ -861,9 +858,14 @@ public class FadRecHomeFragment extends HomeFragment {
             View rootView = getView();
             TextView tvCameraTitle = rootView.findViewById(com.fadcam.R.id.tvCameraTitle);
             TextView tvCameraSubtitle = rootView.findViewById(com.fadcam.R.id.tvCameraSubtitle);
+            boolean animate = !screenCardInfoInitialized;
             
             if (tvCameraTitle != null) {
-                tvCameraTitle.setText("Screen Recording");
+                if (animate && tvCameraTitle instanceof AnimatedTextView) {
+                    ((AnimatedTextView) tvCameraTitle).animateSlotFull("Screen Recording", 400);
+                } else {
+                    tvCameraTitle.setText("Screen Recording");
+                }
             }
             
             if (tvCameraSubtitle != null) {
@@ -874,9 +876,14 @@ public class FadRecHomeFragment extends HomeFragment {
                     int width = metrics.widthPixels;
                     int height = metrics.heightPixels;
                     String subtitle = width + "x" + height + " • 30fps";
-                    tvCameraSubtitle.setText(subtitle);
+                    if (animate && tvCameraSubtitle instanceof AnimatedTextView) {
+                        ((AnimatedTextView) tvCameraSubtitle).animateSlotFull(subtitle, 400);
+                    } else {
+                        tvCameraSubtitle.setText(subtitle);
+                    }
                 }
             }
+            screenCardInfoInitialized = true;
         } catch (Exception e) {
             FLog.e(TAG, "Error updating screen recording card info", e);
         }
@@ -916,10 +923,17 @@ public class FadRecHomeFragment extends HomeFragment {
                 lastClickTime = currentTime;
                 
                 if (screenRecordingState == ScreenRecordingState.NONE) {
-                    // Start recording
+                    if (buttonPauseResume != null) {
+                        buttonPauseResume.setEnabled(false);
+                        buttonPauseResume.setAlpha(0.5f);
+                    }
                     requestScreenRecordingPermissionAndStart();
-                } else {
-                    // Stop recording
+                } else if (screenRecordingState != ScreenRecordingState.STOPPING) {
+                    renderPrimaryButtonForRecordingState(false);
+                    if (buttonPauseResume != null) {
+                        buttonPauseResume.setEnabled(false);
+                        buttonPauseResume.setAlpha(0.5f);
+                    }
                     stopScreenRecording();
                 }
             });
@@ -947,9 +961,11 @@ public class FadRecHomeFragment extends HomeFragment {
                 
                 if (screenRecordingState == ScreenRecordingState.IN_PROGRESS) {
                     // Pause recording
+                    buttonPauseResume.setEnabled(false);
                     mediaProjectionHelper.pauseScreenRecording();
                 } else if (screenRecordingState == ScreenRecordingState.PAUSED) {
                     // Resume recording
+                    buttonPauseResume.setEnabled(false);
                     mediaProjectionHelper.resumeScreenRecording();
                 }
             });
@@ -1107,7 +1123,49 @@ public class FadRecHomeFragment extends HomeFragment {
      */
     private void stopScreenRecording() {
         FLog.d(TAG, "Stopping screen recording");
+        timerHandler.removeCallbacks(pendingStopStateReconcileRunnable);
         mediaProjectionHelper.stopScreenRecording();
+        timerHandler.postDelayed(pendingStopStateReconcileRunnable, 900L);
+    }
+
+    private void renderPrimaryButtonForRecordingState(boolean recordingActive) {
+        if (!isAdded() || buttonStartStop == null) {
+            return;
+        }
+
+        applyButtonTransition(
+            buttonStartStop,
+            recordingActive
+                ? getString(com.fadcam.R.string.button_stop)
+                : getString(com.fadcam.R.string.fadrec_start_screen_recording),
+            AppCompatResources.getDrawable(
+                requireContext(),
+                recordingActive
+                    ? com.fadcam.R.drawable.stop_rounded
+                    : com.fadcam.R.drawable.play_button_rounded
+            ),
+            () -> {
+                buttonStartStop.setBackgroundTintList(
+                    recordingActive
+                        ? ContextCompat.getColorStateList(requireContext(), com.fadcam.R.color.button_stop)
+                        : ColorStateList.valueOf(Color.parseColor("#4CAF50"))
+                );
+                buttonStartStop.setAlpha(1.0f);
+            }
+        );
+    }
+
+    private void queryScreenRecordingState() {
+        if (!isAdded()) {
+            return;
+        }
+        try {
+            Intent queryIntent = new Intent(requireContext(), ScreenRecordingService.class);
+            queryIntent.setAction(Constants.INTENT_ACTION_QUERY_SCREEN_RECORDING_STATE);
+            requireContext().startService(queryIntent);
+        } catch (Exception e) {
+            FLog.w(TAG, "Failed to query ScreenRecordingService state", e);
+        }
     }
 
     /**
@@ -1132,7 +1190,9 @@ public class FadRecHomeFragment extends HomeFragment {
                     switch (action) {
                         case Constants.BROADCAST_ON_SCREEN_RECORDING_STARTED:
                             // FLog.d(TAG, "Broadcast: SCREEN_RECORDING_STARTED");
+                            timerHandler.removeCallbacks(pendingStopStateReconcileRunnable);
                             screenRecordingState = ScreenRecordingState.IN_PROGRESS;
+                            isScreenPreviewOnlyActive = false;
                             persistRecordingState(screenRecordingState);
                             updateUIForRecordingState();
                             syncMuteUiState();
@@ -1142,7 +1202,12 @@ public class FadRecHomeFragment extends HomeFragment {
                             
                         case Constants.BROADCAST_ON_SCREEN_RECORDING_STOPPED:
                             // FLog.d(TAG, "Broadcast: SCREEN_RECORDING_STOPPED");
+                            timerHandler.removeCallbacks(pendingStopStateReconcileRunnable);
                             screenRecordingState = ScreenRecordingState.NONE;
+                            isScreenPreviewOnlyActive = false;
+                            isScreenPreviewEnabled = false;
+                            pendingPreviewOpenUntilSurfaceReady = false;
+                            pendingPreviewCloseSleepAnimation = false;
                             persistRecordingState(screenRecordingState);
                             isRecordingForcedMuted = false;
                             updateUIForRecordingState();
@@ -1153,7 +1218,9 @@ public class FadRecHomeFragment extends HomeFragment {
                             
                         case Constants.BROADCAST_ON_SCREEN_RECORDING_PAUSED:
                             // FLog.d(TAG, "Broadcast: SCREEN_RECORDING_PAUSED");
+                            timerHandler.removeCallbacks(pendingStopStateReconcileRunnable);
                             screenRecordingState = ScreenRecordingState.PAUSED;
+                            isScreenPreviewOnlyActive = false;
                             persistRecordingState(screenRecordingState);
                             updateUIForRecordingState();
                             syncMuteUiState();
@@ -1163,12 +1230,42 @@ public class FadRecHomeFragment extends HomeFragment {
                             
                         case Constants.BROADCAST_ON_SCREEN_RECORDING_RESUMED:
                             // FLog.d(TAG, "Broadcast: SCREEN_RECORDING_RESUMED");
+                            timerHandler.removeCallbacks(pendingStopStateReconcileRunnable);
                             screenRecordingState = ScreenRecordingState.IN_PROGRESS;
+                            isScreenPreviewOnlyActive = false;
                             persistRecordingState(screenRecordingState);
                             updateUIForRecordingState();
                             syncMuteUiState();
                             // Toast.makeText(context, com.fadcam.R.string.fadrec_screen_recording_resumed, 
                             //     Toast.LENGTH_SHORT).show();
+                            break;
+
+                        case Constants.BROADCAST_ON_SCREEN_RECORDING_STATE_CALLBACK:
+                            String stateName = intent.getStringExtra("recordingState");
+                            if (stateName != null) {
+                                try {
+                                    ScreenRecordingState callbackState = ScreenRecordingState.valueOf(stateName);
+                                    if (callbackState != ScreenRecordingState.STOPPING) {
+                                        screenRecordingState = callbackState;
+                                    }
+                                    persistRecordingState(screenRecordingState);
+                                } catch (IllegalArgumentException ignored) {
+                                }
+                            }
+                            boolean previewOnlyActive = intent.getBooleanExtra(
+                                Constants.EXTRA_SCREEN_PREVIEW_ONLY_ACTIVE,
+                                false
+                            );
+                            isScreenPreviewOnlyActive = previewOnlyActive;
+                            isScreenPreviewEnabled = intent.getBooleanExtra(
+                                Constants.EXTRA_SCREEN_PREVIEW_ENABLED,
+                                isScreenPreviewEnabled
+                            );
+                            if (screenRecordingState == ScreenRecordingState.NONE) {
+                                timerHandler.removeCallbacks(pendingStopStateReconcileRunnable);
+                            }
+                            updateUIForRecordingState();
+                            syncMuteUiState();
                             break;
                             
                         // Handle overlay actions
@@ -1200,6 +1297,9 @@ public class FadRecHomeFragment extends HomeFragment {
                             
                         case Constants.ACTION_SCREEN_RECORDING_PERMISSION_DENIED:
                             // FLog.d(TAG, "Received ACTION_SCREEN_RECORDING_PERMISSION_DENIED");
+                            pendingPreviewOnlyPermission = false;
+                            pendingPreviewOpenUntilSurfaceReady = false;
+                            updateUIForRecordingState();
                             Toast.makeText(context, "Screen recording permission denied", Toast.LENGTH_SHORT).show();
                             break;
                             
@@ -1244,6 +1344,7 @@ public class FadRecHomeFragment extends HomeFragment {
             filter.addAction(Constants.BROADCAST_ON_SCREEN_RECORDING_STOPPED);
             filter.addAction(Constants.BROADCAST_ON_SCREEN_RECORDING_PAUSED);
             filter.addAction(Constants.BROADCAST_ON_SCREEN_RECORDING_RESUMED);
+            filter.addAction(Constants.BROADCAST_ON_SCREEN_RECORDING_STATE_CALLBACK);
             filter.addAction(Constants.BROADCAST_ON_SCREEN_RECORDING_MUTE_CHANGED);
             // Add overlay actions
             filter.addAction(Constants.ACTION_START_SCREEN_RECORDING_FROM_OVERLAY);
@@ -1292,24 +1393,23 @@ public class FadRecHomeFragment extends HomeFragment {
             buttonStartStop.setEnabled(true);
             buttonStartStop.setClickable(true);
             buttonStartStop.setAlpha(1.0f);
-            if (screenRecordingState == ScreenRecordingState.NONE) {
-                // IDLE STATE: Green start button
-                buttonStartStop.setText(com.fadcam.R.string.fadrec_start_screen_recording);
-                buttonStartStop.setIcon(
-                    AppCompatResources.getDrawable(requireContext(), com.fadcam.R.drawable.play_button_rounded)
-                );
-                // Green color for start button
-                animateButtonColor(buttonStartStop, android.graphics.Color.parseColor("#4CAF50"));
-            } else {
-                // RECORDING STATE: Red stop button
-                buttonStartStop.setText(com.fadcam.R.string.button_stop);
-                buttonStartStop.setIcon(
-                    AppCompatResources.getDrawable(requireContext(), com.fadcam.R.drawable.stop_rounded)
-                );
-                // Red color for stop button
-                animateButtonColor(buttonStartStop, 
-                    androidx.core.content.ContextCompat.getColor(requireContext(), com.fadcam.R.color.button_stop));
-            }
+            applyButtonTransition(
+                buttonStartStop,
+                screenRecordingState == ScreenRecordingState.NONE
+                    ? getString(com.fadcam.R.string.fadrec_start_screen_recording)
+                    : getString(com.fadcam.R.string.button_stop),
+                AppCompatResources.getDrawable(
+                    requireContext(),
+                    screenRecordingState == ScreenRecordingState.NONE
+                        ? com.fadcam.R.drawable.play_button_rounded
+                        : com.fadcam.R.drawable.stop_rounded
+                ),
+                () -> buttonStartStop.setBackgroundTintList(
+                    screenRecordingState == ScreenRecordingState.NONE
+                        ? ColorStateList.valueOf(Color.parseColor("#4CAF50"))
+                        : ContextCompat.getColorStateList(requireContext(), com.fadcam.R.color.button_stop)
+                )
+            );
         }
         
         // Update Pause/Resume button (always visible, icon-only like FadCam)
@@ -1345,6 +1445,12 @@ public class FadRecHomeFragment extends HomeFragment {
             buttonFadRecMute.setVisibility(View.VISIBLE);
             syncMuteUiState();
         }
+
+        if (screenRecordingState == ScreenRecordingState.NONE && !isScreenPreviewOnlyActive) {
+            isScreenPreviewEnabled = false;
+        }
+        refreshElapsedHeroAppearance();
+        updateModeSpecificPreviewVisibility();
         
         FLog.d(TAG, "UI updated for state: " + screenRecordingState);
         
@@ -1363,28 +1469,6 @@ public class FadRecHomeFragment extends HomeFragment {
         }
     }
     
-    /**
-     * Animate button background color change
-     */
-    private void animateButtonColor(MaterialButton button, int toColor) {
-        try {
-            android.animation.ValueAnimator colorAnimator = android.animation.ValueAnimator.ofArgb(
-                ((android.graphics.drawable.ColorDrawable) button.getBackground()).getColor(),
-                toColor
-            );
-            colorAnimator.setDuration(300);
-            colorAnimator.addUpdateListener(animator -> 
-                button.setBackgroundTintList(
-                    android.content.res.ColorStateList.valueOf((Integer) animator.getAnimatedValue())
-                )
-            );
-            colorAnimator.start();
-        } catch (Exception e) {
-            // Fallback to instant change
-            button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(toColor));
-        }
-    }
-
     private void updateMuteButtonUi() {
         if (buttonFadRecMute == null || !isAdded()) return;
         boolean muted = sharedPreferencesManager != null && sharedPreferencesManager.isScreenRecordingMuted();
@@ -1528,6 +1612,7 @@ public class FadRecHomeFragment extends HomeFragment {
                 elapsedMinutes,
                 elapsedSeconds
             );
+            latestElapsedDisplay = elapsedTimeText;
             
             // Format remaining time
             long days = remainingTime / (24 * 3600);
@@ -1576,6 +1661,9 @@ public class FadRecHomeFragment extends HomeFragment {
                 if (tvRemainingSubtitle != null) {
                     tvRemainingSubtitle.setText(getString(R.string.recording_remaining_time));
                 }
+
+                refreshElapsedHeroAppearance();
+                updateStartStopButtonForFoldedState();
             });
             
             FLog.d(TAG, "Timer updated - Elapsed: " + elapsedTimeText + ", Remaining: " + remainingTimeText);
@@ -1584,12 +1672,441 @@ public class FadRecHomeFragment extends HomeFragment {
         }
     }
 
+    @Override
+    protected boolean suppressDefaultCameraRowUpdates() {
+        return true;
+    }
+
+    @Override
+    protected boolean suppressDefaultElapsedRowUpdates() {
+        return true;
+    }
+
+    @Override
+    protected boolean usesModeSpecificPreviewBehavior() {
+        return true;
+    }
+
+    @Override
+    protected boolean isModePausedForElapsedAppearance() {
+        return screenRecordingState == ScreenRecordingState.PAUSED;
+    }
+
+    @Override
+    protected boolean isModeRecordingForElapsedAppearance() {
+        return screenRecordingState == ScreenRecordingState.IN_PROGRESS;
+    }
+
+    @Override
+    protected int getPreviewEnableHintResId() {
+        return com.fadcam.R.string.fadrec_preview_enable_hint;
+    }
+
+    @Override
+    protected boolean handleModeSpecificPreviewLongPress() {
+        if (!isAdded() || mediaProjectionHelper == null) {
+            return true;
+        }
+
+        if (screenRecordingState == ScreenRecordingState.IN_PROGRESS
+                || screenRecordingState == ScreenRecordingState.PAUSED) {
+            isScreenPreviewEnabled = !isScreenPreviewEnabled;
+            if (isScreenPreviewEnabled) {
+                if (ensurePreviewSurfaceReady()) {
+                    pendingPreviewOpenUntilSurfaceReady = false;
+                    pendingPreviewCloseSleepAnimation = false;
+                    requestAnimateNextPreviewTransition();
+                    pushPreviewSurfaceToService();
+                    updateModeSpecificPreviewVisibility();
+                } else {
+                    pendingPreviewOpenUntilSurfaceReady = true;
+                }
+            } else {
+                pendingPreviewOpenUntilSurfaceReady = false;
+                pendingPreviewCloseSleepAnimation = true;
+                requestAnimateNextPreviewTransition();
+                deferredDetachPreviewSurface = true;
+                updateModeSpecificPreviewVisibility();
+            }
+            return true;
+        }
+
+        if (isScreenPreviewOnlyActive) {
+            isScreenPreviewOnlyActive = false;
+            isScreenPreviewEnabled = false;
+            pendingPreviewCloseSleepAnimation = true;
+            requestAnimateNextPreviewTransition();
+            deferredStopPreviewOnly = true;
+            updateModeSpecificPreviewVisibility();
+            return true;
+        }
+
+        Toast.makeText(
+            requireContext(),
+            com.fadcam.R.string.fullscreen_preview_not_recording,
+            Toast.LENGTH_LONG
+        ).show();
+        return true;
+    }
+
+    @Override
+    protected void updateModeSpecificPreviewVisibility() {
+        if (!isAdded() || getView() == null) {
+            return;
+        }
+
+        View rootView = getView();
+        View textureView = rootView.findViewById(com.fadcam.R.id.textureView);
+        View flPreviewAvatar = rootView.findViewById(com.fadcam.R.id.fl_preview_avatar);
+        View tvPreviewPlaceholder = rootView.findViewById(com.fadcam.R.id.tvPreviewPlaceholder);
+        TextView tvPreviewHint = rootView.findViewById(com.fadcam.R.id.tvPreviewHint);
+        boolean showPreview = isScreenPreviewEnabled
+            && (screenRecordingState == ScreenRecordingState.IN_PROGRESS
+            || screenRecordingState == ScreenRecordingState.PAUSED
+            || isScreenPreviewOnlyActive);
+        boolean shouldAnimate = consumeAnimateNextPreviewTransition();
+        FLog.d(
+            TAG,
+            "updateModeSpecificPreviewVisibility: showPreview=" + showPreview
+                + " shouldAnimate=" + shouldAnimate
+                + " closePending=" + pendingPreviewCloseSleepAnimation
+                + " openPendingSurface=" + pendingPreviewOpenUntilSurfaceReady
+                + " previewOnly=" + isScreenPreviewOnlyActive
+                + " state=" + screenRecordingState
+        );
+
+        if (showPreview && previewOpenSequenceRunning) {
+            return;
+        }
+        if (!showPreview && previewCloseSequenceRunning) {
+            return;
+        }
+
+        if (tvPreviewPlaceholder != null) {
+            tvPreviewPlaceholder.setVisibility(View.GONE);
+        }
+        if (tvPreviewHint != null) {
+            tvPreviewHint.setText(getPreviewEnableHintResId());
+        }
+
+        if (textureView == null || flPreviewAvatar == null) {
+            if (textureView != null) {
+                textureView.setVisibility(showPreview ? View.VISIBLE : View.INVISIBLE);
+                textureView.setAlpha(1f);
+            }
+            if (tvPreviewHint != null) {
+                tvPreviewHint.setVisibility(showPreview ? View.GONE : View.VISIBLE);
+                tvPreviewHint.setAlpha(0.75f);
+            }
+            return;
+        }
+
+        boolean avatarCurrentlyVisible = flPreviewAvatar.getVisibility() == View.VISIBLE;
+        if (showPreview) {
+            if (shouldAnimate) {
+                if (!avatarCurrentlyVisible) {
+                    flPreviewAvatar.setVisibility(View.VISIBLE);
+                    flPreviewAvatar.setAlpha(1f);
+                    flPreviewAvatar.setScaleX(1f);
+                    flPreviewAvatar.setScaleY(1f);
+                    flPreviewAvatar.setEnabled(true);
+                }
+
+                previewCloseSequenceRunning = false;
+                previewOpenSequenceRunning = true;
+                previewUiHandler.removeCallbacksAndMessages(null);
+                runHintVisibilityAnimated(false);
+                textureView.setVisibility(View.VISIBLE);
+                textureView.setAlpha(0f);
+                setPreviewOpenAnimating(true);
+                runHomeAvatarState(true, true);
+
+                previewUiHandler.postDelayed(() -> {
+                    if (!isAdded() || getView() == null) {
+                        previewOpenSequenceRunning = false;
+                        setPreviewOpenAnimating(false);
+                        return;
+                    }
+                    flPreviewAvatar.animate().cancel();
+                    flPreviewAvatar.animate()
+                        .alpha(0f)
+                        .scaleX(0.72f)
+                        .scaleY(0.72f)
+                        .setDuration(280)
+                        .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                        .withEndAction(() -> {
+                            flPreviewAvatar.setVisibility(View.INVISIBLE);
+                            flPreviewAvatar.setEnabled(false);
+                            flPreviewAvatar.setAlpha(1f);
+                            flPreviewAvatar.setScaleX(1f);
+                            flPreviewAvatar.setScaleY(1f);
+                        })
+                        .start();
+
+                    setPendingPreviewReveal(true);
+                    previewUiHandler.postDelayed(() -> {
+                        if (isAdded()) {
+                            setPendingPreviewReveal(false);
+                            runIrisOpenReveal();
+                        } else {
+                            setPreviewOpenAnimating(false);
+                        }
+                        previewOpenSequenceRunning = false;
+                    }, 2500L);
+                }, 480L);
+            } else {
+                previewOpenSequenceRunning = false;
+                textureView.setVisibility(View.VISIBLE);
+                textureView.setAlpha(1f);
+                flPreviewAvatar.setVisibility(View.INVISIBLE);
+                flPreviewAvatar.setEnabled(false);
+                runHintVisibilityAnimated(false);
+            }
+            return;
+        }
+
+        boolean previewCurrentlyVisible = textureView.getVisibility() == View.VISIBLE;
+        boolean shouldAnimateClose = (shouldAnimate || pendingPreviewCloseSleepAnimation)
+            && (previewCurrentlyVisible || pendingPreviewCloseSleepAnimation);
+        if (shouldAnimateClose) {
+            previewOpenSequenceRunning = false;
+            previewCloseSequenceRunning = true;
+            previewUiHandler.removeCallbacksAndMessages(null);
+            setPendingPreviewReveal(false);
+            setPreviewCloseAnimating(true);
+            FLog.d(
+                TAG,
+                "Preview close animation start: textureVisible=" + previewCurrentlyVisible
+                    + " avatarVisible=" + avatarCurrentlyVisible
+            );
+
+            runHomeAvatarState(true, false);
+            flPreviewAvatar.setEnabled(true);
+            flPreviewAvatar.setAlpha(1f);
+            flPreviewAvatar.setScaleX(1f);
+            flPreviewAvatar.setScaleY(1f);
+            flPreviewAvatar.setVisibility(View.VISIBLE);
+            textureView.setVisibility(View.VISIBLE);
+            textureView.setAlpha(1f);
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP
+                && textureView.getWidth() > 0
+                && textureView.getHeight() > 0) {
+                int cx = textureView.getWidth() / 2;
+                int cy = textureView.getHeight() / 2;
+                float maxR = (float) Math.hypot(cx, cy);
+                android.animation.Animator irisClose = android.view.ViewAnimationUtils.createCircularReveal(
+                    textureView,
+                    cx,
+                    cy,
+                    maxR,
+                    0f
+                );
+                irisClose.setDuration(480L);
+                irisClose.setInterpolator(new android.view.animation.AccelerateInterpolator(1.3f));
+                irisClose.addListener(new android.animation.AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(android.animation.Animator animation) {
+                        setPreviewCloseAnimating(false);
+                        textureView.setVisibility(View.INVISIBLE);
+                        textureView.setAlpha(1f);
+                        if (!isAdded()) {
+                            previewCloseSequenceRunning = false;
+                            pendingPreviewCloseSleepAnimation = false;
+                            finalizeDeferredPreviewActions();
+                            return;
+                        }
+                        runHintVisibilityAnimated(true);
+                        View anchor = flPreviewAvatar;
+                        anchor.postDelayed(() -> {
+                            if (isAdded()) {
+                                runHomeAvatarState(false, true);
+                            }
+                            previewCloseSequenceRunning = false;
+                            pendingPreviewCloseSleepAnimation = false;
+                            finalizeDeferredPreviewActions();
+                        }, 650L);
+                    }
+                });
+                irisClose.start();
+            } else {
+                textureView.animate().cancel();
+                textureView.animate()
+                    .alpha(0f)
+                    .setDuration(340L)
+                    .withEndAction(() -> {
+                        setPreviewCloseAnimating(false);
+                        textureView.setVisibility(View.INVISIBLE);
+                        textureView.setAlpha(1f);
+                        if (!isAdded()) {
+                            previewCloseSequenceRunning = false;
+                            pendingPreviewCloseSleepAnimation = false;
+                            finalizeDeferredPreviewActions();
+                            return;
+                        }
+                        runHintVisibilityAnimated(true);
+                        previewUiHandler.postDelayed(() -> {
+                            if (isAdded()) {
+                                runHomeAvatarState(false, true);
+                            }
+                            previewCloseSequenceRunning = false;
+                            pendingPreviewCloseSleepAnimation = false;
+                            finalizeDeferredPreviewActions();
+                        }, 650L);
+                    })
+                    .start();
+            }
+            return;
+        }
+
+        previewCloseSequenceRunning = false;
+        pendingPreviewCloseSleepAnimation = false;
+        textureView.setVisibility(View.INVISIBLE);
+        textureView.setAlpha(1f);
+        flPreviewAvatar.setVisibility(View.VISIBLE);
+        flPreviewAvatar.setEnabled(true);
+        flPreviewAvatar.setAlpha(1f);
+        flPreviewAvatar.setScaleX(1f);
+        flPreviewAvatar.setScaleY(1f);
+        runHintVisibilityAnimated(true);
+        runHomeAvatarState(false, false);
+        finalizeDeferredPreviewActions();
+    }
+
+    @Override
+    protected void onModeSpecificPreviewSurfaceChanged(@Nullable Surface surface, int width, int height) {
+        previewSurface = surface;
+        previewSurfaceWidth = width;
+        previewSurfaceHeight = height;
+        if (pendingPreviewOpenUntilSurfaceReady
+            && surface != null
+            && surface.isValid()
+            && isScreenPreviewEnabled
+            && (screenRecordingState == ScreenRecordingState.IN_PROGRESS
+            || screenRecordingState == ScreenRecordingState.PAUSED)) {
+            pendingPreviewOpenUntilSurfaceReady = false;
+            requestAnimateNextPreviewTransition();
+            pushPreviewSurfaceToService();
+            updateModeSpecificPreviewVisibility();
+            return;
+        }
+        pushPreviewSurfaceToService();
+    }
+
+    private boolean ensurePreviewSurfaceReady() {
+        if (!isAdded() || getView() == null) {
+            return false;
+        }
+        View maybeTextureView = getView().findViewById(com.fadcam.R.id.textureView);
+        if (!(maybeTextureView instanceof android.view.TextureView)) {
+            return previewSurface != null && previewSurface.isValid();
+        }
+
+        android.view.TextureView textureView = (android.view.TextureView) maybeTextureView;
+        textureView.setVisibility(View.VISIBLE);
+        textureView.setAlpha(0f);
+        textureView.requestLayout();
+        textureView.invalidate();
+
+        if (!textureView.isAvailable() || textureView.getSurfaceTexture() == null) {
+            return previewSurface != null && previewSurface.isValid();
+        }
+
+        Surface freshSurface = new Surface(textureView.getSurfaceTexture());
+        previewSurface = freshSurface;
+        previewSurfaceWidth = textureView.getWidth();
+        previewSurfaceHeight = textureView.getHeight();
+        return previewSurface.isValid();
+    }
+
+    private void pushPreviewSurfaceToService() {
+        if (!isAdded() || mediaProjectionHelper == null) {
+            return;
+        }
+
+        boolean shouldPush = isScreenPreviewEnabled
+            && (screenRecordingState == ScreenRecordingState.IN_PROGRESS
+            || screenRecordingState == ScreenRecordingState.PAUSED
+            || isScreenPreviewOnlyActive);
+
+        if (!shouldPush && screenRecordingState == ScreenRecordingState.NONE && !isScreenPreviewOnlyActive) {
+            return;
+        }
+
+        mediaProjectionHelper.updateScreenPreviewSurface(
+            shouldPush ? previewSurface : null,
+            shouldPush ? previewSurfaceWidth : -1,
+            shouldPush ? previewSurfaceHeight : -1
+        );
+    }
+
+    private void finalizeDeferredPreviewActions() {
+        if (deferredDetachPreviewSurface) {
+            deferredDetachPreviewSurface = false;
+            pushPreviewSurfaceToService();
+        }
+        if (deferredStopPreviewOnly) {
+            deferredStopPreviewOnly = false;
+            if (mediaProjectionHelper != null) {
+                mediaProjectionHelper.stopScreenPreview();
+            }
+        }
+    }
+
+    @Override
+    protected void updateStartStopButtonForFoldedState() {
+        if (buttonStartStop == null || !isAdded()) {
+            return;
+        }
+
+        boolean folded = sharedPreferencesManager != null
+                && sharedPreferencesManager.sharedPreferences.getBoolean(
+                Constants.PREF_HOME_CARD_RAIL_FOLDED,
+                false);
+        boolean showTimerOnButton = folded
+                && (screenRecordingState == ScreenRecordingState.IN_PROGRESS
+                || screenRecordingState == ScreenRecordingState.PAUSED);
+        CharSequence currentText = buttonStartStop.getText();
+        String currentValue = currentText != null ? currentText.toString() : "";
+        boolean currentShowsTimer = currentValue.matches("\\d{2}:\\d{2}");
+
+        if (showTimerOnButton) {
+            buttonStartStop.setIcon(AppCompatResources.getDrawable(
+                    requireContext(),
+                    com.fadcam.R.drawable.stop_rounded));
+            if (!currentValue.equals(latestElapsedDisplay)) {
+                if (buttonStartStop instanceof com.fadcam.ui.utils.AnimatedMaterialButton
+                        && currentShowsTimer) {
+                    ((com.fadcam.ui.utils.AnimatedMaterialButton) buttonStartStop)
+                            .animateSlot(latestElapsedDisplay, 400);
+                } else {
+                    buttonStartStop.setText(latestElapsedDisplay);
+                }
+            }
+            return;
+        }
+
+        if (!currentShowsTimer) {
+            return;
+        }
+
+        buttonStartStop.setIcon(AppCompatResources.getDrawable(
+                requireContext(),
+                screenRecordingState == ScreenRecordingState.NONE
+                        ? com.fadcam.R.drawable.play_button_rounded
+                        : com.fadcam.R.drawable.stop_rounded));
+        buttonStartStop.setText(screenRecordingState == ScreenRecordingState.NONE
+                ? getString(com.fadcam.R.string.fadrec_start_screen_recording)
+                : getString(com.fadcam.R.string.button_stop));
+    }
+
     /**
      * Start the timer that updates elapsed/remaining time every second during recording.
      */
     private void startTimerUpdates() {
-        // Stop any existing timer first
-        stopTimerUpdates();
+        if (timerUpdateRunnable != null) {
+            return;
+        }
         
         timerUpdateRunnable = new Runnable() {
             @Override
@@ -1667,6 +2184,46 @@ public class FadRecHomeFragment extends HomeFragment {
         // This avoids the timing issue where state requests arrive before recording fully starts.
         
         // Timer updates are handled by updateUIForRecordingState().
+        reapplyScreenRecordingCardState(false);
+    }
+
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        if (!hidden) {
+            reconcileScreenRecordingStateWithReality();
+            reapplyScreenRecordingCardState(false);
+            if (getView() != null) {
+                updateCardForScreenRecording(getView());
+            }
+        }
+    }
+
+    private void reapplyScreenRecordingCardState(boolean animate) {
+        if (!isAdded() || getView() == null) {
+            return;
+        }
+
+        View rootView = getView();
+        View camSwitchBtn = rootView.findViewById(com.fadcam.R.id.buttonCamSwitch);
+        View torchBtn = rootView.findViewById(com.fadcam.R.id.buttonTorchSwitch);
+        View tileAfToggle = rootView.findViewById(com.fadcam.R.id.tile_af_toggle);
+        View tileExp = rootView.findViewById(com.fadcam.R.id.tile_exp);
+        View tileZoom = rootView.findViewById(com.fadcam.R.id.tile_zoom);
+        View tvRecordingControlsTitle = rootView.findViewById(com.fadcam.R.id.tv_recording_controls_title);
+
+        if (camSwitchBtn != null) camSwitchBtn.setVisibility(View.GONE);
+        if (torchBtn != null) torchBtn.setVisibility(View.GONE);
+        if (tileAfToggle != null) tileAfToggle.setVisibility(View.GONE);
+        if (tileExp != null) tileExp.setVisibility(View.GONE);
+        if (tileZoom != null) tileZoom.setVisibility(View.GONE);
+        if (tvRecordingControlsTitle != null) tvRecordingControlsTitle.setVisibility(View.GONE);
+        configurePreviewCardForScreenRecording(rootView);
+        if (!animate) {
+            screenCardInfoInitialized = true;
+        }
+        updateScreenRecordingCardInfo();
+        updateModeSpecificPreviewVisibility();
     }
 
     /**
@@ -1709,19 +2266,13 @@ public class FadRecHomeFragment extends HomeFragment {
         // to broadcast the authoritative current state when we suspect prefs might be stale.
         screenRecordingState = restoredState;
 
-        // If prefs already say NONE, don't spam a query during the START flow; we'll get
-        // real broadcasts from the service as it transitions to IN_PROGRESS.
-        if (restoredState != ScreenRecordingState.NONE || sharedPreferencesManager.isScreenRecordingInProgress()) {
-            FLog.d(TAG, "onResume: ScreenRecordingService running, restoredState=" + restoredState + " - querying");
-            try {
-                Intent queryIntent = new Intent(requireContext(), ScreenRecordingService.class);
-                queryIntent.setAction(Constants.INTENT_ACTION_QUERY_SCREEN_RECORDING_STATE);
-                requireContext().startService(queryIntent);
-            } catch (Exception e) {
-                FLog.w(TAG, "Failed to query ScreenRecordingService state", e);
-            }
-        } else {
-            FLog.d(TAG, "onResume: ScreenRecordingService running, restoredState=NONE - waiting for broadcasts");
+        FLog.d(TAG, "onResume: ScreenRecordingService running, restoredState=" + restoredState + " - querying");
+        try {
+            Intent queryIntent = new Intent(requireContext(), ScreenRecordingService.class);
+            queryIntent.setAction(Constants.INTENT_ACTION_QUERY_SCREEN_RECORDING_STATE);
+            requireContext().startService(queryIntent);
+        } catch (Exception e) {
+            FLog.w(TAG, "Failed to query ScreenRecordingService state", e);
         }
     }
 
@@ -1732,6 +2283,13 @@ public class FadRecHomeFragment extends HomeFragment {
         
         // Stop timer updates when fragment is paused
         stopTimerUpdates();
+        timerHandler.removeCallbacks(pendingStopStateReconcileRunnable);
+        previewUiHandler.removeCallbacksAndMessages(null);
+        previewOpenSequenceRunning = false;
+        previewCloseSequenceRunning = false;
+        setPendingPreviewReveal(false);
+        pendingPreviewOpenUntilSurfaceReady = false;
+        pendingPreviewCloseSleepAnimation = false;
     }
 
     @Override

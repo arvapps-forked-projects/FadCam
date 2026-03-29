@@ -41,6 +41,7 @@ import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.card.MaterialCardView;
 // For getting drawables
 
 import com.bumptech.glide.Glide;
@@ -175,6 +176,8 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     // Add field to track scrolling state
     private boolean isScrolling = false;
+    // Avoid FFprobe/progress work during initial first paint.
+    private boolean deferHeavyMetadataWork = false;
     // Add skeleton mode for professional loading experience
     private boolean isSkeletonMode = false;
     // Grid span for dynamic sizing at high column counts
@@ -392,6 +395,11 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 CardView cardView = (CardView) holder.itemView;
                 // Force pure white background for all cards in Snow Veil theme
                 cardView.setCardBackgroundColor(Color.WHITE);
+                if (holder.itemView instanceof MaterialCardView) {
+                    MaterialCardView materialCardView = (MaterialCardView) holder.itemView;
+                    materialCardView.setStrokeColor(resolveThemeColor(context, R.attr.homeRailCardBorder));
+                    materialCardView.setStrokeWidth(dpToPx(1));
+                }
 
                 // Log for debugging
                 FLog.d(TAG, "Setting WHITE card background for Snow Veil theme at position " + position);
@@ -408,29 +416,43 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             if (holder.textViewFileTime != null) holder.textViewFileTime.setTextColor(Color.BLACK);
             if (holder.textViewTimeAgo != null) holder.textViewTimeAgo.setTextColor(Color.BLACK);
         } else {
-            // For other themes, use the default background color
+            int cardSurface = resolveThemeColor(context, R.attr.homeRailCardSurface);
+            int cardBorder = resolveThemeColor(context, R.attr.homeRailCardBorder);
+            int primaryText = resolveThemeColor(context, R.attr.homeRailTextPrimary);
+            int secondaryText = resolveThemeColor(context, R.attr.homeRailTextSecondary);
+
             if (holder.itemView instanceof CardView && context != null) {
                 CardView cardView = (CardView) holder.itemView;
-                cardView.setCardBackgroundColor(ContextCompat.getColor(context, R.color.gray));
+                cardView.setCardBackgroundColor(cardSurface);
+                if (holder.itemView instanceof MaterialCardView) {
+                    MaterialCardView materialCardView = (MaterialCardView) holder.itemView;
+                    materialCardView.setStrokeColor(cardBorder);
+                    materialCardView.setStrokeWidth(dpToPx(1));
+                }
 
-                // Log for debugging
-                FLog.d(TAG, "Setting GRAY card background for other theme at position " + position);
+                FLog.d(TAG, "Setting Home rail card background for records at position " + position);
             }
 
-            // Clear any tint for other themes
             if (holder.menuButton != null) {
-                holder.menuButton.clearColorFilter();
+                holder.menuButton.setColorFilter(secondaryText, PorterDuff.Mode.SRC_IN);
             }
 
-            // Leave text colors as default for other themes
             if (holder.textViewRecord != null) {
-                holder.textViewRecord.setTextColor(holder.defaultTextColor);
+                holder.textViewRecord.setTextColor(primaryText);
             }
             if (holder.textViewTimeAgo != null) {
-                holder.textViewTimeAgo.setTextColor(holder.defaultMetaTextColor);
+                holder.textViewTimeAgo.setTextColor(secondaryText);
             }
-            if (holder.textViewFileSize != null) holder.textViewFileSize.setTextColor(holder.defaultMetaTextColor);
-            if (holder.textViewFileTime != null) holder.textViewFileTime.setTextColor(holder.defaultMetaTextColor);
+            if (holder.textViewFileSize != null) holder.textViewFileSize.setTextColor(secondaryText);
+            if (holder.textViewFileTime != null) holder.textViewFileTime.setTextColor(secondaryText);
+            if (holder.recordMetaDivider != null) {
+                holder.recordMetaDivider.setBackgroundColor(Color.argb(
+                    48,
+                    Color.red(secondaryText),
+                    Color.green(secondaryText),
+                    Color.blue(secondaryText)
+                ));
+            }
         }
 
         // Optimize time-consuming operations using DB-backed duration cache
@@ -497,7 +519,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 } else {
                     // Show placeholder immediately — never block the UI thread
                     holder.textViewFileTime.setText("--:--");
-                    if (!(safeMediaProbeMode && isScrolling)) {
+                    if (canRunHeavyMetadataWork()) {
                         // Try DB-backed duration first (instant), fall back to FFprobe only if needed
                         executorService.execute(() -> {
                             long duration = -1;
@@ -589,7 +611,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     if (cachedSaved != null && cachedDur != null) {
                         applyProgressToView(progressBg, progressFill, cachedSaved, cachedDur);
                     } else {
-                        if (safeMediaProbeMode && isScrolling) {
+                        if (!canRunHeavyMetadataWork()) {
                             progressFill.setVisibility(View.GONE);
                             return;
                         }
@@ -2313,6 +2335,14 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         final List<Object> newEntries = buildEntries(newRecords);
         final List<Object> oldEntries = this.entries;
 
+        if (oldEntries == null || oldEntries.isEmpty()) {
+            this.records = new ArrayList<>(newRecords);
+            this.entries = newEntries;
+            notifyDataSetChanged();
+            FLog.d(TAG, "updateRecords: used immediate first-fill path, entries=" + entries.size());
+            return;
+        }
+
         // Use DiffUtil to calculate the differences on entries
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
             @Override
@@ -2832,6 +2862,10 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         this.isScrolling = scrolling;
     }
 
+    public void setDeferHeavyMetadataWork(boolean deferHeavyMetadataWork) {
+        this.deferHeavyMetadataWork = deferHeavyMetadataWork;
+    }
+
     /**
      * Sets skeleton mode for professional loading experience
      * 
@@ -3155,6 +3189,10 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         // stale value isn't served at bind time before FFprobe can re-probe).
         loadedThumbnailCache.clear();
         FLog.d(TAG, "invalidateDurationCache: cleared durationCache + loadedThumbnailCache — FFprobe will re-probe");
+    }
+
+    private boolean canRunHeavyMetadataWork() {
+        return !deferHeavyMetadataWork && !(safeMediaProbeMode && isScrolling);
     }
 
     public void clearCaches() {

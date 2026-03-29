@@ -23,6 +23,19 @@
         <item name="pickerTextSecondary">#999999</item>
         <!-- Section header color - use subtle gray for night theme -->
         <item name="sectionHeaderColor">#888888</item>
+        <item name="homeRailBgStart">#121417</item>
+        <item name="homeRailBgEnd">#121417</item>
+        <item name="homeRailCardSurface">#191D22</item>
+        <item name="homeRailCardBorder">#252A31</item>
+        <item name="homeRailCardStroke">#252A31</item>
+        <item name="homeRailTileSurface">#23282F</item>
+        <item name="homeRailSegmentedSurface">#191D22</item>
+        <item name="homeRailSegmentedBorder">#2C3138</item>
+        <item name="homeRailSegmentActive">#F44336</item>
+        <item name="homeRailSegmentActiveText">#FFF7F8</item>
+        <item name="homeRailTextPrimary">#F3F4F6</item>
+        <item name="homeRailTextSecondary">#B4B8BE</item>
+        <item name="homeRailAccent">#BFCBDA</item>
         
         <!-- Picker component overrides for better contrast in Faded Night theme ONLY -->
         <item name="pickerButtonBackground">@color/picker_button_background</item>
@@ -30,5 +43,9 @@
         <item name="pickerIconTint">@color/picker_icon_tint</item>
         <item name="pickerSliderActive">@color/picker_slider_active</item>
         <item name="pickerSliderInactive">@color/picker_slider_inactive</item>
-    </style>
+    
+        <item name="android:colorBackground">@color/black</item>
+        <item name="backgroundColor">@color/black</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item></style>
 </resources>

@@ -422,6 +422,19 @@
                                 android:textColor="@android:color/darker_gray" />
                         </LinearLayout>
 
+                        <FrameLayout
+                            android:layout_width="32dp"
+                            android:layout_height="28dp"
+                            android:layout_marginEnd="8dp"
+                            android:layout_gravity="center_vertical">
+                            <com.fadcam.ui.utils.StorageProgressRingView
+                                android:id="@+id/battery_progress_ring"
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="Battery used progress" />
+                        </FrameLayout>
+
                         <ImageView
                             android:layout_width="14dp"
                             android:layout_height="14dp"
@@ -611,26 +624,46 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
                         android:background="@drawable/settings_home_row_bg"
                         android:padding="10dp">
 
-                        <TextView
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:text="@string/stream_storage_label"
-                            android:textSize="11sp"
-                            android:textStyle="bold"
-                            android:textColor="?attr/colorHeading" />
+                            android:layout_weight="1"
+                            android:orientation="vertical">
 
-                        <TextView
-                            android:id="@+id/storage_text"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="--"
-                            android:textSize="13sp"
-                            android:layout_marginTop="4dp"
-                            android:textColor="@android:color/darker_gray" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/stream_storage_label"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="?attr/colorHeading" />
+
+                            <TextView
+                                android:id="@+id/storage_text"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--"
+                                android:textSize="13sp"
+                                android:layout_marginTop="4dp"
+                                android:textColor="@android:color/darker_gray" />
+                        </LinearLayout>
+
+                        <FrameLayout
+                            android:layout_width="32dp"
+                            android:layout_height="28dp"
+                            android:layout_gravity="center_vertical">
+                            <com.fadcam.ui.utils.StorageProgressRingView
+                                android:id="@+id/remote_storage_progress_ring"
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="Storage used progress" />
+                        </FrameLayout>
                     </LinearLayout>
                 </LinearLayout>
 
@@ -646,27 +679,47 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
                         android:background="@drawable/settings_home_row_bg"
                         android:padding="10dp"
                         android:layout_marginBottom="6dp">
 
-                        <TextView
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:text="@string/stream_memory_label"
-                            android:textSize="11sp"
-                            android:textStyle="bold"
-                            android:textColor="?attr/colorHeading" />
+                            android:layout_weight="1"
+                            android:orientation="vertical">
 
-                        <TextView
-                            android:id="@+id/memory_text"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="--"
-                            android:textSize="13sp"
-                            android:layout_marginTop="4dp"
-                            android:textColor="@android:color/darker_gray" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/stream_memory_label"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="?attr/colorHeading" />
+
+                            <TextView
+                                android:id="@+id/memory_text"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--"
+                                android:textSize="13sp"
+                                android:layout_marginTop="4dp"
+                                android:textColor="@android:color/darker_gray" />
+                        </LinearLayout>
+
+                        <FrameLayout
+                            android:layout_width="32dp"
+                            android:layout_height="28dp"
+                            android:layout_gravity="center_vertical">
+                            <com.fadcam.ui.utils.StorageProgressRingView
+                                android:id="@+id/remote_memory_progress_ring"
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="Memory used progress" />
+                        </FrameLayout>
                     </LinearLayout>
 
                     <!-- Data Transferred (Clickable) -->

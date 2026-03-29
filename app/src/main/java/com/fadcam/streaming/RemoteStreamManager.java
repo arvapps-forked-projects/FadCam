@@ -1801,12 +1801,11 @@ public class RemoteStreamManager {
         if (activityManager == null) return "unknown";
         
         activityManager.getMemoryInfo(memInfo);
-        long totalMB = memInfo.totalMem / (1024 * 1024);
-        long availMB = memInfo.availMem / (1024 * 1024);
-        long usedMB = totalMB - availMB;
-        int percentage = (int)((usedMB * 100.0f) / totalMB);
+        float totalGB = memInfo.totalMem / (1024.0f * 1024.0f * 1024.0f);
+        float usedGB = (memInfo.totalMem - memInfo.availMem) / (1024.0f * 1024.0f * 1024.0f);
+        int percentage = totalGB > 0 ? (int)((usedGB / totalGB) * 100) : 0;
         
-        return percentage + "% (" + usedMB + "/" + totalMB + " MB)";
+        return String.format(java.util.Locale.US, "%d%% (%.1f/%.1f GB)", percentage, usedGB, totalGB);
     }
     
     /**
@@ -1818,15 +1817,54 @@ public class RemoteStreamManager {
             android.os.StatFs stat = new android.os.StatFs(android.os.Environment.getExternalStorageDirectory().getPath());
             long availBytes = stat.getAvailableBlocksLong() * stat.getBlockSizeLong();
             long totalBytes = stat.getBlockCountLong() * stat.getBlockSizeLong();
-            long usedBytes = totalBytes - availBytes;  // Calculate used space correctly
-            float usedGB = usedBytes / (1024.0f * 1024.0f * 1024.0f);
+            float usedFraction = totalBytes > 0 ? (float) (totalBytes - availBytes) / totalBytes : 0f;
+            usedFraction = Math.max(0f, Math.min(1f, usedFraction));
+            // Calculate percentage the same way the ring does: Math.round() for consistency
+            int percentage = Math.round(usedFraction * 100f);
+            
+            float usedGB = (totalBytes - availBytes) / (1024.0f * 1024.0f * 1024.0f);
             float totalGB = totalBytes / (1024.0f * 1024.0f * 1024.0f);
-            return String.format(java.util.Locale.US, "%.1f/%.1f GB", usedGB, totalGB);
+            return String.format(java.util.Locale.US, "%d%% (%.1f/%.1f GB)", percentage, usedGB, totalGB);
         } catch (Exception e) {
             return "unknown";
         }
     }
     
+    /**
+     * Returns available storage as a fraction (0.0–1.0) of total storage.
+     * Used to drive the progress ring on the Remote tab.
+     */
+    public float getStorageAvailableFraction() {
+        try {
+            android.os.StatFs stat = new android.os.StatFs(android.os.Environment.getExternalStorageDirectory().getPath());
+            long availBytes = stat.getAvailableBlocksLong() * stat.getBlockSizeLong();
+            long totalBytes = stat.getBlockCountLong() * stat.getBlockSizeLong();
+            if (totalBytes <= 0) return 0f;
+            return Math.max(0f, Math.min(1f, (float) availBytes / totalBytes));
+        } catch (Exception e) {
+            return 0f;
+        }
+    }
+
+    /**
+     * Returns available memory as a fraction (0.0–1.0) of total memory.
+     * Used to drive the progress ring on the Remote tab.
+     */
+    public float getMemoryAvailableFraction(android.content.Context ctx) {
+        if (ctx == null) return 0f;
+        try {
+            android.app.ActivityManager.MemoryInfo memInfo = new android.app.ActivityManager.MemoryInfo();
+            android.app.ActivityManager am = (android.app.ActivityManager)
+                    ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE);
+            if (am == null) return 0f;
+            am.getMemoryInfo(memInfo);
+            if (memInfo.totalMem <= 0) return 0f;
+            return Math.max(0f, Math.min(1f, (float) memInfo.availMem / memInfo.totalMem));
+        } catch (Exception e) {
+            return 0f;
+        }
+    }
+
     /**
      * Get network health from NetworkMonitor.
      */

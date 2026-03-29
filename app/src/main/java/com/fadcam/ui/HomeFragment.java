@@ -37,6 +37,8 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.transition.AutoTransition;
+import android.transition.TransitionManager;
 import android.text.Html;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -44,6 +46,7 @@ import android.text.format.Formatter;
 import android.text.style.ForegroundColorSpan;
 import android.util.Range;
 import android.util.Size;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -55,21 +58,27 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView; // <<< ADD IMPORT FOR ImageView
+import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.cardview.widget.CardView; // Add this
 import androidx.core.app.ActivityCompat;
+import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.constraintlayout.widget.ConstraintSet;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.res.ResourcesCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.FragmentManager; // <<< ADD IMPORT FOR FragmentManager
 import androidx.fragment.app.FragmentTransaction; // <<< ADD IMPORT FOR FragmentTransaction
+import com.google.android.material.card.MaterialCardView;
 import com.fadcam.CameraType;
 import com.fadcam.MainActivity;
 import com.fadcam.Constants;
@@ -119,6 +128,40 @@ public class HomeFragment extends BaseFragment {
 
     private static final String TAG = "HomeFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 100;
+    private static final String ELAPSED_ALIGNMENT_RESULT_KEY = "home_elapsed_alignment_picker";
+    private static final String ELAPSED_SIZE_RESULT_KEY = "home_elapsed_size_picker";
+    private static final String ELAPSED_FONT_RESULT_KEY = "home_elapsed_font_picker";
+    private static final String ELAPSED_FLAG_RESULT_KEY = "home_elapsed_flag_picker";
+    private static final String ELAPSED_BACKGROUND_RESULT_KEY = "home_elapsed_background_picker";
+    private static final String ELAPSED_CUSTOMIZE_RESULT_KEY = "home_elapsed_customize_picker";
+    private static final String STORAGE_INDICATOR_STYLE_RESULT_KEY = "home_storage_indicator_style_picker";
+    private static final String STORAGE_CUSTOMIZE_RESULT_KEY = "home_storage_customize_picker";
+    private static final String STORAGE_TOTAL_RESULT_KEY = "home_storage_total_picker";
+    private static final String TIME_LEFT_COLOR_RESULT_KEY = "home_time_left_color_picker";
+    private static final String CLOCK_CUSTOMIZE_RESULT_KEY = "home_clock_customize_picker";
+    private static final String CLOCK_DISPLAY_RESULT_KEY = "home_clock_display_picker";
+    private static final String CLOCK_COLOR_RESULT_KEY = "home_clock_color_picker";
+    private static final String CLOCK_HOUR_FORMAT_RESULT_KEY = "home_clock_hour_format_picker";
+    private static final String ELAPSED_ALIGNMENT_CENTER = "center";
+    private static final String ELAPSED_ALIGNMENT_START = "start";
+    private static final String ELAPSED_SIZE_SMALL = "small";
+    private static final String ELAPSED_SIZE_MEDIUM = "medium";
+    private static final String ELAPSED_SIZE_LARGE = "large";
+    private static final String ELAPSED_FONT_UBUNTU = "ubuntu";
+    private static final String ELAPSED_FONT_MONOSPACE = "monospace";
+    private static final String ELAPSED_FONT_DOTO = "doto";
+    private static final String ELAPSED_FLAG_SHOW = "show";
+    private static final String ELAPSED_FLAG_HIDE = "hide";
+    private static final String ELAPSED_BACKGROUND_TRANSPARENT = "transparent";
+    private static final String ELAPSED_BACKGROUND_BLACK = "black";
+    private static final String ELAPSED_BACKGROUND_WHITE = "white";
+    private static final String STORAGE_INDICATOR_RING = "ring";
+    private static final String STORAGE_INDICATOR_MICRO_PILL = "micro_pill_bar";
+    private static final String STORAGE_INDICATOR_VERTICAL_BAR = "vertical_bar";
+    private static final String STORAGE_TOTAL_VISIBLE = "visible";
+    private static final String STORAGE_TOTAL_HIDDEN = "hidden";
+    private static final String CLOCK_HOUR_FORMAT_12 = "12h";
+    private static final String CLOCK_HOUR_FORMAT_24 = "24h";
 
     private HomeFragmentHelper fragmentHelper;
 
@@ -183,8 +226,10 @@ public class HomeFragment extends BaseFragment {
     private TextView ivCameraIcon;
     private TextView tvEstimateTitle;
     private TextView tvEstimateSubtitle;
+    private ImageView ivEstimateIcon;
     private TextView tvSpaceTitle;
     private TextView tvSpaceSubtitle;
+    private com.fadcam.ui.utils.StorageProgressRingView storageProgressRing;
     // inline total will be rendered in tvSpaceTitle using spans
     
     /**
@@ -194,6 +239,23 @@ public class HomeFragment extends BaseFragment {
     protected TextView tvElapsedSubtitle;
     protected TextView tvRemainingTitle;
     protected TextView tvRemainingSubtitle;
+    private MaterialCardView cardElapsedHero;
+    private ConstraintLayout homeRootLayout;
+    private ImageView tvElapsedStateIcon;
+    private ImageView ivElapsedAccent;
+    private LinearLayout layoutElapsedContent;
+    private LinearLayout layoutElapsedMetaRow;
+    private View rowStorageAvailable;
+    private View rowEstimateTime;
+    private boolean cameraRowUiInitialized = false;
+    private View layoutCards;
+    private View layoutCardRailSection;
+    private View leftPanel;
+    private View rightPanel;
+    private View cardRailTogglePortrait;
+    private View cardRailToggleLandscape;
+    private ImageView ivCardRailTogglePortrait;
+    private ImageView ivCardRailToggleLandscape;
     
     private ImageView btnHamburgerMenu;
     private View hamburgerBadgeDot;
@@ -292,6 +354,9 @@ public class HomeFragment extends BaseFragment {
 
     private CardView cardClock;
     private TextView tvClock, tvDateEnglish, tvDateArabic;
+    private LinearLayout layoutClockInner;
+    private LinearLayout layoutClockContent;
+    protected String latestElapsedDisplay = "00:00";
 
     // FragmentActivity tipres = requireActivity();
     private String[] tips;
@@ -686,6 +751,10 @@ public class HomeFragment extends BaseFragment {
                 public void onAnimationEnd(Animator animation) {
                     super.onAnimationEnd(animation);
 
+                    if (handleModeSpecificPreviewLongPress()) {
+                        return;
+                    }
+
                     if (!isRecordingOrPaused()) {
                         if (!isAdded() || getContext() == null) {
                             return;
@@ -801,6 +870,11 @@ public class HomeFragment extends BaseFragment {
             return;
         }
 
+        if (usesModeSpecificPreviewBehavior()) {
+            updateModeSpecificPreviewVisibility();
+            return;
+        }
+
         // During the iris-close (Preview→Avatar) circular reveal (~480ms), ALL updatePreviewVisibility
         // calls must be ignored.  The service's "recording stopped" broadcast fires ~50ms into the
         // animation and would otherwise hide textureView (losing the camera background) and make
@@ -852,7 +926,7 @@ public class HomeFragment extends BaseFragment {
                 textureView.setVisibility(View.VISIBLE);
                 if (animateNextPreviewTransition) textureView.setAlpha(0f);
                 tvPreviewPlaceholder.setVisibility(View.GONE);
-                if (tvPreviewHint != null) tvPreviewHint.setText(R.string.preview_enable_hint);
+                if (tvPreviewHint != null) tvPreviewHint.setText(getPreviewEnableHintResId());
                 setHintVisibilityAnimated(true);
                 schedulePreviewOnlyStartTimeout();
                 if (textureViewSurface != null && textureViewSurface.isValid()) {
@@ -865,7 +939,7 @@ public class HomeFragment extends BaseFragment {
             textureView.setVisibility(View.INVISIBLE);
             resetPreviewTransform();
             tvPreviewPlaceholder.setVisibility(View.GONE); // Keep hidden
-            if (tvPreviewHint != null) tvPreviewHint.setText(R.string.preview_enable_hint);
+            if (tvPreviewHint != null) tvPreviewHint.setText(getPreviewEnableHintResId());
             setHintVisibilityAnimated(true);
             FLog.d(TAG, "Not recording - showing hint because area is reactive");
         }
@@ -1618,7 +1692,7 @@ public class HomeFragment extends BaseFragment {
         );
         buttonPauseResume.setEnabled(true);
 
-        animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+        applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
                 AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
             buttonStartStop.setBackgroundTintList(
                 ColorStateList.valueOf(
@@ -1626,7 +1700,8 @@ public class HomeFragment extends BaseFragment {
                 )
             );
             buttonStartStop.setEnabled(true);
-        }, true);
+        });
+        updateStartStopButtonForFoldedState();
 
         // Re-enable camera switch button (may have been disabled during WAITING_FOR_CAMERA)
         if (buttonCamSwitch != null) {
@@ -1646,6 +1721,7 @@ public class HomeFragment extends BaseFragment {
         updatePreviewVisibility();
 
         startUpdatingInfo();
+        updateStorageInfo();
     }
 
     private void onRecordingPaused() {
@@ -1659,14 +1735,17 @@ public class HomeFragment extends BaseFragment {
         // Keep camera switch button ENABLED for live switching even when paused
         // Don't disable it here
 
-        animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+        applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
                 AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
             buttonStartStop.setBackgroundTintList(
                 ColorStateList.valueOf(
                     ContextCompat.getColor(requireContext(), R.color.button_stop)
                 )
             );
-        }, true);
+        });
+        updateStartStopButtonForFoldedState();
+        updateStorageInfo();
+        updateElapsedHeroAppearance();
     }
 
     // --- Receiver for MediaRecorder Stopped signal ---
@@ -1767,7 +1846,7 @@ public class HomeFragment extends BaseFragment {
                 "Amoled".equalsIgnoreCase(themeName) ||
                 "Faded Night".equalsIgnoreCase(themeName);
             if (buttonStartStop != null) {
-                animateButtonTransition(buttonStartStop, getString(R.string.button_start),
+                applyButtonTransition(buttonStartStop, getString(R.string.button_start),
                         AppCompatResources.getDrawable(getContext(), R.drawable.play_button_rounded), () -> {
                     // Always use green color for start button regardless of theme
                     int btnColor = Color.parseColor("#4CAF50"); // Always green
@@ -1777,7 +1856,8 @@ public class HomeFragment extends BaseFragment {
                     // Force enable the button when resetting to idle state, regardless of any debouncing
                     buttonStartStop.setEnabled(true);
                     buttonStartStop.setAlpha(1.0f);
-                }, false);
+                });
+                updateStartStopButtonForFoldedState();
                 FLog.d(TAG, "Start button force-enabled in resetUIButtonsToIdleState");
             }
             if (buttonPauseResume != null) {
@@ -1988,6 +2068,9 @@ public class HomeFragment extends BaseFragment {
                 requireContext()
             );
         }
+        if (fragmentHelper != null) {
+            fragmentHelper.syncModeSwitcherToCurrentPreference();
+        }
         // Always clear stale "starting preview" pending state when Home becomes visible.
         // Service callback is the source of truth and will re-assert active preview state.
         clearPreviewOnlyPendingState(true);
@@ -2073,7 +2156,7 @@ public class HomeFragment extends BaseFragment {
             previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
         }
         if (resetHintText && tvPreviewHint != null && !isRecordingOrPaused() && !isPreviewOnlyActive) {
-            tvPreviewHint.setText(R.string.preview_enable_hint);
+            tvPreviewHint.setText(getPreviewEnableHintResId());
             setHintVisibilityAnimated(true);
         }
     }
@@ -2295,14 +2378,16 @@ public class HomeFragment extends BaseFragment {
                     // Get timestamp from the service with current time as fallback
                     long startTimeFromService = i.getLongExtra(
                         Constants.INTENT_EXTRA_RECORDING_START_TIME,
-                        SystemClock.elapsedRealtime()
+                        0L
                     );
-                    recordingStartTime = startTimeFromService;
-                    FLog.d(
-                        TAG,
-                        "initializeRecordingStateReceivers: Setting recordingStartTime=" +
-                        recordingStartTime
-                    );
+                    if (startTimeFromService > 0L) {
+                        recordingStartTime = startTimeFromService;
+                        FLog.d(
+                            TAG,
+                            "initializeRecordingStateReceivers: Setting recordingStartTime=" +
+                            recordingStartTime
+                        );
+                    }
 
                     // Perform non-UI actions previously in onRecordingStarted(true)
                     // WakeLock moved to service
@@ -2375,6 +2460,14 @@ public class HomeFragment extends BaseFragment {
                     );
                     if (serviceState == null) serviceState =
                         RecordingState.NONE; // Default to NONE
+
+                    long callbackStartTime = i.getLongExtra(
+                        Constants.INTENT_EXTRA_RECORDING_START_TIME,
+                        0L
+                    );
+                    if (callbackStartTime > 0L) {
+                        recordingStartTime = callbackStartTime;
+                    }
 
                     // *** CALL the handler method ***
                     handleServiceStateUpdate(serviceState);
@@ -2662,7 +2755,7 @@ public class HomeFragment extends BaseFragment {
         FLog.d(TAG, "Setting UI to: ACTIVE Recording");
         try {
             // Ensure interaction buttons reflect recording
-            animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+            applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
                     AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
                 buttonStartStop.setEnabled(true); // Enable STOP
                 buttonStartStop.setBackgroundTintList(
@@ -2671,7 +2764,7 @@ public class HomeFragment extends BaseFragment {
                         R.color.button_stop
                     )
                 );
-            }, true);
+            });
 
             buttonPauseResume.setEnabled(true); // Enable PAUSE
             buttonPauseResume.setIcon(
@@ -2702,6 +2795,7 @@ public class HomeFragment extends BaseFragment {
             // Manage preview and timers
             updatePreviewVisibility();
             startUpdatingInfo();
+            updateStorageInfo();
         } catch (Exception e) {
             FLog.e(TAG, "Error setting UI for Active state", e);
         }
@@ -2714,7 +2808,7 @@ public class HomeFragment extends BaseFragment {
         try {
             // Set buttons for Paused state (Stop ON, Resume(Play) ON, Switch OFF, Torch
             // OFF)
-            animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+            applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
                     AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
                 buttonStartStop.setEnabled(true); // Enable STOP
                 buttonStartStop.setBackgroundTintList(
@@ -2723,7 +2817,7 @@ public class HomeFragment extends BaseFragment {
                         R.color.button_stop
                     )
                 );
-            }, true);
+            });
 
             buttonPauseResume.setEnabled(true); // Enable RESUME
             buttonPauseResume.setIcon(
@@ -2757,6 +2851,8 @@ public class HomeFragment extends BaseFragment {
             // Manage preview and timers
             updatePreviewVisibility();
             stopUpdatingInfo(); // Show placeholder/last frame, stop timers
+            updateStorageInfo();
+            updateElapsedHeroAppearance();
         } catch (Exception e) {
             FLog.e(TAG, "Error setting UI for Paused state", e);
         }
@@ -2772,7 +2868,7 @@ public class HomeFragment extends BaseFragment {
         FLog.d(TAG, "Setting UI to: WAITING_FOR_CAMERA (camera interrupted)");
         try {
             // Similar to PAUSED state but indicates camera is being recaptured
-            animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+            applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
                     AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
                 buttonStartStop.setEnabled(true); // Enable STOP (user can still stop recording)
                 buttonStartStop.setBackgroundTintList(
@@ -2781,7 +2877,7 @@ public class HomeFragment extends BaseFragment {
                         R.color.button_stop
                     )
                 );
-            }, true);
+            });
 
             // Disable pause button during camera interruption (doesn't make sense)
             buttonPauseResume.setEnabled(false);
@@ -4324,442 +4420,23 @@ public class HomeFragment extends BaseFragment {
         initializeMessages();
 
         CardView cardPreview = view.findViewById(R.id.cardPreview);
-        CardView cardStats = view.findViewById(R.id.cardStats);
-        CardView cardStorage = view.findViewById(R.id.cardStorage);
-        // Clock card is intentionally NOT included here as it has its own color logic
 
         String themeName = sharedPreferencesManager.sharedPreferences.getString(
             com.fadcam.Constants.PREF_APP_THEME,
             Constants.DEFAULT_APP_THEME
         );
 
-        int colorDialog = resolveThemeColor(R.attr.colorDialog);
-        int colorButton = resolveThemeColor(R.attr.colorButton);
-        int colorTransparent = android.graphics.Color.TRANSPARENT;
-        int colorTextPrimary = resolveThemeColor(R.attr.colorHeading);
-        int colorTextSecondary = ContextCompat.getColor(
-            requireContext(),
-            R.color.gray_text_light
-        );
-
-        // override for AMOLED and Red, use *_surface_dark) -----
-        if ("Crimson Bloom".equals(themeName)) {
-            int redSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.red_theme_surface_dark
-            );
-            int redHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.red_theme_heading
-            );
-            int redTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.red_theme_text_secondary_dark
-            );
-            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
-            //     redSurface
-            // ); // Commented: Keep preview transparent with layered icons
-            if (cardStats != null) cardStats.setCardBackgroundColor(redSurface);
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                redSurface
-            );
-            setTextColorsRecursive(cardPreview, redHeading, redTextSecondary);
-            setTextColorsRecursive(cardStats, redHeading, redTextSecondary);
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, redHeading, redTextSecondary);
-        } else if ("Premium Gold".equals(themeName)) {
-            int goldSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.gold_theme_surface_dark
-            );
-            int goldHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.gold_theme_heading
-            );
-            int goldTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.gold_theme_text_secondary_dark
-            );
-            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
-            //     goldSurface
-            // ); // Commented: Keep preview transparent with layered icons
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                goldSurface
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                goldSurface
-            );
-            setTextColorsRecursive(cardPreview, goldHeading, goldTextSecondary);
-            setTextColorsRecursive(cardStats, goldHeading, goldTextSecondary);
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, goldHeading, goldTextSecondary);
-        } else if ("Silent Forest".equals(themeName)) {
-            // Silent Forest theme (green/teal)
-            int forestSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.silentforest_theme_surface_dark
-            );
-            int forestHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.silentforest_theme_heading
-            );
-            int forestTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.silentforest_theme_text_secondary_dark
-            );
-            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
-            //     forestSurface
-            // ); // Commented: Keep preview transparent with layered icons
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                forestSurface
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                forestSurface
-            );
-            setTextColorsRecursive(
-                cardPreview,
-                forestHeading,
-                forestTextSecondary
-            );
-            setTextColorsRecursive(
-                cardStats,
-                forestHeading,
-                forestTextSecondary
-            );
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, forestHeading, forestTextSecondary);
-        } else if ("Shadow Alloy".equals(themeName)) {
-            // Shadow Alloy theme (silver/metallic)
-            int alloySurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.shadowalloy_theme_surface_dark
-            );
-            int alloyHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.shadowalloy_theme_heading
-            );
-            int alloyTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.shadowalloy_theme_text_secondary_dark
-            );
-            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
-            //     alloySurface
-            // ); // Commented: Keep preview transparent with layered icons
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                alloySurface
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                alloySurface
-            );
-            setTextColorsRecursive(
-                cardPreview,
-                alloyHeading,
-                alloyTextSecondary
-            );
-            setTextColorsRecursive(cardStats, alloyHeading, alloyTextSecondary);
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, alloyHeading, alloyTextSecondary);
-        } else if ("Pookie Pink".equals(themeName)) {
-            // Pookie Pink theme (pink)
-            int pinkSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.pookiepink_theme_surface_dark
-            );
-            int pinkHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.pookiepink_theme_heading
-            );
-            int pinkTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.pookiepink_theme_text_secondary_dark
-            );
-            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
-            //     pinkSurface
-            // ); // Commented: Keep preview transparent with layered icons
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                pinkSurface
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                pinkSurface
-            );
-            setTextColorsRecursive(cardPreview, pinkHeading, pinkTextSecondary);
-            setTextColorsRecursive(cardStats, pinkHeading, pinkTextSecondary);
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, pinkHeading, pinkTextSecondary);
-        } else if ("Snow Veil".equals(themeName)) {
-            // Snow Veil theme (white/light)
-            int snowSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.snowveil_theme_preview_area
-            ); // Darker
-            // gray for
-            // preview
-            int snowCardBackground = ContextCompat.getColor(
-                requireContext(),
-                R.color.snowveil_theme_card_background
-            ); // White
-            // for
-            // other
-            // cards
-            int snowHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.snowveil_theme_text_primary
-            );
-            int snowTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.snowveil_theme_text_secondary
-            );
-
-            // Preview area gets darker gray for better contrast
-            // Commented: Keep preview transparent with layered icons
-            // if (cardPreview != null) {
-            //     cardPreview.setCardBackgroundColor(snowSurface);
-            //     // Also set the background of the FrameLayout inside the CardView
-            //     View frameLayout = cardPreview.getChildAt(0);
-            //     if (frameLayout != null) {
-            //         frameLayout.setBackgroundColor(snowSurface);
-            //     }
-            //     // Use a post-layout runnable to ensure the color is applied after all layout
-            //     // operations
-            //     cardPreview.post(() -> {
-            //         cardPreview.setCardBackgroundColor(snowSurface);
-            //         if (frameLayout != null) {
-            //             frameLayout.setBackgroundColor(snowSurface);
-            //         }
-            //     });
-            // }
-
-            // Other cards get white background
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                snowCardBackground
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                snowCardBackground
-            );
-
-            // Set text colors - preview area gets white text, other cards get black text
-            setTextColorsRecursive(
-                cardPreview,
-                Color.WHITE,
-                Color.parseColor("#E0E0E0")
-            ); // White text on dark gray
-            setTextColorsRecursive(cardStats, snowHeading, snowTextSecondary); // Black text on white
-            setTextColorsRecursive(cardStorage, snowHeading, snowTextSecondary); // Black text on white - FIXED!
-
-            // Apply additional contrast improvements for the Snow Veil theme
-            applySnowVeilThemeToUI(view);
-        } else if ("Faded Night".equals(themeName)) {
-            // Faded Night theme - use a proper gray instead of pure black
-            int fadedNightSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.amoled_card
-            ); // Use card color
-            // instead of pure
-            // black
-            int fadedNightHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.amoled_heading
-            );
-            int fadedNightTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.amoled_text_secondary_dark
-            );
-            // Commented: Keep preview transparent with layered icons
-            // if (cardPreview != null) {
-            //     cardPreview.setCardBackgroundColor(fadedNightSurface);
-            //     // Also set the background of the FrameLayout inside the CardView to ensure it
-            //     // overrides the layout attribute
-            //     View frameLayout = cardPreview.getChildAt(0);
-            //     if (frameLayout != null) {
-            //         frameLayout.setBackgroundColor(fadedNightSurface);
-            //     }
-            //     // Use a post-layout runnable to ensure the color is applied after all layout
-            //     // operations
-            //     cardPreview.post(() -> {
-            //         cardPreview.setCardBackgroundColor(fadedNightSurface);
-            //         if (frameLayout != null) {
-            //             frameLayout.setBackgroundColor(fadedNightSurface);
-            //         }
-            //     });
-            // }
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                fadedNightSurface
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                fadedNightSurface
-            );
-            setTextColorsRecursive(
-                cardPreview,
-                fadedNightHeading,
-                fadedNightTextSecondary
-            );
-            setTextColorsRecursive(
-                cardStats,
-                fadedNightHeading,
-                fadedNightTextSecondary
-            );
-
-            // Apply Faded Night theme to recording tiles
-            applyFadedNightThemeToTiles();
-        } else if (isAmoledTheme) {
-            // Pure AMOLED theme - keep pure black for battery saving
-            int amoledSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.amoled_surface_dark
-            );
-            int amoledHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.amoled_heading
-            );
-            int amoledTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.amoled_text_secondary_dark
-            );
-            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
-            //     amoledSurface
-            // ); // Commented: Keep preview transparent with layered icons
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                amoledSurface
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                amoledSurface
-            );
-            setTextColorsRecursive(
-                cardPreview,
-                amoledHeading,
-                amoledTextSecondary
-            );
-            setTextColorsRecursive(
-                cardStats,
-                amoledHeading,
-                amoledTextSecondary
-            );
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, amoledHeading, amoledTextSecondary);
-        } else if ("Midnight Dusk".equals(themeName)) {
-            int darkSurface = ContextCompat.getColor(
-                requireContext(),
-                R.color.dark_purple_bar
-            );
-            int darkHeading = ContextCompat.getColor(
-                requireContext(),
-                R.color.colorHeading
-            );
-            int darkTextSecondary = ContextCompat.getColor(
-                requireContext(),
-                R.color.gray_text_light
-            );
-            // Commented: Keep preview transparent with layered icons
-            // if (cardPreview != null) {
-            //     cardPreview.setCardBackgroundColor(darkSurface);
-            //     // Also set the background of the FrameLayout inside the CardView to ensure it
-            //     // overrides the layout attribute
-            //     View frameLayout = cardPreview.getChildAt(0);
-            //     if (frameLayout != null) {
-            //         frameLayout.setBackgroundColor(darkSurface);
-            //     }
-            //     // Use a post-layout runnable to ensure the color is applied after all layout
-            //     // operations
-            //     cardPreview.post(() -> {
-            //         cardPreview.setCardBackgroundColor(darkSurface);
-            //         if (frameLayout != null) {
-            //             frameLayout.setBackgroundColor(darkSurface);
-            //         }
-            //     });
-            // }
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                darkSurface
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                darkSurface
-            );
-            setTextColorsRecursive(cardPreview, darkHeading, darkTextSecondary);
-            setTextColorsRecursive(cardStats, darkHeading, darkTextSecondary);
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, darkHeading, darkTextSecondary);
-
-            // Apply Midnight Dusk theme to recording tiles
-            applyMidnightDuskThemeToTiles();
-        } else {
-            // Fallback for other themes: use dialog color for cards
-            // if (cardPreview != null) cardPreview.setCardBackgroundColor(
-            //     colorDialog
-            // ); // Commented: Keep preview transparent with layered icons
-            if (cardStats != null) cardStats.setCardBackgroundColor(
-                colorDialog
-            );
-            if (cardStorage != null) cardStorage.setCardBackgroundColor(
-                colorDialog
-            );
-            setTextColorsRecursive(
-                cardPreview,
-                colorTextPrimary,
-                colorTextSecondary
-            );
-            setTextColorsRecursive(
-                cardStats,
-                colorTextPrimary,
-                colorTextSecondary
-            );
-            // Skip storage widget to preserve semantic colors
-            // setTextColorsRecursive(cardStorage, colorTextPrimary, colorTextSecondary);
-        }
-
-    // Enable tap on the Stats card to navigate to the Records tab
-    setupStatsCardNavigation(view);
-        // override for AMOLED and Red, use *_surface_dark) -----
-
-        // Force transparent background for preview card (override theme colors)
         if (cardPreview != null) {
-            cardPreview.setCardBackgroundColor(android.graphics.Color.TRANSPARENT);
+            cardPreview.setCardBackgroundColor(Color.TRANSPARENT);
         }
 
-        // Apply theme-specific colors to mode switcher
         applyModeSwitcherTheming(themeName);
 
-        // colors) -----
-        if (cardStorage != null) {
-            if ("Crimson Bloom".equals(themeName)) {
-                // Use an even darker background for Crimson Bloom theme
-                cardStorage.setCardBackgroundColor(
-                    ContextCompat.getColor(
-                        requireContext(),
-                        R.color.crimson_dark_card_background
-                    )
-                );
-            } else if ("Premium Gold".equals(themeName)) {
-                // Use the gold theme specific card background
-                cardStorage.setCardBackgroundColor(
-                    ContextCompat.getColor(
-                        requireContext(),
-                        R.color.gold_theme_card_background
-                    )
-                );
-            } else if ("Faded Night".equals(themeName)) {
-                // Keep the Faded Night theme color that was already set
-                // Don't override it with dark_card_background
-            } else if ("Midnight Dusk".equals(themeName)) {
-                // Use consistent dark background like other themes
-                cardStorage.setCardBackgroundColor(
-                    ContextCompat.getColor(
-                        requireContext(),
-                        R.color.dark_card_background
-                    )
-                );
-            } else if ("Snow Veil".equals(themeName)) {
-                // Keep the Snow Veil theme color that was already set
-                // Don't override it with dark_card_background
-            } else {
-                // Standard dark background for other themes that don't have specific theming
-                cardStorage.setCardBackgroundColor(
-                    ContextCompat.getColor(
-                        requireContext(),
-                        R.color.dark_card_background
-                    )
-                );
-            }
+        if ("Snow Veil".equals(themeName)) {
+            applySnowVeilThemeToUI(view);
         }
-        // colors) -----
+
+        setupStatsCardNavigation(view);
 
         // theme styling -----
         // This ensures the clock card maintains its own independent color regardless of
@@ -4861,17 +4538,6 @@ public class HomeFragment extends BaseFragment {
         // Setup the small recording tiles row and listeners
         setupRecordingTiles(view);
 
-        // Apply tile theming after tiles are initialized
-        String tileTheme = sharedPreferencesManager.sharedPreferences.getString(
-            Constants.PREF_APP_THEME,
-            Constants.DEFAULT_APP_THEME
-        );
-        if ("Faded Night".equals(tileTheme)) {
-            applyFadedNightThemeToTiles();
-        } else if ("Midnight Dusk".equals(tileTheme)) {
-            applyMidnightDuskThemeToTiles();
-        }
-        
         // Setup lifecycle observer for background/foreground handling
         setupLifecycleObserver();
 
@@ -5323,6 +4989,7 @@ public class HomeFragment extends BaseFragment {
                             "onSurfaceTextureAvailable: Not recording or preview disabled, surface ready for later use"
                         );
                     }
+                    onModeSpecificPreviewSurfaceChanged(textureViewSurface, width, height);
                 }
 
                 @Override
@@ -5354,6 +5021,7 @@ public class HomeFragment extends BaseFragment {
                             height
                         );
                     }
+                    onModeSpecificPreviewSurfaceChanged(textureViewSurface, width, height);
                 }
 
                 @Override
@@ -5387,6 +5055,7 @@ public class HomeFragment extends BaseFragment {
                             "onSurfaceTextureDestroyed: Released local textureViewSurface."
                         );
                     }
+                    onModeSpecificPreviewSurfaceChanged(null, -1, -1);
                     return true; // Surface is released by the listener
                 }
 
@@ -5464,8 +5133,42 @@ public class HomeFragment extends BaseFragment {
             }, 1500); // 1.5 second cooldown
 
             if (recordingState.equals(RecordingState.NONE)) {
+                if (isCardRailCurrentlyFolded()) {
+                    applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
+                            AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
+                        buttonStartStop.setBackgroundTintList(
+                                ContextCompat.getColorStateList(requireContext(), R.color.button_stop)
+                        );
+                        buttonStartStop.setAlpha(1.0f);
+                    });
+                } else {
+                    animateButtonTransition(buttonStartStop, getString(R.string.button_stop),
+                            AppCompatResources.getDrawable(requireContext(), R.drawable.stop_rounded), () -> {
+                        buttonStartStop.setBackgroundTintList(
+                                ContextCompat.getColorStateList(requireContext(), R.color.button_stop)
+                        );
+                        buttonStartStop.setAlpha(1.0f);
+                    }, true);
+                }
                 debouncedStartRecording.run();
             } else {
+                if (isCardRailCurrentlyFolded()) {
+                    applyButtonTransition(buttonStartStop, getString(R.string.button_start),
+                            AppCompatResources.getDrawable(requireContext(), R.drawable.play_button_rounded), () -> {
+                        buttonStartStop.setBackgroundTintList(
+                                ColorStateList.valueOf(Color.parseColor("#4CAF50"))
+                        );
+                        buttonStartStop.setAlpha(1.0f);
+                    });
+                } else {
+                    animateButtonTransition(buttonStartStop, getString(R.string.button_start),
+                            AppCompatResources.getDrawable(requireContext(), R.drawable.play_button_rounded), () -> {
+                        buttonStartStop.setBackgroundTintList(
+                                ColorStateList.valueOf(Color.parseColor("#4CAF50"))
+                        );
+                        buttonStartStop.setAlpha(1.0f);
+                    }, false);
+                }
                 debouncedStopRecording.run();
             }
         });
@@ -5932,12 +5635,37 @@ public class HomeFragment extends BaseFragment {
     private void setupClockLongPressListener() {
         if (cardClock != null) {
             cardClock.setOnLongClickListener(v -> {
-                performHapticFeedback();
-                // Show existing display options and new color chooser
-                showClockAppearanceDialog();
+                animatePressBounce(v, () -> {
+                    performHapticFeedback();
+                    showClockAppearanceDialog();
+                });
                 return true;
             });
         }
+    }
+
+    private void animatePressBounce(@NonNull View target, @Nullable Runnable endAction) {
+        target.animate().cancel();
+        AnimatorSet bounce = new AnimatorSet();
+        ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(target, "scaleX", 0.97f);
+        ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(target, "scaleY", 0.97f);
+        scaleDownX.setDuration(50);
+        scaleDownY.setDuration(50);
+        ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(target, "scaleX", 1.0f);
+        ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(target, "scaleY", 1.0f);
+        scaleUpX.setDuration(70);
+        scaleUpY.setDuration(70);
+        bounce.play(scaleDownX).with(scaleDownY);
+        bounce.play(scaleUpX).with(scaleUpY).after(scaleDownX);
+        bounce.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                target.setScaleX(1f);
+                target.setScaleY(1f);
+                if (endAction != null) endAction.run();
+            }
+        });
+        bounce.start();
     }
 
     private void addWobbleAnimation() {
@@ -5994,177 +5722,130 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void showClockAppearanceDialog() {
-        final String[] appearanceOptions = {
-            "Change Clock Display",
-            "Change Clock Color",
-        };
-        int white = ContextCompat.getColor(
-            requireContext(),
-            android.R.color.white
-        );
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-            requireContext(),
-            android.R.layout.simple_list_item_1,
-            appearanceOptions
-        ) {
-            @Override
-            public View getView(
-                int position,
-                View convertView,
-                ViewGroup parent
-            ) {
-                View view = super.getView(position, convertView, parent);
-                TextView text1 = view.findViewById(android.R.id.text1);
-                if (text1 != null) text1.setTextColor(white);
-                return view;
-            }
-        };
-        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(
-            requireContext(),
-            R.style.ThemeOverlay_FadCam_Dialog
-        )
-            .setTitle("Clock Appearance")
-            .setAdapter(adapter, (dialog, which) -> {
-                if (which == 0) {
-                    // Change Clock Display
-                    showDisplayOptionsDialog();
-                } else if (which == 1) {
-                    // Change Clock Color
-                    showClockColorChooserDialog();
-                }
-            })
-            .setNegativeButton(R.string.universal_cancel, null);
-        AlertDialog dialog = builder.create();
-        dialog.setOnShowListener(dialogInterface -> {
-            // Set button text color to white
-            dialog
-                .getButton(AlertDialog.BUTTON_NEGATIVE)
-                .setTextColor(Color.WHITE);
-        });
-        dialog.show();
+        if (!isAdded()) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "clock_display",
+                getString(R.string.home_clock_display_option),
+                getString(R.string.home_clock_display_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "schedule"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "clock_color",
+                getString(R.string.home_clock_color_option),
+                getString(R.string.home_clock_color_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "palette"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "clock_hour_format",
+                getString(R.string.home_clock_hour_format_option),
+                getString(R.string.home_clock_hour_format_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "schedule"));
+
+        getParentFragmentManager().setFragmentResultListener(
+                CLOCK_CUSTOMIZE_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            "");
+                    if ("clock_display".equals(selected)) {
+                        showDisplayOptionsDialog();
+                    } else if ("clock_color".equals(selected)) {
+                        showClockColorChooserDialog();
+                    } else if ("clock_hour_format".equals(selected)) {
+                        showClockHourFormatSheet();
+                    }
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_clock_customize_title),
+                        items,
+                        null,
+                        CLOCK_CUSTOMIZE_RESULT_KEY,
+                        getString(R.string.home_clock_customize_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_clock_customize_sheet");
     }
 
     private void showDisplayOptionsDialog() {
-        final String[] items = {
+        if (!isAdded()) return;
+
+        final String[] labels = {
             getString(R.string.dialog_clock_timeonly),
             getString(R.string.dialog_clock_englishtime),
             getString(R.string.dialog_clock_Islamic_calendar),
         };
+        final String[] ids = {"clock_time_only", "clock_english", "clock_islamic"};
         int currentOption = getCurrentDisplayOption();
-        int white = ContextCompat.getColor(
-            requireContext(),
-            android.R.color.white
-        );
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-            requireContext(),
-            android.R.layout.simple_list_item_single_choice,
-            items
-        ) {
-            @Override
-            public View getView(
-                int position,
-                View convertView,
-                ViewGroup parent
-            ) {
-                View view = super.getView(position, convertView, parent);
-                TextView text1 = view.findViewById(android.R.id.text1);
-                if (text1 != null) text1.setTextColor(white);
-                return view;
-            }
-        };
-        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(
-            requireContext(),
-            R.style.ThemeOverlay_FadCam_Dialog
-        )
-            .setTitle(getString(R.string.dialog_clock_title))
-            .setSingleChoiceItems(adapter, currentOption, (dialog, which) -> {
-                saveDisplayOption(which);
-                updateClock();
-                dialog.dismiss();
-            })
-            .setNegativeButton(R.string.universal_cancel, null);
-        AlertDialog dialog = builder.create();
-        dialog.setOnShowListener(dialogInterface -> {
-            // Set button text color to white
-            dialog
-                .getButton(AlertDialog.BUTTON_NEGATIVE)
-                .setTextColor(Color.WHITE);
-        });
-        dialog.show();
+        String selectedId = ids[Math.max(0, Math.min(currentOption, ids.length - 1))];
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(ids[0], labels[0], getString(R.string.home_clock_display_timeonly_desc), null, null, null, null, null, "schedule"));
+        items.add(new com.fadcam.ui.picker.OptionItem(ids[1], labels[1], getString(R.string.home_clock_display_english_desc), null, null, null, null, null, "calendar_month"));
+        items.add(new com.fadcam.ui.picker.OptionItem(ids[2], labels[2], getString(R.string.home_clock_display_islamic_desc), null, null, null, null, null, "event"));
+
+        getParentFragmentManager().setFragmentResultListener(
+                CLOCK_DISPLAY_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            ids[0]);
+                    int which = Arrays.asList(ids).indexOf(selected);
+                    if (which < 0) which = 0;
+                    saveDisplayOption(which);
+                    updateClock();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_clock_display_option),
+                        items,
+                        selectedId,
+                        CLOCK_DISPLAY_RESULT_KEY,
+                        getString(R.string.home_clock_display_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_clock_display_sheet");
     }
 
     private void showClockColorChooserDialog() {
-        String currentSelectedColorHex =
-            sharedPreferencesManager.getClockCardColor();
-        int currentSelectedColorIndex = -1;
+        if (!isAdded()) return;
+
+        String currentSelectedColorHex = sharedPreferencesManager.getClockCardColor();
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
         for (int i = 0; i < CLOCK_COLOR_HEX_VALUES.length; i++) {
-            if (
-                CLOCK_COLOR_HEX_VALUES[i].equalsIgnoreCase(
-                    currentSelectedColorHex
-                )
-            ) {
-                currentSelectedColorIndex = i;
-                break;
-            }
+            items.add(new com.fadcam.ui.picker.OptionItem(
+                    CLOCK_COLOR_HEX_VALUES[i],
+                    CLOCK_COLOR_NAMES[i],
+                    getString(R.string.home_clock_color_choice_desc, CLOCK_COLOR_HEX_VALUES[i]),
+                    Color.parseColor(CLOCK_COLOR_HEX_VALUES[i]),
+                    null, null, null, null, null));
         }
-        int white = ContextCompat.getColor(
-            requireContext(),
-            android.R.color.white
-        );
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-            requireContext(),
-            android.R.layout.simple_list_item_single_choice,
-            CLOCK_COLOR_NAMES
-        ) {
-            @Override
-            public View getView(
-                int position,
-                View convertView,
-                ViewGroup parent
-            ) {
-                View view = super.getView(position, convertView, parent);
-                TextView text1 = view.findViewById(android.R.id.text1);
-                if (text1 != null) {
-                    text1.setTextColor(white);
-                    int size = (int) (text1.getTextSize() * 1.2f);
-                    GradientDrawable circle = new GradientDrawable();
-                    circle.setShape(GradientDrawable.OVAL);
-                    circle.setColor(
-                        Color.parseColor(CLOCK_COLOR_HEX_VALUES[position])
-                    );
-                    circle.setSize(size, size);
-                    // Set as left drawable
-                    text1.setCompoundDrawablesWithIntrinsicBounds(
-                        circle,
-                        null,
-                        null,
-                        null
-                    );
-                    text1.setCompoundDrawablePadding(24);
-                }
-                return view;
-            }
-        };
-        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(
-            requireContext(),
-            R.style.ThemeOverlay_FadCam_Dialog
-        )
-            .setTitle("Choose Clock Background Color")
-            .setSingleChoiceItems(
-                adapter,
-                currentSelectedColorIndex,
-                (dialog, which) -> {
-                    String selectedColorHex = CLOCK_COLOR_HEX_VALUES[which];
-                    sharedPreferencesManager.setClockCardColor(
-                        selectedColorHex
-                    );
+
+        getParentFragmentManager().setFragmentResultListener(
+                CLOCK_COLOR_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selectedColorHex = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            currentSelectedColorHex);
+                    sharedPreferencesManager.setClockCardColor(selectedColorHex);
                     applyClockCardColor(selectedColorHex);
 
-                    // Update clock text colors based on background brightness
                     int selectedColor = Color.parseColor(selectedColorHex);
                     boolean isLightColor = isLightColor(selectedColor);
-
-                    // Set text colors based on background brightness
                     if (isLightColor) {
                         tvClock.setTextColor(Color.BLACK);
                         tvDateEnglish.setTextColor(Color.BLACK);
@@ -6174,27 +5855,66 @@ public class HomeFragment extends BaseFragment {
                         tvDateEnglish.setTextColor(Color.WHITE);
                         tvDateArabic.setTextColor(Color.WHITE);
                     }
+                    updateClock();
+                });
 
-                    FLog.d(
-                        TAG,
-                        "User selected clock color: " +
-                        CLOCK_COLOR_NAMES[which] +
-                        " (" +
-                        selectedColorHex +
-                        ")"
-                    );
-                    dialog.dismiss();
-                }
-            )
-            .setNegativeButton(R.string.universal_cancel, null);
-        AlertDialog dialog = builder.create();
-        dialog.setOnShowListener(dialogInterface -> {
-            // Set button text color to white
-            dialog
-                .getButton(AlertDialog.BUTTON_NEGATIVE)
-                .setTextColor(Color.WHITE);
-        });
-        dialog.show();
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_clock_color_option),
+                        items,
+                        currentSelectedColorHex,
+                        CLOCK_COLOR_RESULT_KEY,
+                        getString(R.string.home_clock_color_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_clock_color_sheet");
+    }
+
+    private void showClockHourFormatSheet() {
+        if (!isAdded()) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                CLOCK_HOUR_FORMAT_12,
+                getString(R.string.home_clock_hour_format_12),
+                getString(R.string.home_clock_hour_format_12_desc),
+                null, null, null, null, null, "schedule"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                CLOCK_HOUR_FORMAT_24,
+                getString(R.string.home_clock_hour_format_24),
+                getString(R.string.home_clock_hour_format_24_desc),
+                null, null, null, null, null, "schedule"));
+
+        String selectedId = getCurrentClockHourFormat();
+
+        getParentFragmentManager().setFragmentResultListener(
+                CLOCK_HOUR_FORMAT_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            CLOCK_HOUR_FORMAT_12);
+                    saveClockHourFormat(selected);
+                    updateClock();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_clock_hour_format_option),
+                        items,
+                        selectedId,
+                        CLOCK_HOUR_FORMAT_RESULT_KEY,
+                        getString(R.string.home_clock_hour_format_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_clock_hour_format_sheet");
     }
 
     /**
@@ -6214,10 +5934,25 @@ public class HomeFragment extends BaseFragment {
         return brightness > 160;
     }
 
+    private int dpToPxInt(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    private boolean isLandscapeMode() {
+        return getResources().getConfiguration().orientation
+                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+    }
+
     private int getCurrentDisplayOption() {
         return requireActivity()
             .getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
             .getInt("display_option", 2); // Default to "Everything"
+    }
+
+    private String getCurrentClockHourFormat() {
+        return requireActivity()
+            .getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
+            .getString(Constants.PREF_HOME_CLOCK_HOUR_FORMAT, CLOCK_HOUR_FORMAT_12);
     }
 
     private void saveDisplayOption(int option) {
@@ -6225,6 +5960,14 @@ public class HomeFragment extends BaseFragment {
             .getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
             .edit();
         editor.putInt("display_option", option);
+        editor.apply();
+    }
+
+    private void saveClockHourFormat(@NonNull String format) {
+        SharedPreferences.Editor editor = requireActivity()
+            .getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
+            .edit();
+        editor.putString(Constants.PREF_HOME_CLOCK_HOUR_FORMAT, format);
         editor.apply();
     }
 
@@ -6241,10 +5984,14 @@ public class HomeFragment extends BaseFragment {
             Context.MODE_PRIVATE
         );
         int displayOption = prefs.getInt("display_option", 2); // Default to "Everything"
+        String hourFormatPref = prefs.getString(
+            Constants.PREF_HOME_CLOCK_HOUR_FORMAT,
+            CLOCK_HOUR_FORMAT_12
+        );
 
         // Update the time
         SimpleDateFormat timeFormat = new SimpleDateFormat(
-            "hh:mm a",
+            CLOCK_HOUR_FORMAT_24.equals(hourFormatPref) ? "HH:mm" : "hh:mm a",
             Locale.getDefault()
         );
         String currentTime = timeFormat.format(new Date());
@@ -6314,22 +6061,64 @@ public class HomeFragment extends BaseFragment {
         String displayDateEnglish = displayOption == 1 || displayOption == 2 ? currentDateEnglish : "";
         String displayDateArabic = displayOption == 2 ? currentDateArabic : "";
 
+        boolean showEnglish = displayOption == 1 || displayOption == 2;
+        boolean showArabic = displayOption == 2;
+        tvDateEnglish.setVisibility(showEnglish ? View.VISIBLE : View.GONE);
+        tvDateArabic.setVisibility(showArabic ? View.VISIBLE : View.GONE);
+
+        if (displayOption == 0) {
+            tvClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, isLandscapeMode() ? 18f : 16f);
+            tvClock.setPadding(0, 0, 0, 0);
+        } else if (displayOption == 1) {
+            tvClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, isLandscapeMode() ? 16f : 14f);
+            tvClock.setPadding(0, 0, 0, 0);
+        } else {
+            tvClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, isLandscapeMode() ? 15f : 13f);
+            tvClock.setPadding(0, 0, 0, 0);
+        }
+
+        if (layoutClockInner != null) {
+            int horizontalPadding = dpToPxInt(4);
+            int verticalPadding = displayOption == 0 ? dpToPxInt(4) : dpToPxInt(3);
+            layoutClockInner.setPadding(
+                    horizontalPadding,
+                    verticalPadding,
+                    horizontalPadding,
+                    verticalPadding);
+            layoutClockInner.setGravity(Gravity.CENTER_VERTICAL);
+        }
+        if (layoutClockContent != null) {
+            layoutClockContent.setGravity(Gravity.CENTER_VERTICAL);
+            int contentVerticalPadding = displayOption == 0 ? dpToPxInt(1) : 0;
+            layoutClockContent.setPadding(0, contentVerticalPadding, 0, contentVerticalPadding);
+            layoutClockContent.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        }
+
         if (tvDateEnglish instanceof com.fadcam.ui.utils.AnimatedTextView) {
             ((com.fadcam.ui.utils.AnimatedTextView) tvDateEnglish).animateSlot(displayDateEnglish, 400);
         } else {
             tvDateEnglish.setText(displayDateEnglish);
         }
-        tvDateEnglish.setPadding(
-            5,
-            tvPreviewPlaceholder.getPaddingTop(),
-            5,
-            tvPreviewPlaceholder.getPaddingBottom()
-        );
+        tvDateEnglish.setPadding(0, 0, 0, 0);
+        tvDateEnglish.setSingleLine(true);
+        tvDateEnglish.setEllipsize(null);
+        tvDateEnglish.setHorizontallyScrolling(false);
+        tvDateEnglish.setGravity(Gravity.START);
 
         if (tvDateArabic instanceof com.fadcam.ui.utils.AnimatedTextView) {
             ((com.fadcam.ui.utils.AnimatedTextView) tvDateArabic).animateSlot(displayDateArabic, 400);
         } else {
             tvDateArabic.setText(displayDateArabic);
+        }
+        tvDateArabic.setPadding(0, 0, 0, 0);
+        tvDateArabic.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        tvDateArabic.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
+        tvDateArabic.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        tvDateArabic.setTextDirection(View.TEXT_DIRECTION_RTL);
+        ViewGroup.LayoutParams arabicParams = tvDateArabic.getLayoutParams();
+        if (arabicParams instanceof LinearLayout.LayoutParams) {
+            ((LinearLayout.LayoutParams) arabicParams).gravity = Gravity.END;
+            tvDateArabic.setLayoutParams(arabicParams);
         }
     }
 
@@ -6378,6 +6167,83 @@ public class HomeFragment extends BaseFragment {
 
     }
 
+    protected boolean suppressDefaultCameraRowUpdates() {
+        return false;
+    }
+
+    protected boolean suppressDefaultElapsedRowUpdates() {
+        return false;
+    }
+
+    protected boolean usesModeSpecificPreviewBehavior() {
+        return false;
+    }
+
+    @StringRes
+    protected int getPreviewEnableHintResId() {
+        return R.string.preview_enable_hint;
+    }
+
+    /**
+     * Allows mode-specific fragments to intercept preview long-press without
+     * forking the entire HomeFragment preview interaction flow.
+     */
+    protected boolean handleModeSpecificPreviewLongPress() {
+        return false;
+    }
+
+    protected void updateModeSpecificPreviewVisibility() {
+    }
+
+    protected void onModeSpecificPreviewSurfaceChanged(@Nullable Surface surface, int width, int height) {
+    }
+
+    protected boolean isModePausedForElapsedAppearance() {
+        return isPaused();
+    }
+
+    protected boolean isModeRecordingForElapsedAppearance() {
+        return isRecording();
+    }
+
+    protected void refreshElapsedHeroAppearance() {
+        updateElapsedHeroAppearance();
+    }
+
+    protected void requestAnimateNextPreviewTransition() {
+        animateNextPreviewTransition = true;
+    }
+
+    protected boolean consumeAnimateNextPreviewTransition() {
+        boolean shouldAnimate = animateNextPreviewTransition;
+        animateNextPreviewTransition = false;
+        return shouldAnimate;
+    }
+
+    protected void setPreviewOpenAnimating(boolean animating) {
+        isPreviewOpenAnimating = animating;
+    }
+
+    protected void setPreviewCloseAnimating(boolean animating) {
+        isPreviewCloseAnimating = animating;
+    }
+
+    protected void setPendingPreviewReveal(boolean pending) {
+        pendingIrisOpenReveal = pending;
+    }
+
+    protected void runHomeAvatarState(boolean enabled, boolean animate) {
+        applyHomeAvatarState(enabled, animate);
+    }
+
+    protected void runHintVisibilityAnimated(boolean show) {
+        setHintVisibilityAnimated(show);
+    }
+
+    protected void runIrisOpenReveal() {
+        performIrisOpenReveal();
+    }
+
     /**
      * Updates storage UI with cached storage information for instant display
      */
@@ -6395,15 +6261,27 @@ public class HomeFragment extends BaseFragment {
 
         if (isRecording() || isPaused()) {
             // Always read from SharedPreferences - service is the source of truth
-            long serviceStartTime = sharedPreferencesManager.sharedPreferences.getLong(
+            android.content.SharedPreferences prefs = sharedPreferencesManager.sharedPreferences;
+            long serviceStartTime = prefs.getLong(
                 Constants.PREF_RECORDING_START_TIME,
+                0
+            );
+            long pauseStartedAt = prefs.getLong(
+                Constants.PREF_RECORDING_PAUSE_STARTED_AT,
+                0
+            );
+            long accumulatedPausedDuration = prefs.getLong(
+                Constants.PREF_RECORDING_ACCUMULATED_PAUSED_DURATION,
                 0
             );
             
             if (serviceStartTime > 0) {
+                long anchorTime = (isPaused() && pauseStartedAt > 0L)
+                    ? pauseStartedAt
+                    : SystemClock.elapsedRealtime();
                 elapsedTime = Math.max(
                     0,
-                    SystemClock.elapsedRealtime() - serviceStartTime
+                    anchorTime - serviceStartTime - accumulatedPausedDuration
                 );
                 // Verbose timer logging removed - called too frequently (every 1s during recording)
             } else {
@@ -6593,85 +6471,91 @@ public class HomeFragment extends BaseFragment {
             "%.2f GB",
             gbAvailable
         );
-        final String finalSelectedEstimate = selectedEstimate;
+        final float availableFraction = gbTotal > 0d
+            ? (float) Math.max(0d, Math.min(1d, gbAvailable / gbTotal))
+            : 0f;
+        final boolean showLiveRemaining = isRecording() || isPaused();
+        final String finalTimeLeftText = showLiveRemaining
+            ? formatRemainingTime(days, hours, minutes, seconds)
+            : selectedEstimate;
         final String elapsedTimeText = String.format(
             Locale.getDefault(),
             "%02d:%02d",
             elapsedMinutes,
             elapsedSeconds
         );
-        final String remainingTimeText = formatRemainingTime(
-            days,
-            hours,
-            minutes,
-            seconds
-        );
+        latestElapsedDisplay = elapsedTimeText;
 
         // Update UI on main thread
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
-                    // Camera row
-                    if (tvCameraTitle != null) {
-                        String oldCamTitle = tvCameraTitle.getText() != null ? tvCameraTitle.getText().toString() : "";
-                        if (!oldCamTitle.equals(finalCameraLabel)) {
-                            if (tvCameraTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                                ((com.fadcam.ui.utils.AnimatedTextView) tvCameraTitle).animateSlotFull(finalCameraLabel, 400);
-                            } else {
-                                tvCameraTitle.setText(finalCameraLabel);
-                            }
-                        }
-                    }
-                    if (tvCameraSubtitle != null) {
-                        String oldCamSub = tvCameraSubtitle.getText() != null ? tvCameraSubtitle.getText().toString() : "";
-                        if (!oldCamSub.equals(cameraSubtitle)) {
-                            if (tvCameraSubtitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                                ((com.fadcam.ui.utils.AnimatedTextView) tvCameraSubtitle).animateSlotFull(cameraSubtitle, 400);
-                            } else {
-                                tvCameraSubtitle.setText(cameraSubtitle);
-                            }
-                        }
-                    }
-
-                    // Update camera icon
-                    try {
-                        com.fadcam.CameraType camType =
-                            sharedPreferencesManager.getCameraSelection();
-                        if (ivCameraIcon != null) {
-                            String newIconText;
-                            if (camType == com.fadcam.CameraType.FRONT) {
-                                newIconText = "camera_front";
-                            } else if (camType.isDual()) {
-                                newIconText = "switch_video";
-                            } else {
-                                newIconText = "camera_alt";
-                            }
-                            String oldIconText = ivCameraIcon.getText() != null
-                                    ? ivCameraIcon.getText().toString() : "";
-                            if (!oldIconText.equals(newIconText)) {
-                                if (ivCameraIcon instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                                    ((com.fadcam.ui.utils.AnimatedTextView) ivCameraIcon)
-                                            .animateCrossfade(newIconText, 300);
+                    boolean animateCameraRow = cameraRowUiInitialized;
+                    if (!suppressDefaultCameraRowUpdates()) {
+                        // Camera row
+                        if (tvCameraTitle != null) {
+                            String oldCamTitle = tvCameraTitle.getText() != null ? tvCameraTitle.getText().toString() : "";
+                            if (!oldCamTitle.equals(finalCameraLabel)) {
+                                if (animateCameraRow && tvCameraTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                    ((com.fadcam.ui.utils.AnimatedTextView) tvCameraTitle).animateSlotFull(finalCameraLabel, 400);
                                 } else {
-                                    ivCameraIcon.setText(newIconText);
+                                    tvCameraTitle.setText(finalCameraLabel);
                                 }
                             }
                         }
-                    } catch (Exception ignored) {}
+                        if (tvCameraSubtitle != null) {
+                            String oldCamSub = tvCameraSubtitle.getText() != null ? tvCameraSubtitle.getText().toString() : "";
+                            if (!oldCamSub.equals(cameraSubtitle)) {
+                                if (animateCameraRow && tvCameraSubtitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                    ((com.fadcam.ui.utils.AnimatedTextView) tvCameraSubtitle).animateSlotFull(cameraSubtitle, 400);
+                                } else {
+                                    tvCameraSubtitle.setText(cameraSubtitle);
+                                }
+                            }
+                        }
+    
+                        // Update camera icon
+                        try {
+                            com.fadcam.CameraType camType =
+                                sharedPreferencesManager.getCameraSelection();
+                            if (ivCameraIcon != null) {
+                                String newIconText;
+                                if (camType == com.fadcam.CameraType.FRONT) {
+                                    newIconText = "camera_front";
+                                } else if (camType.isDual()) {
+                                    newIconText = "switch_video";
+                                } else {
+                                    newIconText = "camera_alt";
+                                }
+                                String oldIconText = ivCameraIcon.getText() != null
+                                        ? ivCameraIcon.getText().toString() : "";
+                                if (!oldIconText.equals(newIconText)) {
+                                    if (animateCameraRow && ivCameraIcon instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                        ((com.fadcam.ui.utils.AnimatedTextView) ivCameraIcon)
+                                                .animateCrossfade(newIconText, 300);
+                                    } else {
+                                        ivCameraIcon.setText(newIconText);
+                                    }
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    cameraRowUiInitialized = true;
 
-                    // Estimate row
+                    // Time-left row
                     if (tvEstimateTitle != null) {
                         String oldEstimate = tvEstimateTitle.getText() != null ? tvEstimateTitle.getText().toString() : "";
-                        if (!oldEstimate.equals(finalSelectedEstimate)) {
+                        if (!oldEstimate.equals(finalTimeLeftText)) {
                             if (tvEstimateTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                                ((com.fadcam.ui.utils.AnimatedTextView) tvEstimateTitle).animateSlot(finalSelectedEstimate, 400);
+                                ((com.fadcam.ui.utils.AnimatedTextView) tvEstimateTitle).animateSlotDown(finalTimeLeftText, 400);
                             } else {
-                                tvEstimateTitle.setText(finalSelectedEstimate);
+                                tvEstimateTitle.setText(finalTimeLeftText);
                             }
                         }
                     }
                     if (tvEstimateSubtitle != null) tvEstimateSubtitle.setText(
-                        getString(R.string.recording_estimated_time)
+                        getString(R.string.recording_time_left)
                     );
+                    applyTimeLeftAccentPreference();
 
                     // Space row — value only on tvSpaceTitle, static total on tvSpaceTotal.
                     // Available space decreases during recording, so we animate DOWN.
@@ -6690,6 +6574,7 @@ public class HomeFragment extends BaseFragment {
                         String totalStr = String.format(numberFormatLocale, "/ %.2f GB", gbTotal);
                         tvSpaceTotal.setText(totalStr);
                     }
+                    applyStorageTotalVisibilityPreference();
                     if (tvSpaceSubtitle != null) {
                         String newSubtitle = getString(R.string.storage_available_space);
                         if (tvSpaceSubtitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
@@ -6698,46 +6583,41 @@ public class HomeFragment extends BaseFragment {
                             tvSpaceSubtitle.setText(newSubtitle);
                         }
                     }
+                    if (storageProgressRing != null) {
+                        storageProgressRing.setProgress(availableFraction);
+                    }
+                    applyStorageIndicatorStylePreference();
 
-                    // Elapsed row — time increases, animate UP.
-                    if (tvElapsedTitle != null) {
-                        String oldElapsed = tvElapsedTitle.getText() != null ? tvElapsedTitle.getText().toString() : "";
-                        if (!oldElapsed.equals(elapsedTimeText)) {
-                            if (tvElapsedTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                                ((com.fadcam.ui.utils.AnimatedTextView) tvElapsedTitle).animateSlot(elapsedTimeText, 400);
-                            } else {
-                                tvElapsedTitle.setText(elapsedTimeText);
+                    if (!suppressDefaultElapsedRowUpdates()) {
+                        // Elapsed row — time increases, animate UP.
+                        if (tvElapsedTitle != null) {
+                            String oldElapsed = tvElapsedTitle.getText() != null ? tvElapsedTitle.getText().toString() : "";
+                            if (!oldElapsed.equals(elapsedTimeText)) {
+                                if (tvElapsedTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                    ((com.fadcam.ui.utils.AnimatedTextView) tvElapsedTitle).animateSlot(elapsedTimeText, 400);
+                                } else {
+                                    tvElapsedTitle.setText(elapsedTimeText);
+                                }
                             }
                         }
-                    }
-                    if (tvElapsedSubtitle != null) {
-                        String newElapsedSub = getString(R.string.recording_elapsed_time);
-                        if (tvElapsedSubtitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                            ((com.fadcam.ui.utils.AnimatedTextView) tvElapsedSubtitle).animateSlot(newElapsedSub, 400);
-                        } else {
-                            tvElapsedSubtitle.setText(newElapsedSub);
-                        }
-                    }
-
-                    // Remaining row — time decreases, animate DOWN.
-                    if (tvRemainingTitle != null) {
-                        String oldRemaining = tvRemainingTitle.getText() != null ? tvRemainingTitle.getText().toString() : "";
-                        if (!oldRemaining.equals(remainingTimeText)) {
-                            if (tvRemainingTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                                ((com.fadcam.ui.utils.AnimatedTextView) tvRemainingTitle).animateSlotDown(remainingTimeText, 400);
+                        if (tvElapsedSubtitle != null) {
+                            String newElapsedSub = getString(R.string.recording_elapsed_time);
+                            if (tvElapsedSubtitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                ((com.fadcam.ui.utils.AnimatedTextView) tvElapsedSubtitle).animateSlot(newElapsedSub, 400);
                             } else {
-                                tvRemainingTitle.setText(remainingTimeText);
+                                tvElapsedSubtitle.setText(newElapsedSub);
                             }
                         }
+                        updateElapsedHeroAppearance();
+                        applyElapsedAlignmentPreference();
+                        applyElapsedSizePreference();
+                        applyElapsedFontPreference();
+                        applyElapsedFlagPreference();
                     }
-                    if (tvRemainingSubtitle != null) {
-                        String newRemainingSub = getString(R.string.recording_remaining_time);
-                        if (tvRemainingSubtitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                            ((com.fadcam.ui.utils.AnimatedTextView) tvRemainingSubtitle).animateSlot(newRemainingSub, 400);
-                        } else {
-                            tvRemainingSubtitle.setText(newRemainingSub);
-                        }
+                    if (!suppressDefaultElapsedRowUpdates()) {
+                        updateStartStopButtonForFoldedState();
                     }
+
                 });
         }
     }
@@ -6755,19 +6635,39 @@ public class HomeFragment extends BaseFragment {
      * @param applyChanges Runnable that sets icon, backgroundTint, enabled state, etc.
      * @param slideUp      {@code true} → label slides UP (Start → Stop); {@code false} → DOWN.
      */
-    private void animateButtonTransition(
+    protected void applyButtonTransition(
+            @NonNull MaterialButton button,
+            @NonNull CharSequence newText,
+            @Nullable android.graphics.drawable.Drawable newIcon,
+            @NonNull Runnable applyOtherChanges) {
+        // State-sync paths should be deterministic and non-animated. These methods run during
+        // lifecycle restores, service callbacks, and tab switches; animating here causes the
+        // play/stop icon to blink when returning to Home even though the user did not click.
+        applyOtherChanges.run();
+        if (button instanceof com.fadcam.ui.utils.AnimatedMaterialButton) {
+            ((com.fadcam.ui.utils.AnimatedMaterialButton) button).cancelAnimation();
+        }
+        if (newIcon != null || button.getIcon() != null) {
+            button.setIcon(newIcon);
+        }
+        button.setText(newText);
+    }
+
+    protected void animateButtonTransition(
             @NonNull MaterialButton button,
             @NonNull CharSequence newText,
             @Nullable android.graphics.drawable.Drawable newIcon,
             @NonNull Runnable applyOtherChanges,
             boolean slideUp) {
-        // Apply tint, enabled-state etc. immediately; icon is animated separately below.
         applyOtherChanges.run();
+
+        Drawable currentIcon = button.getIcon();
+        boolean iconChanged = !areEquivalentDrawables(currentIcon, newIcon);
+
         if (button instanceof com.fadcam.ui.utils.AnimatedMaterialButton) {
             com.fadcam.ui.utils.AnimatedMaterialButton animated =
                     (com.fadcam.ui.utils.AnimatedMaterialButton) button;
-            // Animate icon crossfade alongside text slot machine.
-            if (newIcon != null) {
+            if (iconChanged) {
                 animated.animateIcon(newIcon, 300);
             }
             CharSequence current = animated.getText();
@@ -6779,9 +6679,30 @@ public class HomeFragment extends BaseFragment {
                 }
             }
         } else {
-            if (newIcon != null) button.setIcon(newIcon);
+            if (iconChanged) {
+                button.setIcon(newIcon);
+            }
             button.setText(newText);
         }
+    }
+
+    private boolean areEquivalentDrawables(@Nullable Drawable current, @Nullable Drawable next) {
+        if (current == next) {
+            return true;
+        }
+        if (current == null || next == null) {
+            return false;
+        }
+
+        Drawable.ConstantState currentState = current.getConstantState();
+        Drawable.ConstantState nextState = next.getConstantState();
+        if (currentState != null && nextState != null) {
+            return currentState.equals(nextState);
+        }
+
+        return current.getClass().equals(next.getClass())
+                && current.getIntrinsicWidth() == next.getIntrinsicWidth()
+                && current.getIntrinsicHeight() == next.getIntrinsicHeight();
     }
 
     private String formatRemainingTime(
@@ -6790,15 +6711,10 @@ public class HomeFragment extends BaseFragment {
         long minutes,
         long seconds
     ) {
-        // When not recording, show 00:00 format like elapsed time for consistency
-        if (days == 0 && hours == 0 && minutes == 0 && seconds == 0) {
-            return "00:00";
-        }
-
         StringBuilder remainingTime = new StringBuilder();
         if (days > 0) {
             remainingTime.append(
-                String.format(Locale.getDefault(), "%d days ", days)
+                String.format(Locale.getDefault(), "%dd ", days)
             );
         }
         if (hours > 0) {
@@ -6863,7 +6779,7 @@ public class HomeFragment extends BaseFragment {
     private String getRecordingTimeEstimate(long availableBytes, long bitrate) {
         // Prevent division by zero
         if (bitrate <= 0) {
-            return "∞ h ∞ min"; // Infinite time if bitrate is zero
+            return "\u221e";
         }
 
         // Calculate seconds, handling potential overflow
@@ -6878,14 +6794,15 @@ public class HomeFragment extends BaseFragment {
         // Ensure non-negative values
         recordingSeconds = Math.max(0, recordingSeconds);
 
-        long recordingHours = recordingSeconds / 3600;
+        long recordingDays = recordingSeconds / (24 * 3600);
+        long recordingHours = (recordingSeconds % (24 * 3600)) / 3600;
         long recordingMinutes = (recordingSeconds % 3600) / 60;
-
-        return String.format(
-            Locale.getDefault(),
-            "%d h %d min",
+        long remainingSeconds = recordingSeconds % 60;
+        return formatRemainingTime(
+            recordingDays,
             recordingHours,
-            recordingMinutes
+            recordingMinutes,
+            remainingSeconds
         );
     }
 
@@ -8309,7 +8226,7 @@ public class HomeFragment extends BaseFragment {
             isPreviewOnlyStartPending = false;
             previewOnlyStartPendingDeadlineMs = 0L;
             if (tvPreviewHint != null) {
-                tvPreviewHint.setText(R.string.preview_enable_hint);
+                tvPreviewHint.setText(getPreviewEnableHintResId());
             }
             setHintVisibilityAnimated(true);
             return;
@@ -8329,7 +8246,7 @@ public class HomeFragment extends BaseFragment {
             isPreviewOnlyStartPending = false;
             previewOnlyStartPendingDeadlineMs = 0L;
             if (tvPreviewHint != null) {
-                tvPreviewHint.setText(R.string.preview_enable_hint);
+                tvPreviewHint.setText(getPreviewEnableHintResId());
             }
             setHintVisibilityAnimated(true);
             Toast.makeText(requireContext(), "Preview could not start. Try long-press again.", Toast.LENGTH_SHORT).show();
@@ -9635,16 +9552,17 @@ public class HomeFragment extends BaseFragment {
             stats.setClickable(true);
             stats.setFocusable(true);
             stats.setOnClickListener(v -> {
-                performHapticFeedback();
-                try {
-                    if (getActivity() instanceof com.fadcam.MainActivity) {
-                        com.fadcam.MainActivity act = (com.fadcam.MainActivity) getActivity();
-                        // Switch to Records tab (index 1)
-                        act.switchFragment(1, true);
+                animatePressBounce(v, () -> {
+                    performHapticFeedback();
+                    try {
+                        if (getActivity() instanceof com.fadcam.MainActivity) {
+                            com.fadcam.MainActivity act = (com.fadcam.MainActivity) getActivity();
+                            act.switchFragment(1, true);
+                        }
+                    } catch (Exception e) {
+                        FLog.e(TAG, "Failed to navigate to Records from Stats card", e);
                     }
-                } catch (Exception e) {
-                    FLog.e(TAG, "Failed to navigate to Records from Stats card", e);
-                }
+                });
             });
         } catch (Exception e) {
             FLog.e(TAG, "setupStatsCardNavigation error", e);
@@ -9653,18 +9571,37 @@ public class HomeFragment extends BaseFragment {
 
     private void initializeViews(View view) {
         FLog.d(TAG, "initializeViews: Finding UI elements.");
+        homeRootLayout = (view instanceof ConstraintLayout) ? (ConstraintLayout) view : null;
         tvCameraTitle = view.findViewById(R.id.tvCameraTitle);
         tvCameraSubtitle = view.findViewById(R.id.tvCameraSubtitle);
         ivCameraIcon = view.findViewById(R.id.ivCameraIcon);
         tvEstimateTitle = view.findViewById(R.id.tvEstimateTitle);
         tvEstimateSubtitle = view.findViewById(R.id.tvEstimateSubtitle);
+        ivEstimateIcon = view.findViewById(R.id.ivEstimateIcon);
         tvSpaceTitle = view.findViewById(R.id.tvSpaceTitle);
         tvSpaceSubtitle = view.findViewById(R.id.tvSpaceSubtitle);
+        storageProgressRing = view.findViewById(R.id.storageProgressRing);
         // ...existing code...
         tvElapsedTitle = view.findViewById(R.id.tvElapsedTitle);
         tvElapsedSubtitle = view.findViewById(R.id.tvElapsedSubtitle);
-        tvRemainingTitle = view.findViewById(R.id.tvRemainingTitle);
-        tvRemainingSubtitle = view.findViewById(R.id.tvRemainingSubtitle);
+        cardElapsedHero = view.findViewById(R.id.cardElapsedHero);
+        tvElapsedStateIcon = view.findViewById(R.id.tvElapsedStateIcon);
+        ivElapsedAccent = view.findViewById(R.id.ivElapsedAccent);
+        layoutElapsedContent = view.findViewById(R.id.layoutElapsedContent);
+        layoutElapsedMetaRow = view.findViewById(R.id.layoutElapsedMetaRow);
+        rowStorageAvailable = view.findViewById(R.id.rowStorageAvailable);
+        rowEstimateTime = view.findViewById(R.id.rowEstimateTime);
+        cameraRowUiInitialized = false;
+        layoutCards = view.findViewById(R.id.layoutCards);
+        layoutCardRailSection = view.findViewById(R.id.layoutCardRailSection);
+        leftPanel = view.findViewById(R.id.leftPanel);
+        rightPanel = view.findViewById(R.id.rightPanel);
+        cardRailTogglePortrait = view.findViewById(R.id.cardRailTogglePortrait);
+        cardRailToggleLandscape = view.findViewById(R.id.cardRailToggleLandscape);
+        ivCardRailTogglePortrait = view.findViewById(R.id.ivCardRailTogglePortrait);
+        ivCardRailToggleLandscape = view.findViewById(R.id.ivCardRailToggleLandscape);
+        tvRemainingTitle = null;
+        tvRemainingSubtitle = null;
         btnHamburgerMenu = view.findViewById(R.id.btnHamburgerMenu);
         hamburgerBadgeDot = view.findViewById(R.id.hamburgerBadgeDot);
         ivAppTitle = view.findViewById(R.id.ivAppTitle);
@@ -9723,11 +9660,24 @@ public class HomeFragment extends BaseFragment {
         tvClock = view.findViewById(R.id.tvClock);
         tvDateEnglish = view.findViewById(R.id.tvDateEnglish);
         tvDateArabic = view.findViewById(R.id.tvDateArabic);
+        layoutClockInner = view.findViewById(R.id.layoutClockInner);
+        layoutClockContent = view.findViewById(R.id.layoutClockContent);
 
         // Stats views — split label/value layout
         tvVideoCount = view.findViewById(R.id.tvVideoCount);
         tvVideoSize = view.findViewById(R.id.tvVideoSize);
         tvSpaceTotal = view.findViewById(R.id.tvSpaceTotal);
+        setupHomeCustomizationListeners();
+        applyElapsedAlignmentPreference();
+        applyElapsedSizePreference();
+        applyElapsedFontPreference();
+        applyElapsedFlagPreference();
+        applyStorageIndicatorStylePreference();
+        applyStorageTotalVisibilityPreference();
+        applyTimeLeftAccentPreference();
+        updateElapsedHeroAppearance();
+        applyCardRailFoldedState(false);
+        setupCardRailToggle();
 
         // Torch button (already initialized elsewhere, but good to have it
         // consistently)
@@ -10455,6 +10405,7 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
+
     /**
      * Override the onBackPressed method from BaseFragment
      */
@@ -10718,6 +10669,7 @@ public class HomeFragment extends BaseFragment {
             }
         } else {
             // Tab switched away — pause heavy operations
+            pauseUpdateHandlers();
             if (!isLaunchingPhotoCapture) {
                 stopBubbleRotation();
             }
@@ -10887,7 +10839,7 @@ public class HomeFragment extends BaseFragment {
             );
         } else {
             // Fallback to default
-            result = CLOCK_COLOR_HEX_VALUES[0]; // Default to Purple (#673AB7)
+            result = CLOCK_COLOR_HEX_VALUES[0]; // Purple (#673AB7)
             FLog.w(
                 TAG,
                 "No specific theme match found for [" +
@@ -11197,105 +11149,22 @@ public class HomeFragment extends BaseFragment {
      */
     private void applyModeSwitcherTheming(String themeName) {
         try {
-            // Find the active segment (FadCam)
-            View segmentFadCam = getView().findViewById(R.id.segment_fadcam);
-            if (segmentFadCam == null) return;
+            View root = getView();
+            if (root == null) return;
 
-            // Determine the theme color and text color for the active segment
-            int activeColor;
-            int textColor;
-            switch (themeName) {
-                case "Crimson Bloom":
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.red_theme_primary
-                    );
-                    textColor = Color.WHITE; // Red background with white text
-                    break;
-                case "Premium Gold":
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.gold_theme_primary
-                    );
-                    textColor = Color.BLACK; // Bright gold background with black text
-                    break;
-                case "Silent Forest":
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.silentforest_theme_primary
-                    );
-                    textColor = Color.WHITE; // Green background with white text
-                    break;
-                case "Shadow Alloy":
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.shadowalloy_theme_primary
-                    );
-                    textColor = Color.BLACK; // Bright silver background with black text
-                    break;
-                case "Pookie Pink":
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.pookiepink_theme_primary
-                    );
-                    textColor = Color.BLACK; // Bright pink background with black text
-                    break;
-                case "Snow Veil":
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.snowveil_theme_primary
-                    );
-                    textColor = Color.WHITE; // Gray background with white text
-                    break;
-                case "Midnight Dusk":
-                    // Use the same purple color as the clock card
-                    activeColor = Color.parseColor("#673AB7"); // Same purple as clock card
-                    textColor = Color.WHITE; // Purple background with white text
-                    break;
-                case "Faded Night":
-                    // Use the original red color for Faded Night
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.redPastel
-                    );
-                    textColor = Color.WHITE; // Red background with white text
-                    break;
-                case "AMOLED":
-                    // For AMOLED theme, use a lighter accent color
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.amoled_accent
-                    );
-                    textColor = Color.WHITE; // Dark background with white text
-                    break;
-                default:
-                    // Default to the original red color for unknown themes
-                    activeColor = ContextCompat.getColor(
-                        requireContext(),
-                        R.color.redPastel
-                    );
-                    textColor = Color.WHITE;
-                    break;
+            View activeIndicator = root.findViewById(R.id.segment_active_indicator);
+            if (activeIndicator != null) {
+                activeIndicator.setBackgroundResource(R.drawable.segment_active_background);
             }
 
-            // Create a new background drawable with the theme color
-            GradientDrawable activeBackground = new GradientDrawable();
-            activeBackground.setShape(GradientDrawable.RECTANGLE);
-            activeBackground.setColor(activeColor);
-            activeBackground.setCornerRadius(
-                14 * getResources().getDisplayMetrics().density
-            ); // 14dp radius
+            View segmentFadCam = root.findViewById(R.id.segment_fadcam);
+            View segmentFadRec = root.findViewById(R.id.segment_fadrec);
+            View segmentFadMic = root.findViewById(R.id.segment_fadmic);
 
-            // Apply the themed background to the active segment
-            segmentFadCam.setBackground(activeBackground);
-
-            // Find and update the text color for the active segment
-            TextView textFadCam = segmentFadCam.findViewById(R.id.text_fadcam);
-            if (textFadCam != null) {
-                textFadCam.setTextColor(textColor);
-            }
+            if (segmentFadCam != null) segmentFadCam.setBackground(null);
+            if (segmentFadRec != null) segmentFadRec.setBackground(null);
+            if (segmentFadMic != null) segmentFadMic.setBackground(null);
         } catch (Exception e) {
-            // Silently handle any errors to avoid crashes
             FLog.w(
                 "HomeFragment",
                 "Error applying mode switcher theming",
@@ -11344,22 +11213,13 @@ public class HomeFragment extends BaseFragment {
         if (tvCameraSubtitle != null) tvCameraSubtitle.setTextColor(
             Color.WHITE
         );
-        if (tvEstimateTitle != null) tvEstimateTitle.setTextColor(Color.WHITE);
+        applyTimeLeftAccentPreference();
         if (tvEstimateSubtitle != null) tvEstimateSubtitle.setTextColor(
-            Color.WHITE
+            Color.parseColor("#B0B0B0")
         );
         if (tvSpaceTitle != null) tvSpaceTitle.setTextColor(Color.WHITE);
         if (tvSpaceSubtitle != null) tvSpaceSubtitle.setTextColor(Color.WHITE);
-        if (tvElapsedTitle != null) tvElapsedTitle.setTextColor(Color.WHITE);
-        if (tvElapsedSubtitle != null) tvElapsedSubtitle.setTextColor(
-            Color.WHITE
-        );
-        if (tvRemainingTitle != null) tvRemainingTitle.setTextColor(
-            Color.WHITE
-        );
-        if (tvRemainingSubtitle != null) tvRemainingSubtitle.setTextColor(
-            Color.WHITE
-        );
+        updateElapsedHeroAppearance();
 
         // Keep semantic colors for icons but ensure they're visible on light background
         if (ivCameraIcon != null) {
@@ -11408,6 +11268,986 @@ public class HomeFragment extends BaseFragment {
             }
         } catch (Exception e) {
             FLog.e(TAG, "Error coloring icons: " + e.getMessage());
+        }
+    }
+
+    private void setupHomeCustomizationListeners() {
+        if (cardElapsedHero != null) {
+            cardElapsedHero.setOnLongClickListener(v -> {
+                animatePressBounce(v, () -> {
+                    performHapticFeedback();
+                    showElapsedCustomizeSheet();
+                });
+                return true;
+            });
+        }
+
+        if (rowStorageAvailable != null) {
+            rowStorageAvailable.setOnClickListener(v -> {
+                // Keep the row visually pressable so ripple feedback works with long press.
+            });
+            rowStorageAvailable.setOnLongClickListener(v -> {
+                animatePressBounce(v, () -> {
+                    performHapticFeedback();
+                    showStorageCustomizeSheet();
+                });
+                return true;
+            });
+        }
+
+        if (rowEstimateTime != null) {
+            rowEstimateTime.setOnClickListener(v -> {
+                // Keep the row visually pressable so ripple feedback works with long press.
+            });
+            rowEstimateTime.setOnLongClickListener(v -> {
+                animatePressBounce(v, () -> {
+                    performHapticFeedback();
+                    showTimeLeftColorSheet();
+                });
+                return true;
+            });
+        }
+    }
+
+    private void setupCardRailToggle() {
+        View.OnClickListener listener = v -> {
+            performHapticFeedback();
+            boolean folded = sharedPreferencesManager != null
+                    && sharedPreferencesManager.sharedPreferences.getBoolean(
+                    Constants.PREF_HOME_CARD_RAIL_FOLDED,
+                    false);
+            boolean next = !folded;
+            if (sharedPreferencesManager != null) {
+                sharedPreferencesManager.sharedPreferences.edit()
+                        .putBoolean(Constants.PREF_HOME_CARD_RAIL_FOLDED, next)
+                        .apply();
+            }
+            applyCardRailFoldedState(true);
+        };
+        if (cardRailTogglePortrait != null) {
+            cardRailTogglePortrait.setOnClickListener(listener);
+        }
+        if (cardRailToggleLandscape != null) {
+            cardRailToggleLandscape.setOnClickListener(listener);
+        }
+    }
+
+    protected boolean isCardRailCurrentlyFolded() {
+        return sharedPreferencesManager != null
+                && sharedPreferencesManager.sharedPreferences.getBoolean(
+                Constants.PREF_HOME_CARD_RAIL_FOLDED,
+                false);
+    }
+
+    protected void updateStartStopButtonForFoldedState() {
+        if (buttonStartStop == null || !isAdded()) {
+            return;
+        }
+
+        boolean folded = isCardRailCurrentlyFolded();
+        boolean showTimerOnButton = folded && (isRecording() || isPaused());
+        CharSequence currentText = buttonStartStop.getText();
+        String currentValue = currentText != null ? currentText.toString() : "";
+        boolean currentShowsTimer = currentValue.matches("\\d{2}:\\d{2}");
+
+        if (showTimerOnButton) {
+            buttonStartStop.setIcon(AppCompatResources.getDrawable(
+                    requireContext(),
+                    R.drawable.stop_rounded));
+            if (!currentValue.equals(latestElapsedDisplay)) {
+                if (buttonStartStop instanceof com.fadcam.ui.utils.AnimatedMaterialButton
+                        && currentShowsTimer) {
+                    // Timer updates should behave like the elapsed card: only the
+                    // changed digits move while the stable prefix/suffix stay put.
+                    ((com.fadcam.ui.utils.AnimatedMaterialButton) buttonStartStop)
+                            .animateSlot(latestElapsedDisplay, 400);
+                } else {
+                    buttonStartStop.setText(latestElapsedDisplay);
+                }
+            }
+            return;
+        }
+
+        if (!currentShowsTimer) {
+            return;
+        }
+
+        android.graphics.drawable.Drawable icon = AppCompatResources.getDrawable(
+                requireContext(),
+                recordingState == RecordingState.NONE
+                        ? R.drawable.play_button_rounded
+                        : R.drawable.stop_rounded);
+        buttonStartStop.setIcon(icon);
+        buttonStartStop.setText(recordingState == RecordingState.NONE
+                ? getString(R.string.button_start)
+                : getString(R.string.button_stop));
+    }
+
+    private void applyCardRailFoldedState(boolean animate) {
+        boolean folded = isCardRailCurrentlyFolded();
+
+        if (homeRootLayout != null && animate) {
+            AutoTransition transition = new AutoTransition();
+            transition.setDuration(220);
+            TransitionManager.beginDelayedTransition(homeRootLayout, transition);
+        }
+
+        if (isLandscapeMode()) {
+            if (leftPanel != null) {
+                leftPanel.setVisibility(folded ? View.GONE : View.VISIBLE);
+            }
+            applyLandscapeFoldConstraints(folded);
+            if (ivCardRailToggleLandscape != null) {
+                ivCardRailToggleLandscape.animate().cancel();
+                if (animate) {
+                    ivCardRailToggleLandscape.animate()
+                            .rotation(folded ? 0f : 180f)
+                            .setDuration(220)
+                            .start();
+                } else {
+                    ivCardRailToggleLandscape.setRotation(folded ? 0f : 180f);
+                }
+            }
+            if (cardRailToggleLandscape != null) {
+                cardRailToggleLandscape.setVisibility(View.VISIBLE);
+                cardRailToggleLandscape.setAlpha(0.9f);
+            }
+            if (cardRailTogglePortrait != null) {
+                cardRailTogglePortrait.setVisibility(View.GONE);
+            }
+        } else {
+            if (layoutCardRailSection != null) {
+                layoutCardRailSection.setVisibility(folded ? View.GONE : View.VISIBLE);
+            } else if (layoutCards != null) {
+                layoutCards.setVisibility(folded ? View.GONE : View.VISIBLE);
+            }
+            if (ivCardRailTogglePortrait != null) {
+                ivCardRailTogglePortrait.animate().cancel();
+                if (animate) {
+                    ivCardRailTogglePortrait.animate()
+                            .rotation(folded ? 0f : 180f)
+                            .setDuration(220)
+                            .start();
+                } else {
+                    ivCardRailTogglePortrait.setRotation(folded ? 0f : 180f);
+                }
+            }
+            if (cardRailTogglePortrait != null) {
+                cardRailTogglePortrait.setVisibility(View.VISIBLE);
+                cardRailTogglePortrait.setTranslationY(0f);
+                cardRailTogglePortrait.setAlpha(0.9f);
+            }
+            if (cardRailToggleLandscape != null) {
+                cardRailToggleLandscape.setVisibility(View.GONE);
+            }
+        }
+        updateStartStopButtonForFoldedState();
+    }
+
+    private void applyLandscapeFoldConstraints(boolean folded) {
+        if (homeRootLayout == null || leftPanel == null || rightPanel == null || cardRailToggleLandscape == null) {
+            return;
+        }
+        ConstraintSet set = new ConstraintSet();
+        set.clone(homeRootLayout);
+        set.clear(R.id.leftPanel, ConstraintSet.END);
+        set.clear(R.id.cardRailToggleLandscape, ConstraintSet.START);
+        set.clear(R.id.cardRailToggleLandscape, ConstraintSet.END);
+        set.clear(R.id.rightPanel, ConstraintSet.START);
+
+        set.connect(R.id.leftPanel, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, dpToPxInt(6));
+        set.connect(R.id.leftPanel, ConstraintSet.TOP, R.id.header_bar, ConstraintSet.BOTTOM, dpToPxInt(4));
+        set.connect(R.id.leftPanel, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, dpToPxInt(72));
+
+        set.connect(R.id.cardRailToggleLandscape, ConstraintSet.TOP, R.id.header_bar, ConstraintSet.BOTTOM, dpToPxInt(4));
+        set.connect(R.id.cardRailToggleLandscape, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, dpToPxInt(72));
+        set.connect(R.id.rightPanel, ConstraintSet.TOP, R.id.header_bar, ConstraintSet.BOTTOM, dpToPxInt(4));
+        set.connect(R.id.rightPanel, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, 0);
+        set.connect(R.id.rightPanel, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, dpToPxInt(6));
+
+        if (folded) {
+            set.connect(R.id.cardRailToggleLandscape, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, dpToPxInt(6));
+        } else {
+            set.connect(R.id.leftPanel, ConstraintSet.END, R.id.cardRailToggleLandscape, ConstraintSet.START, 0);
+            set.connect(R.id.cardRailToggleLandscape, ConstraintSet.START, R.id.leftPanel, ConstraintSet.END, 0);
+        }
+        set.connect(R.id.cardRailToggleLandscape, ConstraintSet.END, R.id.rightPanel, ConstraintSet.START, dpToPxInt(3));
+        set.connect(R.id.rightPanel, ConstraintSet.START, R.id.cardRailToggleLandscape, ConstraintSet.END, dpToPxInt(3));
+        set.applyTo(homeRootLayout);
+    }
+
+    private void showElapsedCustomizeSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "elapsed_alignment",
+                getString(R.string.home_elapsed_alignment_option),
+                getString(R.string.home_elapsed_alignment_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "format_align_left"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "elapsed_size",
+                getString(R.string.home_elapsed_size_option),
+                getString(R.string.home_elapsed_size_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "format_size"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "elapsed_font",
+                getString(R.string.home_elapsed_font_option),
+                getString(R.string.home_elapsed_font_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "font_download"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "elapsed_flag",
+                getString(R.string.home_elapsed_flag_option),
+                getString(R.string.home_elapsed_flag_option_desc),
+                null, null, null, true,
+                sharedPreferencesManager != null && sharedPreferencesManager.sharedPreferences.getBoolean(Constants.PREF_HOME_ELAPSED_SHOW_FLAG, true),
+                "flag"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "elapsed_background",
+                getString(R.string.home_elapsed_background_option),
+                getString(R.string.home_elapsed_background_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "crop_portrait"));
+
+        getParentFragmentManager().setFragmentResultListener(
+                ELAPSED_CUSTOMIZE_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            "");
+                    if ("elapsed_alignment".equals(selected)) {
+                        showElapsedAlignmentSheet();
+                    } else if ("elapsed_size".equals(selected)) {
+                        showElapsedSizeSheet();
+                    } else if ("elapsed_font".equals(selected)) {
+                        showElapsedFontSheet();
+                    } else if ("elapsed_flag".equals(selected)) {
+                        boolean enabled = bundle.getBoolean(
+                                com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SWITCH_STATE,
+                                true);
+                        if (sharedPreferencesManager != null) {
+                            sharedPreferencesManager.sharedPreferences.edit()
+                                    .putBoolean(Constants.PREF_HOME_ELAPSED_SHOW_FLAG, enabled)
+                                    .apply();
+                        }
+                        applyElapsedFlagPreference();
+                    } else if ("elapsed_background".equals(selected)) {
+                        showElapsedBackgroundSheet();
+                    }
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_elapsed_customize_title),
+                        items,
+                        null,
+                        ELAPSED_CUSTOMIZE_RESULT_KEY,
+                        getString(R.string.home_elapsed_customize_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_elapsed_customize_sheet");
+    }
+
+    private void showElapsedAlignmentSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_ALIGNMENT_CENTER,
+                getString(R.string.home_elapsed_align_center),
+                getString(R.string.home_elapsed_align_center_desc),
+                null, null, null, null, null, "format_align_center"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_ALIGNMENT_START,
+                getString(R.string.home_elapsed_align_left),
+                getString(R.string.home_elapsed_align_left_desc),
+                null, null, null, null, null, "format_align_left"));
+
+        String selectedId = sharedPreferencesManager != null
+                ? sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_HOME_ELAPSED_ALIGNMENT,
+                        ELAPSED_ALIGNMENT_CENTER)
+                : ELAPSED_ALIGNMENT_CENTER;
+
+        getParentFragmentManager().setFragmentResultListener(
+                ELAPSED_ALIGNMENT_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            ELAPSED_ALIGNMENT_CENTER);
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putString(Constants.PREF_HOME_ELAPSED_ALIGNMENT, selected)
+                                .apply();
+                    }
+                    applyElapsedAlignmentPreference();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_elapsed_alignment_option),
+                        items,
+                        selectedId,
+                        ELAPSED_ALIGNMENT_RESULT_KEY,
+                        getString(R.string.home_elapsed_alignment_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_elapsed_alignment_sheet");
+    }
+
+    private void showElapsedSizeSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_SIZE_SMALL,
+                getString(R.string.home_elapsed_size_small),
+                getString(R.string.home_elapsed_size_small_desc),
+                null, null, null, null, null, "short_text"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_SIZE_MEDIUM,
+                getString(R.string.home_elapsed_size_medium),
+                getString(R.string.home_elapsed_size_medium_desc),
+                null, null, null, null, null, "format_size"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_SIZE_LARGE,
+                getString(R.string.home_elapsed_size_large),
+                getString(R.string.home_elapsed_size_large_desc),
+                null, null, null, null, null, "title"));
+
+        String selectedId = sharedPreferencesManager != null
+                ? sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_HOME_ELAPSED_SIZE,
+                        ELAPSED_SIZE_MEDIUM)
+                : ELAPSED_SIZE_MEDIUM;
+
+        getParentFragmentManager().setFragmentResultListener(
+                ELAPSED_SIZE_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            ELAPSED_SIZE_MEDIUM);
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putString(Constants.PREF_HOME_ELAPSED_SIZE, selected)
+                                .apply();
+                    }
+                    applyElapsedSizePreference();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_elapsed_size_option),
+                        items,
+                        selectedId,
+                        ELAPSED_SIZE_RESULT_KEY,
+                        getString(R.string.home_elapsed_size_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_elapsed_size_sheet");
+    }
+
+    private void showElapsedFontSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_FONT_UBUNTU,
+                getString(R.string.home_elapsed_font_ubuntu),
+                getString(R.string.home_elapsed_font_ubuntu_desc),
+                null, null, null, null, null, "font_download"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_FONT_MONOSPACE,
+                getString(R.string.home_elapsed_font_monospace),
+                getString(R.string.home_elapsed_font_monospace_desc),
+                null, null, null, null, null, "code"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_FONT_DOTO,
+                getString(R.string.home_elapsed_font_doto),
+                getString(R.string.home_elapsed_font_doto_desc),
+                null, null, null, null, null, "auto_awesome"));
+
+        String selectedId = sharedPreferencesManager != null
+                ? sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_HOME_ELAPSED_FONT,
+                        ELAPSED_FONT_UBUNTU)
+                : ELAPSED_FONT_UBUNTU;
+
+        getParentFragmentManager().setFragmentResultListener(
+                ELAPSED_FONT_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            ELAPSED_FONT_UBUNTU);
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putString(Constants.PREF_HOME_ELAPSED_FONT, selected)
+                                .apply();
+                    }
+                    applyElapsedFontPreference();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_elapsed_font_option),
+                        items,
+                        selectedId,
+                        ELAPSED_FONT_RESULT_KEY,
+                        getString(R.string.home_elapsed_font_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_elapsed_font_sheet");
+    }
+
+    private void showElapsedFlagSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_FLAG_SHOW,
+                getString(R.string.home_elapsed_flag_show),
+                getString(R.string.home_elapsed_flag_show_desc),
+                null, null, null, null, null, "flag"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_FLAG_HIDE,
+                getString(R.string.home_elapsed_flag_hide),
+                getString(R.string.home_elapsed_flag_hide_desc),
+                null, null, null, null, null, "hide_image"));
+
+        String selectedId = sharedPreferencesManager != null
+                ? (sharedPreferencesManager.sharedPreferences.getBoolean(
+                        Constants.PREF_HOME_ELAPSED_SHOW_FLAG, true)
+                        ? ELAPSED_FLAG_SHOW : ELAPSED_FLAG_HIDE)
+                : ELAPSED_FLAG_SHOW;
+
+        getParentFragmentManager().setFragmentResultListener(
+                ELAPSED_FLAG_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            ELAPSED_FLAG_SHOW);
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putBoolean(Constants.PREF_HOME_ELAPSED_SHOW_FLAG, ELAPSED_FLAG_SHOW.equals(selected))
+                                .apply();
+                    }
+                    applyElapsedFlagPreference();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_elapsed_flag_option),
+                        items,
+                        selectedId,
+                        ELAPSED_FLAG_RESULT_KEY,
+                        getString(R.string.home_elapsed_flag_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_elapsed_flag_sheet");
+    }
+
+    private void showElapsedBackgroundSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_BACKGROUND_BLACK,
+                getString(R.string.home_elapsed_background_black),
+                getString(R.string.home_elapsed_background_black_desc),
+                null, null, null, null, null, "crop_portrait"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_BACKGROUND_WHITE,
+                getString(R.string.home_elapsed_background_white),
+                getString(R.string.home_elapsed_background_white_desc),
+                null, null, null, null, null, "crop_portrait"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                ELAPSED_BACKGROUND_TRANSPARENT,
+                getString(R.string.home_elapsed_background_transparent),
+                getString(R.string.home_elapsed_background_transparent_desc),
+                null, null, null, null, null, "texture"));
+
+        String selectedId = sharedPreferencesManager != null
+                ? sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_HOME_ELAPSED_BACKGROUND,
+                        ELAPSED_BACKGROUND_BLACK)
+                : ELAPSED_BACKGROUND_BLACK;
+
+        getParentFragmentManager().setFragmentResultListener(
+                ELAPSED_BACKGROUND_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            ELAPSED_BACKGROUND_BLACK);
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putString(Constants.PREF_HOME_ELAPSED_BACKGROUND, selected)
+                                .apply();
+                    }
+                    updateElapsedHeroAppearance();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_elapsed_background_option),
+                        items,
+                        selectedId,
+                        ELAPSED_BACKGROUND_RESULT_KEY,
+                        getString(R.string.home_elapsed_background_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_elapsed_background_sheet");
+    }
+
+    private void showStorageCustomizeSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "storage_style",
+                getString(R.string.home_storage_indicator_option),
+                getString(R.string.home_storage_indicator_option_desc),
+                null, null, R.drawable.ic_arrow_right, null, null, "donut_large"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                "storage_total",
+                getString(R.string.home_storage_total_option),
+                getString(R.string.home_storage_total_option_desc),
+                null, null, null, true,
+                sharedPreferencesManager != null && sharedPreferencesManager.sharedPreferences.getBoolean(Constants.PREF_HOME_STORAGE_SHOW_TOTAL, true),
+                "storage"));
+
+        getParentFragmentManager().setFragmentResultListener(
+                STORAGE_CUSTOMIZE_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            "");
+                    if ("storage_style".equals(selected)) {
+                        showStorageIndicatorStyleSheet();
+                    } else if ("storage_total".equals(selected)) {
+                        boolean enabled = bundle.getBoolean(
+                                com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SWITCH_STATE,
+                                true);
+                        if (sharedPreferencesManager != null) {
+                            sharedPreferencesManager.sharedPreferences.edit()
+                                    .putBoolean(Constants.PREF_HOME_STORAGE_SHOW_TOTAL, enabled)
+                                    .apply();
+                        }
+                        applyStorageTotalVisibilityPreference();
+                    }
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_storage_customize_title),
+                        items,
+                        null,
+                        STORAGE_CUSTOMIZE_RESULT_KEY,
+                        getString(R.string.home_storage_customize_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_storage_customize_sheet");
+    }
+
+    private void showStorageIndicatorStyleSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                STORAGE_INDICATOR_RING,
+                getString(R.string.home_storage_indicator_ring),
+                getString(R.string.home_storage_indicator_ring_desc),
+                null, null, null, null, null, "donut_large"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                STORAGE_INDICATOR_MICRO_PILL,
+                getString(R.string.home_storage_indicator_bar),
+                getString(R.string.home_storage_indicator_bar_desc),
+                null, null, null, null, null, "view_stream"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                STORAGE_INDICATOR_VERTICAL_BAR,
+                getString(R.string.home_storage_indicator_vertical),
+                getString(R.string.home_storage_indicator_vertical_desc),
+                null, null, null, null, null, "align_vertical_bottom"));
+
+        String selectedId = sharedPreferencesManager != null
+                ? sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_HOME_STORAGE_INDICATOR_STYLE,
+                        STORAGE_INDICATOR_RING)
+                : STORAGE_INDICATOR_RING;
+
+        getParentFragmentManager().setFragmentResultListener(
+                STORAGE_INDICATOR_STYLE_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            STORAGE_INDICATOR_RING);
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putString(Constants.PREF_HOME_STORAGE_INDICATOR_STYLE, selected)
+                                .apply();
+                    }
+                    applyStorageIndicatorStylePreference();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_storage_indicator_option),
+                        items,
+                        selectedId,
+                        STORAGE_INDICATOR_STYLE_RESULT_KEY,
+                        getString(R.string.home_storage_indicator_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_storage_indicator_style_sheet");
+    }
+
+    private void showStorageTotalSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                STORAGE_TOTAL_VISIBLE,
+                getString(R.string.home_storage_total_show),
+                getString(R.string.home_storage_total_show_desc),
+                null, null, null, null, null, "visibility"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
+                STORAGE_TOTAL_HIDDEN,
+                getString(R.string.home_storage_total_hide),
+                getString(R.string.home_storage_total_hide_desc),
+                null, null, null, null, null, "visibility_off"));
+
+        String selectedId = sharedPreferencesManager != null
+                ? (sharedPreferencesManager.sharedPreferences.getBoolean(
+                        Constants.PREF_HOME_STORAGE_SHOW_TOTAL, true)
+                        ? STORAGE_TOTAL_VISIBLE : STORAGE_TOTAL_HIDDEN)
+                : STORAGE_TOTAL_VISIBLE;
+
+        getParentFragmentManager().setFragmentResultListener(
+                STORAGE_TOTAL_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            STORAGE_TOTAL_VISIBLE);
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putBoolean(Constants.PREF_HOME_STORAGE_SHOW_TOTAL, STORAGE_TOTAL_VISIBLE.equals(selected))
+                                .apply();
+                    }
+                    applyStorageTotalVisibilityPreference();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_storage_total_option),
+                        items,
+                        selectedId,
+                        STORAGE_TOTAL_RESULT_KEY,
+                        getString(R.string.home_storage_total_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_storage_total_sheet");
+    }
+
+    private void showTimeLeftColorSheet() {
+        if (!isAdded() || getActivity() == null) return;
+
+        ArrayList<com.fadcam.ui.picker.OptionItem> items = new ArrayList<>();
+        String currentHex = sharedPreferencesManager != null
+                ? sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_HOME_TIME_LEFT_COLOR,
+                        "#F44336")
+                : "#F44336";
+        String selectedId = currentHex;
+        for (int i = 0; i < CLOCK_COLOR_HEX_VALUES.length; i++) {
+            items.add(new com.fadcam.ui.picker.OptionItem(
+                    CLOCK_COLOR_HEX_VALUES[i],
+                    CLOCK_COLOR_NAMES[i],
+                    getString(R.string.home_time_left_color_choice_desc, CLOCK_COLOR_HEX_VALUES[i]),
+                    Color.parseColor(CLOCK_COLOR_HEX_VALUES[i]),
+                    null, null, null, null, null));
+        }
+
+        getParentFragmentManager().setFragmentResultListener(
+                TIME_LEFT_COLOR_RESULT_KEY,
+                getViewLifecycleOwner(),
+                (key, bundle) -> {
+                    if (bundle == null) return;
+                    String selected = bundle.getString(
+                            com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID,
+                            "#F44336");
+                    if (sharedPreferencesManager != null) {
+                        sharedPreferencesManager.sharedPreferences.edit()
+                                .putString(Constants.PREF_HOME_TIME_LEFT_COLOR, selected)
+                                .apply();
+                    }
+                    applyTimeLeftAccentPreference();
+                });
+
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet =
+                com.fadcam.ui.picker.PickerBottomSheetFragment.newInstanceGradient(
+                        getString(R.string.home_time_left_color_title),
+                        items,
+                        selectedId,
+                        TIME_LEFT_COLOR_RESULT_KEY,
+                        getString(R.string.home_time_left_color_helper),
+                        true);
+        Bundle args = sheet.getArguments();
+        if (args != null) {
+            args.putBoolean(com.fadcam.ui.picker.PickerBottomSheetFragment.ARG_HIDE_CHECK, true);
+        }
+        sheet.show(getParentFragmentManager(), "home_time_left_color_sheet");
+    }
+
+    private void applyElapsedAlignmentPreference() {
+        if (sharedPreferencesManager == null || layoutElapsedContent == null) {
+            return;
+        }
+
+        String alignment = sharedPreferencesManager.sharedPreferences.getString(
+                Constants.PREF_HOME_ELAPSED_ALIGNMENT,
+                ELAPSED_ALIGNMENT_CENTER);
+        boolean startAligned = ELAPSED_ALIGNMENT_START.equals(alignment);
+        int startInset = startAligned ? dpToPxInt(18) : 0;
+
+        layoutElapsedContent.setGravity(startAligned ? Gravity.START : Gravity.CENTER_HORIZONTAL);
+        layoutElapsedContent.setPadding(startInset, 0, 0, 0);
+
+        if (layoutElapsedMetaRow != null) {
+            layoutElapsedMetaRow.setGravity(startAligned
+                    ? (Gravity.START | Gravity.CENTER_VERTICAL)
+                    : Gravity.CENTER);
+        }
+
+        if (tvElapsedTitle != null) {
+            tvElapsedTitle.setGravity(startAligned ? Gravity.START : Gravity.CENTER);
+            ViewGroup.LayoutParams params = tvElapsedTitle.getLayoutParams();
+            if (params instanceof LinearLayout.LayoutParams) {
+                ((LinearLayout.LayoutParams) params).gravity = startAligned ? Gravity.START : Gravity.CENTER_HORIZONTAL;
+                tvElapsedTitle.setLayoutParams(params);
+            }
+            tvElapsedTitle.setTextAlignment(startAligned ? View.TEXT_ALIGNMENT_VIEW_START : View.TEXT_ALIGNMENT_CENTER);
+        }
+
+        if (tvElapsedSubtitle != null) {
+            tvElapsedSubtitle.setTextAlignment(startAligned ? View.TEXT_ALIGNMENT_VIEW_START : View.TEXT_ALIGNMENT_CENTER);
+        }
+    }
+
+    private void applyElapsedSizePreference() {
+        if (sharedPreferencesManager == null || tvElapsedTitle == null) {
+            return;
+        }
+
+        String size = sharedPreferencesManager.sharedPreferences.getString(
+                Constants.PREF_HOME_ELAPSED_SIZE,
+                ELAPSED_SIZE_MEDIUM);
+        float textSizeSp;
+        if (ELAPSED_SIZE_SMALL.equals(size)) {
+            textSizeSp = isLandscapeMode() ? 16f : 18f;
+        } else if (ELAPSED_SIZE_LARGE.equals(size)) {
+            textSizeSp = isLandscapeMode() ? 26f : 29f;
+        } else {
+            textSizeSp = isLandscapeMode() ? 21f : 23f;
+        }
+        tvElapsedTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, textSizeSp);
+    }
+
+    private void applyElapsedFontPreference() {
+        if (sharedPreferencesManager == null || tvElapsedTitle == null) {
+            return;
+        }
+        String fontPref = sharedPreferencesManager.sharedPreferences.getString(
+                Constants.PREF_HOME_ELAPSED_FONT,
+                ELAPSED_FONT_UBUNTU);
+        if (ELAPSED_FONT_MONOSPACE.equals(fontPref)) {
+            tvElapsedTitle.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        } else if (ELAPSED_FONT_DOTO.equals(fontPref)) {
+            try {
+                android.graphics.Typeface doto = android.graphics.Typeface.createFromAsset(
+                        requireContext().getAssets(),
+                        "doto.ttf");
+                tvElapsedTitle.setTypeface(doto, android.graphics.Typeface.BOLD);
+            } catch (Exception e) {
+                android.graphics.Typeface ubuntu = ResourcesCompat.getFont(requireContext(), R.font.ubuntu_regular);
+                if (ubuntu != null) {
+                    tvElapsedTitle.setTypeface(ubuntu, android.graphics.Typeface.BOLD);
+                }
+            }
+        } else {
+            android.graphics.Typeface ubuntu = ResourcesCompat.getFont(requireContext(), R.font.ubuntu_regular);
+            if (ubuntu != null) {
+                tvElapsedTitle.setTypeface(ubuntu, android.graphics.Typeface.BOLD);
+            }
+        }
+    }
+
+    private void applyElapsedFlagPreference() {
+        if (sharedPreferencesManager == null || ivElapsedAccent == null) {
+            return;
+        }
+        boolean showFlag = sharedPreferencesManager.sharedPreferences.getBoolean(
+                Constants.PREF_HOME_ELAPSED_SHOW_FLAG,
+                true);
+        ivElapsedAccent.setVisibility(showFlag ? View.VISIBLE : View.GONE);
+        if (cardElapsedHero != null) {
+            cardElapsedHero.setMinimumHeight(dpToPxInt(isLandscapeMode() ? 46 : 48));
+        }
+    }
+
+    private void applyStorageIndicatorStylePreference() {
+        if (sharedPreferencesManager == null || storageProgressRing == null) {
+            return;
+        }
+
+        String style = sharedPreferencesManager.sharedPreferences.getString(
+                Constants.PREF_HOME_STORAGE_INDICATOR_STYLE,
+                STORAGE_INDICATOR_RING);
+        int viewStyle;
+        if (STORAGE_INDICATOR_MICRO_PILL.equals(style)) {
+            viewStyle = com.fadcam.ui.utils.StorageProgressRingView.STYLE_MICRO_PILL_BAR;
+        } else if (STORAGE_INDICATOR_VERTICAL_BAR.equals(style)) {
+            viewStyle = com.fadcam.ui.utils.StorageProgressRingView.STYLE_VERTICAL_BAR;
+        } else {
+            viewStyle = com.fadcam.ui.utils.StorageProgressRingView.STYLE_RING;
+        }
+        storageProgressRing.setIndicatorStyle(viewStyle);
+    }
+
+    private void applyStorageTotalVisibilityPreference() {
+        if (sharedPreferencesManager == null || tvSpaceTotal == null) {
+            return;
+        }
+        boolean showTotal = sharedPreferencesManager.sharedPreferences.getBoolean(
+                Constants.PREF_HOME_STORAGE_SHOW_TOTAL,
+                true);
+        tvSpaceTotal.setVisibility(showTotal ? View.VISIBLE : View.GONE);
+    }
+
+    private void applyTimeLeftAccentPreference() {
+        if (sharedPreferencesManager == null) {
+            return;
+        }
+        String colorHex = sharedPreferencesManager.sharedPreferences.getString(
+                Constants.PREF_HOME_TIME_LEFT_COLOR,
+                "#F44336");
+        int accentColor = Color.parseColor(colorHex);
+        if (tvEstimateTitle != null) {
+            tvEstimateTitle.setTextColor(accentColor);
+        }
+        if (ivEstimateIcon != null) {
+            ivEstimateIcon.setColorFilter(accentColor);
+        }
+    }
+
+    private void updateElapsedHeroAppearance() {
+        if (cardElapsedHero == null) {
+            return;
+        }
+
+        String backgroundPref = sharedPreferencesManager != null
+                ? sharedPreferencesManager.sharedPreferences.getString(
+                        Constants.PREF_HOME_ELAPSED_BACKGROUND,
+                        ELAPSED_BACKGROUND_BLACK)
+                : ELAPSED_BACKGROUND_BLACK;
+        boolean useBlackCard = ELAPSED_BACKGROUND_BLACK.equals(backgroundPref);
+        boolean useWhiteCard = ELAPSED_BACKGROUND_WHITE.equals(backgroundPref);
+
+        int backgroundColor;
+        int strokeColor;
+        int railStrokeColor = resolveThemeColor(R.attr.homeRailCardBorder);
+        int titleColor;
+        int subtitleColor;
+        int iconColor;
+        int stateIconRes;
+
+        if (isModePausedForElapsedAppearance()) {
+            backgroundColor = useBlackCard
+                    ? Color.parseColor("#E6000000")
+                    : useWhiteCard ? Color.parseColor("#F7F3EE") : Color.TRANSPARENT;
+            strokeColor = useBlackCard || useWhiteCard ? railStrokeColor : Color.TRANSPARENT;
+            titleColor = useWhiteCard ? Color.parseColor("#6C4B12") : Color.parseColor("#FFF6E2");
+            subtitleColor = useWhiteCard ? Color.parseColor("#A07024") : Color.parseColor("#D8B06C");
+            iconColor = useWhiteCard ? Color.parseColor("#A07024") : Color.parseColor("#C8923A");
+            stateIconRes = R.drawable.pause_rounded;
+        } else if (isModeRecordingForElapsedAppearance()) {
+            backgroundColor = useBlackCard
+                    ? Color.parseColor("#E6000000")
+                    : useWhiteCard ? Color.parseColor("#F7FBF8") : Color.TRANSPARENT;
+            strokeColor = useBlackCard || useWhiteCard ? railStrokeColor : Color.TRANSPARENT;
+            titleColor = useWhiteCard ? Color.parseColor("#165B36") : Color.parseColor("#EDFFF4");
+            subtitleColor = useWhiteCard ? Color.parseColor("#2F8A5A") : Color.parseColor("#8DE0AC");
+            iconColor = useWhiteCard ? Color.parseColor("#2F8A5A") : Color.parseColor("#56C889");
+            stateIconRes = R.drawable.play_button_rounded;
+        } else {
+            backgroundColor = useBlackCard
+                    ? Color.parseColor("#E6000000")
+                    : useWhiteCard ? Color.parseColor("#F4F6F8") : Color.TRANSPARENT;
+            strokeColor = useBlackCard || useWhiteCard ? railStrokeColor : Color.TRANSPARENT;
+            titleColor = useWhiteCard ? Color.parseColor("#33424C") : Color.parseColor("#C9D5DE");
+            subtitleColor = useWhiteCard ? Color.parseColor("#667682") : Color.parseColor("#90A4AE");
+            iconColor = useWhiteCard ? Color.parseColor("#667682") : Color.parseColor("#6B7C88");
+            stateIconRes = R.drawable.play_button_rounded;
+        }
+
+        cardElapsedHero.setCardBackgroundColor(backgroundColor);
+        cardElapsedHero.setStrokeColor(strokeColor);
+        cardElapsedHero.setStrokeWidth((useBlackCard || useWhiteCard) ? dpToPxInt(1) : 0);
+        cardElapsedHero.setRadius(dpToPxInt(12));
+        cardElapsedHero.setCardElevation((useBlackCard || useWhiteCard) ? dpToPxInt(4) : 0);
+        cardElapsedHero.setMinimumHeight(dpToPxInt(isLandscapeMode() ? 46 : 48));
+
+        if (tvElapsedTitle != null) {
+            tvElapsedTitle.setTextColor(titleColor);
+        }
+        if (tvElapsedSubtitle != null) {
+            tvElapsedSubtitle.setTextColor(subtitleColor);
+        }
+        if (tvElapsedStateIcon != null) {
+            tvElapsedStateIcon.setImageResource(stateIconRes);
+            tvElapsedStateIcon.setColorFilter(iconColor);
         }
     }
 

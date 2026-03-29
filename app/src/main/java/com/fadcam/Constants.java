@@ -37,6 +37,18 @@ public abstract class Constants {
         "pref_front_video_mirror_enabled";
     public static final String PREF_IS_PREVIEW_ENABLED = "isPreviewEnabled";
     public static final String PREF_RECORDING_START_TIME = "recording_start_time"; // Stores recording start timestamp for orientation changes
+    public static final String PREF_RECORDING_PAUSE_STARTED_AT = "recording_pause_started_at";
+    public static final String PREF_RECORDING_ACCUMULATED_PAUSED_DURATION = "recording_accumulated_paused_duration";
+    public static final String PREF_HOME_ELAPSED_ALIGNMENT = "pref_home_elapsed_alignment";
+    public static final String PREF_HOME_ELAPSED_SIZE = "pref_home_elapsed_size";
+    public static final String PREF_HOME_ELAPSED_FONT = "pref_home_elapsed_font";
+    public static final String PREF_HOME_ELAPSED_SHOW_FLAG = "pref_home_elapsed_show_flag";
+    public static final String PREF_HOME_ELAPSED_BACKGROUND = "pref_home_elapsed_background";
+    public static final String PREF_HOME_STORAGE_INDICATOR_STYLE = "pref_home_storage_indicator_style";
+    public static final String PREF_HOME_STORAGE_SHOW_TOTAL = "pref_home_storage_show_total";
+    public static final String PREF_HOME_TIME_LEFT_COLOR = "pref_home_time_left_color";
+    public static final String PREF_HOME_CLOCK_HOUR_FORMAT = "pref_home_clock_hour_format";
+    public static final String PREF_HOME_CARD_RAIL_FOLDED = "pref_home_card_rail_folded";
     public static final String PREF_FLOATING_CONTROLS_ENABLED = "floating_controls_enabled"; // Enable floating quick menu for FadRec
     public static final String PREF_BOTH_TORCHES_ENABLED =
         "pref_both_torches_enabled";
@@ -247,6 +259,12 @@ public abstract class Constants {
         "com.fadcam.ACTION_RESUME_SCREEN_RECORDING";
     public static final String INTENT_ACTION_SET_SCREEN_RECORDING_MUTE =
         "com.fadcam.ACTION_SET_SCREEN_RECORDING_MUTE";
+    public static final String INTENT_ACTION_START_SCREEN_PREVIEW_ONLY =
+        "com.fadcam.ACTION_START_SCREEN_PREVIEW_ONLY";
+    public static final String INTENT_ACTION_STOP_SCREEN_PREVIEW_ONLY =
+        "com.fadcam.ACTION_STOP_SCREEN_PREVIEW_ONLY";
+    public static final String INTENT_ACTION_CHANGE_SCREEN_PREVIEW_SURFACE =
+        "com.fadcam.ACTION_CHANGE_SCREEN_PREVIEW_SURFACE";
 
     // Query current screen recording state (service will respond via state broadcast)
     public static final String INTENT_ACTION_QUERY_SCREEN_RECORDING_STATE =
@@ -301,6 +319,10 @@ public abstract class Constants {
         "com.fadcam.ON_SCREEN_RECORDING_STATE_CALLBACK";
     public static final String BROADCAST_ON_SCREEN_RECORDING_MUTE_CHANGED =
         "com.fadcam.ON_SCREEN_RECORDING_MUTE_CHANGED";
+    public static final String EXTRA_SCREEN_PREVIEW_ONLY_ACTIVE =
+        "com.fadcam.EXTRA_SCREEN_PREVIEW_ONLY_ACTIVE";
+    public static final String EXTRA_SCREEN_PREVIEW_ENABLED =
+        "com.fadcam.EXTRA_SCREEN_PREVIEW_ENABLED";
 
     // Screen recording preferences
     public static final String PREF_SCREEN_RECORDING_AUDIO_SOURCE =
@@ -351,6 +373,10 @@ public abstract class Constants {
     public static final String INTENT_EXTRA_RECORDING_STATE = "RECORDING_STATE";
     public static final String INTENT_EXTRA_RECORDING_START_TIME =
         "RECORDING_START_TIME";
+    public static final String INTENT_EXTRA_RECORDING_PAUSE_STARTED_AT =
+        "RECORDING_PAUSE_STARTED_AT";
+    public static final String INTENT_EXTRA_RECORDING_ACCUMULATED_PAUSED_DURATION =
+        "RECORDING_ACCUMULATED_PAUSED_DURATION";
     public static final String INTENT_EXTRA_TORCH_STATE = "torch_state";
     public static final String INTENT_EXTRA_TORCH_STATE_CHANGED =
         "TORCH_STATE_CHANGED";
