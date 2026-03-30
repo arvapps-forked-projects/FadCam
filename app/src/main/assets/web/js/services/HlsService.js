@@ -44,8 +44,8 @@ class HlsService {
                 // Standard xhrSetup approach - modify URL before request is sent
                 // This is the recommended way per hls.js documentation
                 baseConfig.xhrSetup = function(xhr, url) {
-                    // Only modify cloud stream URLs
-                    if (url.includes('/stream/') || url.includes('live.fadseclab.com')) {
+                    // Only modify cloud stream URLs that don't already have a token
+                    if ((url.includes('/stream/') || url.includes('live.fadseclab.com')) && !url.includes('token=')) {
                         const separator = url.includes('?') ? '&' : '?';
                         // Add cache-busting timestamp for playlist files to prevent stale segments
                         const cacheBust = url.includes('.m3u8') ? `&_t=${Date.now()}` : '';
@@ -54,6 +54,14 @@ class HlsService {
                         xhr.open('GET', authUrl, true);
                     }
                 };
+
+                // Use the E2E-decrypting fragment loader if available
+                if (typeof FadCamFragLoader !== 'undefined') {
+                    baseConfig.fLoader = FadCamFragLoader;
+                    console.log('[HlsService] 🔐 E2E fragment loader attached');
+                } else {
+                    console.warn('[HlsService] FadCamFragLoader not loaded — segments will NOT be decrypted');
+                }
             } else {
                 console.warn('[HlsService] ☁️ Cloud mode but no stream token available!');
             }

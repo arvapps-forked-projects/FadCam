@@ -34,7 +34,8 @@
     STORAGE_KEYS: {
       SESSION: 'fadcam_session',
       USER: 'fadcam_user',
-      STREAM_TOKEN: 'fadcam_stream_token' // JWT for relay API calls
+      STREAM_TOKEN: 'fadcam_stream_token', // JWT for relay API calls
+      E2E_VERIFY_TAG: 'fadcam_e2e_verify_tag' // HMAC verify tag from Supabase
     }
   };
   
@@ -100,12 +101,38 @@
   }
   
   // Store session in localStorage
-  function storeSession(sessionData, userData, streamToken) {
+  function storeSession(sessionData, userData, streamToken, e2eVerifyTag) {
     localStorage.setItem(CLOUD_CONFIG.STORAGE_KEYS.SESSION, JSON.stringify(sessionData));
     localStorage.setItem(CLOUD_CONFIG.STORAGE_KEYS.USER, JSON.stringify(userData));
     if (streamToken) {
       localStorage.setItem(CLOUD_CONFIG.STORAGE_KEYS.STREAM_TOKEN, streamToken);
     }
+    // Only update verify_tag when the server provides one.
+    // Never wipe an existing tag when null is returned — that typically means the
+    // Android device's PBKDF2 thread hasn't finished writing it to Supabase yet
+    // (race condition on first link). Keeping the old tag avoids breaking sessions
+    // that were already unlocked.
+    if (e2eVerifyTag) {
+      localStorage.setItem(CLOUD_CONFIG.STORAGE_KEYS.E2E_VERIFY_TAG, e2eVerifyTag);
+      console.log('[FadCamRemote] E2E verify_tag stored from token exchange');
+    } else {
+      console.log('[FadCamRemote] Token exchange returned null e2e_verify_tag — keeping existing tag if any');
+    }
+  }
+
+  // Get stored E2E verify tag
+  function getE2EVerifyTag() {
+    return localStorage.getItem(CLOUD_CONFIG.STORAGE_KEYS.E2E_VERIFY_TAG) || null;
+  }
+
+  // Get user ID from stored session
+  function getSessionUserId() {
+    try {
+      const sessionStr = localStorage.getItem(CLOUD_CONFIG.STORAGE_KEYS.SESSION);
+      if (!sessionStr) return null;
+      const session = JSON.parse(sessionStr);
+      return session.user_id || null;
+    } catch { return null; }
   }
   
   // Get stored stream access token
@@ -132,8 +159,8 @@
         throw new Error(result.error || 'Token exchange failed');
       }
       
-      // Store the session and stream access token for future use
-      storeSession(result.session_hint, result.user, result.stream_access_token);
+      // Store the session, stream access token, and E2E verify tag for future use
+      storeSession(result.session_hint, result.user, result.stream_access_token, result.e2e_verify_tag || null);
       
       // Clean up the URL (remove token from URL for security/aesthetics)
       const cleanUrl = new URL(window.location.href);
@@ -153,6 +180,182 @@
   function isStreamingMode() {
     return getStreamDeviceId() !== null;
   }
+
+  // ── E2E Unlock Modal ────────────────────────────────────────────────────────
+
+  /**
+   * Show the E2E unlock modal (injected dynamically into <body>).
+   * Called when: E2E key is missing from IndexedDB and stream is encrypted.
+   * Supports two modes:
+   *   - Normal (verifyTag present): validates password against server tag before storing key.
+   *   - First-time / race-condition (verifyTag null): derives and stores key without validation;
+   *     decryption failure will re-prompt automatically.
+   */
+  function showE2EUnlockModal() {
+    // Remove existing modal if any
+    const existing = document.getElementById('e2e-unlock-overlay');
+    if (existing) existing.remove();
+
+    const userId  = (streamContext && streamContext.userId) || getSessionUserId();
+    const verifyTag = getE2EVerifyTag();
+    // true = first-time / race condition (PBKDF2 may not have written tag to Supabase yet)
+    const noVerifyTag = !verifyTag;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'e2e-unlock-overlay';
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'background:rgba(0,0,0,0.92)',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'z-index:10000', 'font-family:system-ui,sans-serif',
+    ].join(';');
+
+    const subtitle = noVerifyTag
+      ? 'This stream appears to be end-to-end encrypted. Enter your FadSec ID password to decrypt & unlock playback.'
+      : 'This stream is end-to-end encrypted. Enter your FadSec ID password to decrypt & unlock playback.';
+
+    overlay.innerHTML = `
+      <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:32px 28px;
+                  max-width:400px;width:90%;color:#fff;text-align:center;">
+        <div style="font-size:40px;margin-bottom:12px;">&#x1F512;</div>
+        <h2 style="margin:0 0 8px;font-size:18px;font-weight:700;">
+          E2E Stream Encryption
+        </h2>
+        <p style="margin:0 0 24px;font-size:13px;color:#aaa;">
+          ${subtitle}
+        </p>
+        <input
+          id="e2e-unlock-input"
+          type="password"
+          placeholder="FadSec ID password"
+          autocomplete="current-password"
+          style="width:100%;box-sizing:border-box;padding:10px 14px;
+                 background:#0d0d1a;border:1px solid #444;border-radius:8px;
+                 color:#fff;font-size:14px;margin-bottom:12px;
+                 outline:none;transition:border-color .2s;"
+        />
+        <div id="e2e-unlock-error"
+             style="color:#ff5555;font-size:12px;min-height:20px;margin-bottom:12px;"></div>
+        <button
+          id="e2e-unlock-btn"
+          onclick="window.__e2eUnlockSubmit()"
+          style="width:100%;padding:11px;background:#3a86ff;border:none;
+                 border-radius:8px;color:#fff;font-size:14px;font-weight:600;
+                 cursor:pointer;transition:background .2s;"
+        >
+          Unlock
+        </button>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    // Focus the input
+    const input = document.getElementById('e2e-unlock-input');
+    if (input) setTimeout(() => input.focus(), 50);
+
+    // Enter key submits
+    if (input) {
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') window.__e2eUnlockSubmit(); });
+    }
+
+    // Attach submit handler on window to keep it accessible from inline onclick
+    window.__e2eUnlockSubmit = async function () {
+      const btn   = document.getElementById('e2e-unlock-btn');
+      const errEl = document.getElementById('e2e-unlock-error');
+      const pw    = (document.getElementById('e2e-unlock-input') || {}).value || '';
+
+      if (!pw) {
+        if (errEl) errEl.textContent = 'Password is required.';
+        return;
+      }
+
+      if (btn) { btn.disabled = true; btn.textContent = 'Unlocking…'; }
+      if (errEl) errEl.textContent = '';
+
+      try {
+        if (!userId) throw new Error('User ID unavailable — please re-authenticate.');
+
+        if (noVerifyTag) {
+          // Race condition: verify_tag not yet in Supabase (PBKDF2 still running on device).
+          // Derive and store the key without server validation. If the password is wrong the
+          // stream decryption will fail and the e2e-decryption-failed event will re-prompt.
+          console.log('[FadCamRemote] No verify_tag available — unlocking without server validation (first-time / race condition)');
+          await E2EKeyManager.unlockNoVerify(pw, userId);
+        } else {
+          const ok = await E2EKeyManager.unlock(pw, userId, verifyTag);
+          if (!ok) {
+            if (errEl) errEl.textContent = 'Incorrect password. Please try again.';
+            if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+            return;
+          }
+        }
+
+        // Success — dismiss modal and signal stream to reload
+        const el = document.getElementById('e2e-unlock-overlay');
+        if (el) {
+          el.style.opacity = '0';
+          el.style.transition = 'opacity .3s';
+          setTimeout(() => el.remove(), 300);
+        }
+        delete window.__e2eUnlockSubmit;
+        console.log('[FadCamRemote] E2E unlocked successfully');
+        // Notify the stream player to reload so it can decrypt with the new key
+        window.dispatchEvent(new CustomEvent('e2e-stream-ready'));
+      } catch (err) {
+        console.error('[FadCamRemote] E2E unlock error:', err);
+        if (errEl) errEl.textContent = err.message || 'Unlock failed. Please try again.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+      }
+    };
+  }
+
+  /**
+   * Check if the E2E unlock modal should be shown and show it if needed.
+   * Shows when: verify_tag exists (E2E is configured) AND key is not in IndexedDB.
+   */
+  async function checkAndShowE2EUnlock() {
+    const verifyTag = getE2EVerifyTag();
+    if (!verifyTag) {
+      console.log('[FadCamRemote] No E2E verify_tag — stream is not encrypted');
+      return;
+    }
+
+    if (typeof E2EKeyManager === 'undefined') {
+      console.warn('[FadCamRemote] E2EKeyManager not loaded — cannot check E2E state');
+      return;
+    }
+
+    const initialized = await E2EKeyManager.isInitialized();
+    if (!initialized) {
+      console.log('[FadCamRemote] E2E key not in IndexedDB — showing unlock modal');
+      showE2EUnlockModal();
+    } else {
+      console.log('[FadCamRemote] E2E key already in IndexedDB — stream ready');
+    }
+  }
+
+  // Listen for decryption failures → show unlock modal (debounced, non-destructive).
+  // CRITICAL: Do NOT clear the key on every failure. HLS fires this event for every
+  // segment retry, and clearing the key mid-typing makes it impossible for the user
+  // to enter their password. Only clear the key when the user entered a wrong password
+  // (handled inside showE2EUnlockModal's submit handler).
+  let _e2eModalShowing = false;
+  window.addEventListener('e2e-decryption-failed', async (ev) => {
+    console.warn('[FadCamRemote] e2e-decryption-failed event received:', ev.detail);
+    // Skip if the unlock modal is already visible (avoid overlapping prompts)
+    if (_e2eModalShowing || document.getElementById('e2e-unlock-overlay')) {
+      return;
+    }
+    _e2eModalShowing = true;
+    showE2EUnlockModal();
+    // Reset flag when modal is dismissed (overlay removed from DOM)
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById('e2e-unlock-overlay')) {
+        _e2eModalShowing = false;
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true });
+  });
   
   // Initialize stream context for device
   async function initStreamContext(deviceId) {
@@ -227,10 +430,12 @@
           if (!validationResponse.ok) {
             console.error(`[FadCamRemote] ❌ Session validation failed: HTTP ${validationResponse.status}`);
             console.log('[FadCamRemote] User loses access: tier changed, beta revoked, or quota exceeded');
-            // Clear stored session - user no longer has access
+            // Clear stored session and E2E key — user no longer has access
             localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.SESSION);
             localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.USER);
             localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.STREAM_TOKEN);
+            localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.E2E_VERIFY_TAG);
+            if (typeof E2EKeyManager !== 'undefined') E2EKeyManager.clear();
             
             showStreamOverlay('Access Revoked', 'Your streaming access has been revoked or expired. Please log in again from Lab.');
             setTimeout(() => {
@@ -271,6 +476,9 @@
       }
       
       console.log('[FadCamRemote] Stream context ready:', streamContext);
+
+      // Show E2E unlock modal if verify_tag is present but key is not in IndexedDB
+      await checkAndShowE2EUnlock();
       
       // Emit event for DashboardViewModel to pick up cloud mode
       if (typeof eventBus !== 'undefined') {
@@ -402,15 +610,13 @@
     isWebAccess,
     streamContext: () => streamContext,
     getStreamToken: () => streamContext?.streamToken || getStreamToken(),
+    getE2EVerifyTag,
+    getSessionUserId,
     getRelayHlsUrl: () => {
       if (!streamContext?.userId || !streamContext?.deviceId) return null;
-      let url = `https://live.fadseclab.com:8443/stream/${streamContext.userId}/${streamContext.deviceId}/live.m3u8`;
-      // Append token as query parameter for auth (avoids CORS issues with headers)
-      const token = streamContext?.streamToken || getStreamToken();
-      if (token) {
-        url += `?token=${encodeURIComponent(token)}`;
-      }
-      return url;
+      // Return the base URL without token — HlsService.xhrSetup handles auth injection.
+      // This prevents token duplication when xhrSetup and the URL both carry the token.
+      return `https://live.fadseclab.com:8443/stream/${streamContext.userId}/${streamContext.deviceId}/live.m3u8`;
     },
     getRelayStatusUrl: () => {
       if (!streamContext?.userId || !streamContext?.deviceId) return null;
