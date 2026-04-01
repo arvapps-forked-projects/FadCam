@@ -210,40 +210,91 @@
     ].join(';');
 
     const subtitle = noVerifyTag
-      ? 'This stream appears to be end-to-end encrypted. Enter your FadSec ID password to decrypt & unlock playback.'
-      : 'This stream is end-to-end encrypted. Enter your FadSec ID password to decrypt & unlock playback.';
+      ? 'This stream appears to be end-to-end encrypted. Enter your LabPass to decrypt &amp; unlock playback.'
+      : 'This stream is end-to-end encrypted. Enter your LabPass to decrypt &amp; unlock playback.';
 
     overlay.innerHTML = `
-      <div style="background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:32px 28px;
-                  max-width:400px;width:90%;color:#fff;text-align:center;">
-        <div style="font-size:40px;margin-bottom:12px;">&#x1F512;</div>
-        <h2 style="margin:0 0 8px;font-size:18px;font-weight:700;">
-          E2E Stream Encryption
+      <div style="
+        background: rgba(9,9,11,0.96);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid #27272a;
+        border-radius: 16px;
+        padding: 32px 28px 24px;
+        max-width: 420px;
+        width: 90%;
+        color: #fff;
+        text-align: center;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      ">
+        <div style="
+          width: 52px; height: 52px;
+          background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 16px;
+          box-shadow: 0 0 0 1px rgba(220,38,38,0.3), 0 8px 32px rgba(220,38,38,0.35);
+          font-size: 22px; line-height: 1;
+        ">&#x1F512;</div>
+        <h2 style="margin:0 0 8px;font-size:18px;font-weight:700;letter-spacing:-0.2px;">
+          Encrypted Stream
         </h2>
-        <p style="margin:0 0 24px;font-size:13px;color:#aaa;">
+        <p style="margin:0 0 24px;font-size:13px;color:#a1a1aa;line-height:1.55;">
           ${subtitle}
         </p>
-        <input
-          id="e2e-unlock-input"
-          type="password"
-          placeholder="FadSec ID password"
-          autocomplete="current-password"
-          style="width:100%;box-sizing:border-box;padding:10px 14px;
-                 background:#0d0d1a;border:1px solid #444;border-radius:8px;
-                 color:#fff;font-size:14px;margin-bottom:12px;
-                 outline:none;transition:border-color .2s;"
-        />
+        <div style="text-align:left;margin-bottom:6px;">
+          <label style="display:block;font-size:12px;font-weight:600;color:#e4e4e7;margin-bottom:2px;letter-spacing:0.4px;text-transform:uppercase;">
+            LabPass
+          </label>
+          <p style="margin:0 0 8px;font-size:11px;color:#71717a;line-height:1.4;">
+            Your <strong style="color:#a1a1aa;font-weight:600;">FadSec ID</strong> password — the one you use to sign in at <span style="color:#dc2626;">id.fadseclab.com</span>
+          </p>
+          <input
+            id="e2e-unlock-input"
+            type="password"
+            placeholder="Enter your LabPass…"
+            autocomplete="current-password"
+            style="
+              width:100%; box-sizing:border-box;
+              padding: 10px 14px;
+              background: #09090b;
+              border: 1px solid #27272a;
+              border-radius: 8px;
+              color: #fff;
+              font-size: 14px;
+              outline: none;
+              transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            "
+            onfocus="this.style.borderColor='transparent';this.style.boxShadow='0 0 0 2px #dc2626';"
+            onblur="this.style.borderColor='#27272a';this.style.boxShadow='none';"
+          />
+        </div>
         <div id="e2e-unlock-error"
-             style="color:#ff5555;font-size:12px;min-height:20px;margin-bottom:12px;"></div>
+             style="color:#ef4444;font-size:12px;min-height:20px;margin-bottom:12px;text-align:left;"></div>
         <button
           id="e2e-unlock-btn"
           onclick="window.__e2eUnlockSubmit()"
-          style="width:100%;padding:11px;background:#3a86ff;border:none;
-                 border-radius:8px;color:#fff;font-size:14px;font-weight:600;
-                 cursor:pointer;transition:background .2s;"
+          style="
+            width: 100%; padding: 11px;
+            background: #dc2626;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            letter-spacing: 0.2px;
+            transition: box-shadow 0.2s ease, background 0.2s ease;
+          "
+          onmouseover="if(!this.disabled){this.style.boxShadow='0 0 12px rgba(220,38,38,0.8),0 0 28px rgba(220,38,38,0.45)';}"
+          onmouseout="this.style.boxShadow='none';"
         >
-          Unlock
+          Unlock Stream
         </button>
+        <p style="margin:16px 0 0;font-size:11px;color:#3f3f46;letter-spacing:0.5px;">
+          POWERED BY <span style="color:#dc2626;font-weight:600;">FADSEC LAB</span>
+        </p>
       </div>`;
 
     document.body.appendChild(overlay);
@@ -264,7 +315,7 @@
       const pw    = (document.getElementById('e2e-unlock-input') || {}).value || '';
 
       if (!pw) {
-        if (errEl) errEl.textContent = 'Password is required.';
+        if (errEl) errEl.textContent = 'LabPass is required.';
         return;
       }
 
@@ -283,8 +334,8 @@
         } else {
           const ok = await E2EKeyManager.unlock(pw, userId, verifyTag);
           if (!ok) {
-            if (errEl) errEl.textContent = 'Incorrect password. Please try again.';
-            if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+            if (errEl) errEl.textContent = 'Incorrect LabPass. Please try again.';
+            if (btn) { btn.disabled = false; btn.textContent = 'Unlock Stream'; }
             return;
           }
         }
@@ -303,7 +354,7 @@
       } catch (err) {
         console.error('[FadCamRemote] E2E unlock error:', err);
         if (errEl) errEl.textContent = err.message || 'Unlock failed. Please try again.';
-        if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Unlock Stream'; }
       }
     };
   }
@@ -415,6 +466,7 @@
         // This ensures users with revoked access cannot bypass tier restrictions
         // If tier/beta status changed since last login, this will catch it
         console.log('[FadCamRemote] 🔐 Validating stored session with server...');
+        let validationPassed = false;
         try {
           const validationResponse = await fetch(`${CLOUD_CONFIG.SUPABASE_URL}/functions/v1/verify-stream-token`, {
             method: 'POST',
@@ -427,33 +479,56 @@
             body: JSON.stringify({ device_id: deviceId, user_id: session.user_id })
           });
           
-          if (!validationResponse.ok) {
-            console.error(`[FadCamRemote] ❌ Session validation failed: HTTP ${validationResponse.status}`);
-            console.log('[FadCamRemote] User loses access: tier changed, beta revoked, or quota exceeded');
-            // Clear stored session and E2E key — user no longer has access
+          if (validationResponse.ok) {
+            console.log('[FadCamRemote] ✅ Session validated - user has current access');
+            validationPassed = true;
+          } else if (validationResponse.status === 401) {
+            // 401 = Token truly expired or invalid — hard fail
+            console.error('[FadCamRemote] ❌ Token rejected (401) — clearing session');
             localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.SESSION);
             localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.USER);
             localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.STREAM_TOKEN);
             localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.E2E_VERIFY_TAG);
             if (typeof E2EKeyManager !== 'undefined') E2EKeyManager.clear();
-            
-            showStreamOverlay('Access Revoked', 'Your streaming access has been revoked or expired. Please log in again from Lab.');
-            setTimeout(() => {
-              window.location.href = CLOUD_CONFIG.LAB_URL;
-            }, 3000);
+            showStreamOverlay('Session Expired', 'Your session has expired. Redirecting to login...');
+            setTimeout(() => { window.location.href = CLOUD_CONFIG.LAB_URL; }, 3000);
+            return;
+          } else {
+            // 403 or other = could be CORS/routing issue (X-Original-URI missing)
+            // Fall back to client-side JWT expiry check
+            console.warn(`[FadCamRemote] ⚠️ Server validation returned ${validationResponse.status} — checking token locally`);
+          }
+        } catch (validationError) {
+          console.warn('[FadCamRemote] ⚠️ Session validation network error:', validationError.message);
+          // Network error — fall back to client-side check instead of hard fail
+        }
+        
+        // If server validation didn't pass, check JWT expiry client-side as fallback
+        if (!validationPassed) {
+          try {
+            const parts = storedStreamToken.split('.');
+            if (parts.length === 3) {
+              const payload = JSON.parse(atob(parts[1]));
+              const now = Math.floor(Date.now() / 1000);
+              if (payload.exp && payload.exp < now) {
+                console.error('[FadCamRemote] ❌ Token expired locally — clearing session');
+                localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.SESSION);
+                localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.USER);
+                localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.STREAM_TOKEN);
+                showStreamOverlay('Session Expired', 'Your session has expired. Redirecting to login...');
+                setTimeout(() => { window.location.href = CLOUD_CONFIG.LAB_URL; }, 3000);
+                return;
+              }
+              console.log('[FadCamRemote] ✅ Token not expired locally — proceeding with stored session');
+            }
+          } catch (e) {
+            console.error('[FadCamRemote] ❌ Cannot decode stored token — clearing session');
+            localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.SESSION);
+            localStorage.removeItem(CLOUD_CONFIG.STORAGE_KEYS.STREAM_TOKEN);
+            showStreamOverlay('Invalid Session', 'Redirecting to login...');
+            setTimeout(() => { window.location.href = CLOUD_CONFIG.LAB_URL; }, 2000);
             return;
           }
-          
-          console.log('[FadCamRemote] ✅ Session validated - user has current access');
-        } catch (validationError) {
-          console.error('[FadCamRemote] Session validation error:', validationError);
-          // Network error or server issue - fail safely by requiring re-auth
-          console.log('[FadCamRemote] 🛡️ Failing safe - network error, redirecting to login');
-          showStreamOverlay('Connection Failed', 'Unable to verify access. Please try again from Lab.');
-          setTimeout(() => {
-            window.location.href = CLOUD_CONFIG.LAB_URL;
-          }, 3000);
-          return;
         }
         
         // We have a valid, server-verified stored session, use it
@@ -625,6 +700,8 @@
     getRelayCommandUrl: () => {
       if (!streamContext?.userId || !streamContext?.deviceId) return null;
       return `https://live.fadseclab.com:8443/api/command/${streamContext.userId}/${streamContext.deviceId}`;
-    }
+    },
+    showE2EUnlockModal,
+    checkAndShowE2EUnlock,
   };
 })();
