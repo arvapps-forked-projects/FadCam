@@ -179,7 +179,6 @@ public class FragmentedMp4MuxerWrapper {
             if (orientationHint != 0) {
                 try {
                     muxer.addMetadataEntry(new Mp4OrientationData(orientationHint));
-                    FLog.d(TAG, "Added orientation metadata: " + orientationHint);
                 } catch (Exception e) {
                     FLog.w(TAG, "Failed to add orientation metadata", e);
                 }
@@ -193,7 +192,6 @@ public class FragmentedMp4MuxerWrapper {
                     System.currentTimeMillis());
                 muxer.addMetadataEntry(new androidx.media3.container.Mp4TimestampData(
                     mp4TimeSeconds, mp4TimeSeconds));
-                FLog.d(TAG, "Added timestamp metadata (MP4 epoch seconds): " + mp4TimeSeconds);
             } catch (Exception e) {
                 FLog.w(TAG, "Failed to add timestamp metadata", e);
             }
@@ -204,7 +202,6 @@ public class FragmentedMp4MuxerWrapper {
             // This makes the file streamable right away
             try {
                 fileOutputStream.flush();
-                FLog.d(TAG, "Muxer started and flushed - file is now streamable");
                 FLog.i(TAG, "✅ [MEDIA3-FIX] Muxer initialized with " + trackCount + 
                            " tracks. ALL fragments will use tfhd.DEFAULT_BASE_IS_MOOF for proper offset calculation");
             } catch (IOException e) {
@@ -239,7 +236,7 @@ public class FragmentedMp4MuxerWrapper {
                 Long offset = timestampOffsets.get(trackIndex);
                 if (offset == null) {
                     timestampOffsets.put(trackIndex, bufferInfo.presentationTimeUs);
-                    FLog.w(TAG, "⏱️ Track " + trackIndex + " timestamp offset initialized: " + bufferInfo.presentationTimeUs + "us (" + (bufferInfo.presentationTimeUs / 1000000.0) + "s) - will be normalized to 0");
+                    // timestamp offset initialized for this track
                 }
                 
                 // Check if all tracks have offsets
@@ -259,7 +256,7 @@ public class FragmentedMp4MuxerWrapper {
             int logCount = trackSampleLogs.get(trackIndex, 0);
             // Verbose logging reduced per user request - only log first 3 samples to verify initialization
             if (logCount < 3) {
-                FLog.d(TAG, "[MUXER] PTS normalize t=" + normalizedPresentationTimeUs + "us (raw=" + bufferInfo.presentationTimeUs + "us, offset=" + offset + ") track=" + trackIndex + (isKeyFrame ? " [KEY]" : ""));
+                // [MUXER] PTS normalize logging removed (was noisy)
                 trackSampleLogs.put(trackIndex, logCount + 1);
             }
             
@@ -493,8 +490,7 @@ public class FragmentedMp4MuxerWrapper {
                 
                 androidx.media3.common.ColorInfo colorInfo = colorBuilder.build();
                 builder.setColorInfo(colorInfo);
-                FLog.d(TAG, "  Set color info from MediaFormat");
-            }
+}
             
             if (mediaFormat.containsKey(MediaFormat.KEY_ROTATION)) {
                 builder.setRotationDegrees(mediaFormat.getInteger(MediaFormat.KEY_ROTATION));
@@ -549,21 +545,18 @@ public class FragmentedMp4MuxerWrapper {
             if (mediaFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
                 channels = mediaFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
                 builder.setChannelCount(channels);
-                FLog.d(TAG, "  channelCount=" + channels);
             } else {
                 FLog.w(TAG, "  WARNING: No channel count in audio format!");
             }
             if (mediaFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
                 sampleRate = mediaFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE);
                 builder.setSampleRate(sampleRate);
-                FLog.d(TAG, "  sampleRate=" + sampleRate);
             } else {
                 FLog.w(TAG, "  WARNING: No sample rate in audio format!");
             }
             if (mediaFormat.containsKey(MediaFormat.KEY_BIT_RATE)) {
                 int bitrate = mediaFormat.getInteger(MediaFormat.KEY_BIT_RATE);
                 builder.setAverageBitrate(bitrate);
-                FLog.d(TAG, "  bitrate=" + bitrate);
             }
 
             // CRITICAL VLC FIX: Generate proper AAC AudioSpecificConfig for ESDS box
@@ -578,10 +571,7 @@ public class FragmentedMp4MuxerWrapper {
                 
                 // Set explicit codec string for MP4 descriptor box - Media3 REQUIRES this for proper ESDS
                 // The codec string tells the MP4 parser (VLC) what audio codec profile/level to expect
-                builder.setCodecs("mp4a.40.2"); // AAC-LC (object type 2), profile level 0
-                
-                FLog.d(TAG, "  Generated clean AAC config for VLC: " + bytesToHex(aacConfig) + 
-                           " (sampleRate=" + sampleRate + ", channels=" + channels + ")");
+                builder.setCodecs("mp4a.40.2"); // AAC-LC
             }
         }
 
@@ -596,8 +586,9 @@ public class FragmentedMp4MuxerWrapper {
 
         if ((mediaCodecFlags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0) {
             flags |= C.BUFFER_FLAG_KEY_FRAME;
-            if (trackIndex == videoTrackIndex && videoTrackIndex != -1 && sampleCountDebug < 5) {
-                FLog.w(TAG, "[VLC-VIDEO-CONVERT] Video keyframe flag converted to Media3 C.BUFFER_FLAG_KEY_FRAME");
+            if (trackIndex == videoTrackIndex && videoTrackIndex != -1 && sampleCountDebug < 3) {
+                sampleCountDebug++;
+                FLog.d(TAG, "[VLC-VIDEO-CONVERT] Video keyframe flag mapped to Media3 — first 3 keyframes only");
             }
         }
         
@@ -650,9 +641,13 @@ public class FragmentedMp4MuxerWrapper {
             byte[] data = new byte[payload.remaining()];
             payload.get(data);
             
-            // Check streaming mode to determine if we should save to disk
+            // Check streaming mode to determine if we should save to disk.
+            // Always write when the server is not running – a stale STREAM_ONLY setting from a
+            // previous streaming session must never silently suppress local saves.
             RemoteStreamManager.StreamingMode streamingMode = RemoteStreamManager.getInstance().getStreamingMode();
-            boolean shouldSaveToDisk = (streamingMode == RemoteStreamManager.StreamingMode.STREAM_AND_SAVE);
+            boolean serverActive = RemoteStreamManager.getInstance().isStreamingEnabled();
+            boolean shouldSaveToDisk = !serverActive
+                || (streamingMode == RemoteStreamManager.StreamingMode.STREAM_AND_SAVE);
             
             if (segment.isInitSegment) {
                 // Initialization segment (ftyp + moov)

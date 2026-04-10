@@ -225,12 +225,12 @@ public class HomeFragment extends BaseFragment {
     private TextView tvCameraTitle;
     private TextView tvCameraSubtitle;
     private TextView ivCameraIcon;
-    private TextView tvEstimateTitle;
-    private TextView tvEstimateSubtitle;
+    protected TextView tvEstimateTitle;
+    protected TextView tvEstimateSubtitle;
     private ImageView ivEstimateIcon;
-    private TextView tvSpaceTitle;
-    private TextView tvSpaceSubtitle;
-    private com.fadcam.ui.utils.StorageProgressRingView storageProgressRing;
+    protected TextView tvSpaceTitle;
+    protected TextView tvSpaceSubtitle;
+    protected com.fadcam.ui.utils.StorageProgressRingView storageProgressRing;
     // inline total will be rendered in tvSpaceTitle using spans
     
     /**
@@ -238,6 +238,7 @@ public class HomeFragment extends BaseFragment {
      */
     protected TextView tvElapsedTitle;
     protected TextView tvElapsedSubtitle;
+    protected TextView tvElapsedReadable;
     protected TextView tvRemainingTitle;
     protected TextView tvRemainingSubtitle;
     private MaterialCardView cardElapsedHero;
@@ -369,7 +370,7 @@ public class HomeFragment extends BaseFragment {
     /** Animated value showing total recording size (label is static in layout) */
     private TextView tvVideoSize;
     /** Static view showing "/ XX.X GB" total device storage after tvSpaceTitle */
-    private TextView tvSpaceTotal;
+    protected TextView tvSpaceTotal;
 
     // Track last known good values for stats to prevent 0-value display during scans
     /**
@@ -892,7 +893,6 @@ public class HomeFragment extends BaseFragment {
                 tvPreviewPlaceholder.setVisibility(View.GONE);
                 setHintVisibilityAnimated(false);
                 applyPreviewTransform();
-                FLog.d(TAG, "Preview enabled and recording - showing preview");
 
                 // Ensure surface is sent to service
                 if (
@@ -1790,6 +1790,7 @@ public class HomeFragment extends BaseFragment {
             }
             updatePreviewVisibility(); // Triggers iris-close or direct hide
             stopUpdatingInfo(); // Stop updating storage info
+            updateStorageInfo(); // Update UI to hide labels per preference (recording is now stopped)
 
             FLog.d(
                 TAG,
@@ -1920,10 +1921,6 @@ public class HomeFragment extends BaseFragment {
                     "Start button disabled due to camera resources/hardware availability"
                 );
             } else {
-                FLog.d(
-                    TAG,
-                    "Start button enabled as camera resources are available"
-                );
             }
         }
     }
@@ -2371,10 +2368,6 @@ public class HomeFragment extends BaseFragment {
                 @Override
                 public void onReceive(Context context, Intent i) {
                     if (!isAdded() || i == null) return;
-                    FLog.d(
-                        TAG,
-                        "Received BROADCAST_ON_RECORDING_STARTED (New Handler)"
-                    );
 
                     // Get timestamp from the service with current time as fallback
                     long startTimeFromService = i.getLongExtra(
@@ -2383,11 +2376,6 @@ public class HomeFragment extends BaseFragment {
                     );
                     if (startTimeFromService > 0L) {
                         recordingStartTime = startTimeFromService;
-                        FLog.d(
-                            TAG,
-                            "initializeRecordingStateReceivers: Setting recordingStartTime=" +
-                            recordingStartTime
-                        );
                     }
 
                     // Perform non-UI actions previously in onRecordingStarted(true)
@@ -2694,11 +2682,6 @@ public class HomeFragment extends BaseFragment {
             );
             return;
         }
-        FLog.i(
-            TAG,
-            "handleServiceStateUpdate: Applying UI for Service State = " +
-            reportedState
-        );
 
         // Update the local recording state variable
         RecordingState previousState = recordingState;
@@ -2736,24 +2719,14 @@ public class HomeFragment extends BaseFragment {
                         previewOnlyStartHandler.removeCallbacks(pendingPreviewOnlyStartTimeoutRunnable);
                     }
                 }
-                FLog.d(
-                    TAG,
-                    "handleServiceStateUpdate: Service state is NONE. Resetting UI to idle."
-                );
                 resetUIButtonsToIdleState();
                 break;
         }
-        FLog.d(
-            TAG,
-            "handleServiceStateUpdate finished. Fragment state is now: " +
-            recordingState
-        );
     }
 
     /** Helper to set UI elements for the ACTIVE recording state */
     private void setUIForRecordingActive() {
         if (!isAdded() || getContext() == null) return;
-        FLog.d(TAG, "Setting UI to: ACTIVE Recording");
         try {
             // Ensure interaction buttons reflect recording
             applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
@@ -2805,7 +2778,6 @@ public class HomeFragment extends BaseFragment {
     /** Helper to set UI elements for the PAUSED recording state */
     private void setUIForRecordingPaused() {
         if (!isAdded() || getContext() == null) return;
-        FLog.d(TAG, "Setting UI to: PAUSED Recording");
         try {
             // Set buttons for Paused state (Stop ON, Resume(Play) ON, Switch OFF, Torch
             // OFF)
@@ -2866,7 +2838,6 @@ public class HomeFragment extends BaseFragment {
      */
     private void setUIForWaitingForCamera() {
         if (!isAdded() || getContext() == null) return;
-        FLog.d(TAG, "Setting UI to: WAITING_FOR_CAMERA (camera interrupted)");
         try {
             // Similar to PAUSED state but indicates camera is being recaptured
             applyButtonTransition(buttonStartStop, getString(R.string.button_stop),
@@ -4546,11 +4517,9 @@ public class HomeFragment extends BaseFragment {
         try {
             cameraId = getCameraWithFlash();
             if (cameraId == null) {
-                FLog.d(TAG, "No camera with flash found");
                 buttonTorchSwitch.setEnabled(false);
                 buttonTorchSwitch.setVisibility(View.GONE);
             } else {
-                FLog.d(TAG, "Flash available on camera: " + cameraId);
                 buttonTorchSwitch.setEnabled(true);
                 buttonTorchSwitch.setVisibility(View.VISIBLE);
             }
@@ -4954,31 +4923,15 @@ public class HomeFragment extends BaseFragment {
                     int width,
                     int height
                 ) {
-                    FLog.d(
-                        TAG,
-                        "onSurfaceTextureAvailable: SurfaceTexture is now available. Size: " +
-                        width +
-                        "x" +
-                        height
-                    );
                     if (textureViewSurface != null) {
                         textureViewSurface.release();
                     }
                     textureViewSurface = new Surface(surfaceTexture);
-                    FLog.d(
-                        TAG,
-                        "onSurfaceTextureAvailable: Created new surface from texture"
-                    );
                     // Clear the returning flag now that surface is ready
                     if (isReturningFromFullscreen) {
-                        FLog.d(TAG, "onSurfaceTextureAvailable: Clearing isReturningFromFullscreen flag");
                         isReturningFromFullscreen = false;
                     }
                     if (isPreviewEnabled && (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending)) {
-                        FLog.d(
-                            TAG,
-                            "onSurfaceTextureAvailable: Preview active, sending surface to service"
-                        );
                         updateServiceWithCurrentSurface(
                             textureViewSurface,
                             width,
@@ -5114,10 +5067,6 @@ public class HomeFragment extends BaseFragment {
             // If service is not running, force recordingState to NONE
             if (!isMyServiceRunning(RecordingService.class)
                     && !isMyServiceRunning(DualCameraRecordingService.class)) {
-                FLog.d(
-                    TAG,
-                    "Service not running, forcing recordingState to NONE"
-                );
                 recordingState = RecordingState.NONE;
                 isDualRecordingActive = false;
             }
@@ -5129,7 +5078,6 @@ public class HomeFragment extends BaseFragment {
             handlerClock.postDelayed(() -> {
                 if (buttonStartStop != null && isAdded()) {
                     buttonStartStop.setEnabled(true);
-                    FLog.d(TAG, "Button re-enabled after cooldown period");
                 }
             }, 1500); // 1.5 second cooldown
 
@@ -5273,7 +5221,6 @@ public class HomeFragment extends BaseFragment {
 
         // Force reset recording state if service is not running
         if (!isMyServiceRunning(RecordingService.class)) {
-            FLog.d(TAG, "Service not running, forcing recordingState to NONE");
             recordingState = RecordingState.NONE;
         }
 
@@ -5299,14 +5246,12 @@ public class HomeFragment extends BaseFragment {
             return; // Don't try to start again if it might be running
         }
 
-        FLog.d(TAG, "startRecording: Starting RecordingService.");
         Intent serviceIntent = new Intent(getContext(), RecordingService.class);
         serviceIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
 
         // Pass current torch state (from HomeFragment's perspective) to the service
         // The service will use this to set the initial FLASH_MODE in its CaptureRequest
         // if it starts successfully.
-        FLog.d(TAG, "Passing initial torch state to service: " + isTorchOn);
         serviceIntent.putExtra(
             Constants.INTENT_EXTRA_INITIAL_TORCH_STATE,
             isTorchOn
@@ -5318,7 +5263,6 @@ public class HomeFragment extends BaseFragment {
             textureViewSurface != null &&
             textureViewSurface.isValid()
         ) {
-            FLog.d(TAG, "Preview enabled, passing valid surface to service.");
             serviceIntent.putExtra("SURFACE", textureViewSurface);
         } else {
             FLog.w(
@@ -5332,7 +5276,6 @@ public class HomeFragment extends BaseFragment {
         // UI state changes will be handled by broadcast receivers
         // setUIForRecordingActive(); // Move UI update to onRecordingStarted broadcast
         // receiver
-        FLog.d(TAG, "startRecording: RecordingService start initiated.");
     }
 
     // ── Dual Camera Recording ─────────────────────────────────────────
@@ -5361,14 +5304,11 @@ public class HomeFragment extends BaseFragment {
             return;
         }
 
-        FLog.d(TAG, "startDualRecording: Starting DualCameraRecordingService");
         isDualRecordingActive = true;
 
         Intent intent = new Intent(getContext(), DualCameraRecordingService.class);
         intent.setAction(Constants.INTENT_ACTION_START_DUAL_RECORDING);
         ServiceStartPolicy.startRecordingAction(requireContext(), intent);
-
-        FLog.d(TAG, "startDualRecording: DualCameraRecordingService start initiated.");
     }
 
     /**
@@ -5480,7 +5420,6 @@ public class HomeFragment extends BaseFragment {
         }
         // Force reset recording state if service is not running
         if (!isMyServiceRunning(RecordingService.class)) {
-            FLog.d(TAG, "Service not running, forcing recordingState to NONE");
             recordingState = RecordingState.NONE;
         }
 
@@ -5506,14 +5445,12 @@ public class HomeFragment extends BaseFragment {
             return; // Don't try to start again if it might be running
         }
 
-        FLog.d(TAG, "startRecording: Starting RecordingService.");
         Intent serviceIntent = new Intent(getContext(), RecordingService.class);
         serviceIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
 
         // Pass current torch state (from HomeFragment's perspective) to the service
         // The service will use this to set the initial FLASH_MODE in its CaptureRequest
         // if it starts successfully.
-        FLog.d(TAG, "Passing initial torch state to service: " + isTorchOn);
         serviceIntent.putExtra(
             Constants.INTENT_EXTRA_INITIAL_TORCH_STATE,
             isTorchOn
@@ -5525,7 +5462,6 @@ public class HomeFragment extends BaseFragment {
             textureViewSurface != null &&
             textureViewSurface.isValid()
         ) {
-            FLog.d(TAG, "Preview enabled, passing valid surface to service.");
             serviceIntent.putExtra("SURFACE", textureViewSurface);
         } else {
             FLog.w(
@@ -5539,7 +5475,6 @@ public class HomeFragment extends BaseFragment {
         // UI state changes will be handled by broadcast receivers
         // setUIForRecordingActive(); // Move UI update to onRecordingStarted broadcast
         // receiver
-        FLog.d(TAG, "startRecording: RecordingService start initiated.");
     }
 
     // Inside HomeFragment.java
@@ -6172,6 +6107,10 @@ public class HomeFragment extends BaseFragment {
         return false;
     }
 
+    protected boolean suppressDefaultTimeLeftRowUpdates() {
+        return false;
+    }
+
     protected boolean suppressDefaultElapsedRowUpdates() {
         return false;
     }
@@ -6246,6 +6185,32 @@ public class HomeFragment extends BaseFragment {
     }
 
     /**
+     * Generate dynamic labels string for elapsed time (e.g., "d • h • m • s").
+     * Only includes labels for non-zero units to keep display clean.
+     * @param elapsedTimeMs elapsed time in milliseconds
+     * @return labels string aligned with timer display, or empty if all units are zero
+     */
+    protected String generateElapsedTimeLabels(long elapsedTimeMs) {
+        long totalSeconds = elapsedTimeMs / 1000;
+        long days = totalSeconds / (24 * 3600);
+        long hours = (totalSeconds % (24 * 3600)) / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        
+        if (totalSeconds == 0) return "";
+        
+        // Build labels for active units only with bullet separator
+        if (days > 0) {
+            return "d • h • m • s";
+        } else if (hours > 0) {
+            return "h • m • s";
+        } else if (minutes > 0) {
+            return "m • s";
+        } else {
+            return "s";
+        }
+    }
+
+    /**
      * Updates storage UI with cached storage information for instant display
      */
     private void updateStorageUiWithCachedInfo(
@@ -6286,7 +6251,6 @@ public class HomeFragment extends BaseFragment {
                 );
                 // Verbose timer logging removed - called too frequently (every 1s during recording)
             } else {
-                FLog.e(TAG, "❌ Timer: Service start time is ZERO in SharedPreferences!");
                 elapsedTime = 0;
             }
 
@@ -6332,8 +6296,25 @@ public class HomeFragment extends BaseFragment {
         // Resetting here causes race condition during orientation changes.
 
         // Adjust available bytes for recording
-        long adjustedAvailable =
-            storageInfo.availableBytes - estimatedBytesUsed;
+        long adjustedAvailable;
+        if (isRecording() || isPaused()) {
+            // Check if streaming is active in STREAM_ONLY mode - if so, don't deduct estimated bytes
+            boolean isStreamOnlyMode = false;
+            try {
+                boolean serverActive = RemoteStreamManager.getInstance().isStreamingEnabled();
+                com.fadcam.streaming.RemoteStreamManager.StreamingMode mode =
+                    sharedPreferencesManager.getStreamingMode();
+                isStreamOnlyMode = serverActive &&
+                    (mode == com.fadcam.streaming.RemoteStreamManager.StreamingMode.STREAM_ONLY);
+            } catch (Exception e) {
+                FLog.e(TAG, "Error checking streaming mode for storage calculation", e);
+            }
+            adjustedAvailable = isStreamOnlyMode
+                ? storageInfo.availableBytes
+                : storageInfo.availableBytes - estimatedBytesUsed;
+        } else {
+            adjustedAvailable = storageInfo.availableBytes;
+        }
 
         // Skip subtracting if using custom removable storage that can't be probed
         if (
@@ -6476,9 +6457,23 @@ public class HomeFragment extends BaseFragment {
             ? (float) Math.max(0d, Math.min(1d, gbAvailable / gbTotal))
             : 0f;
         final boolean showLiveRemaining = isRecording() || isPaused();
-        final String finalTimeLeftText = showLiveRemaining
-            ? formatRemainingTime(days, hours, minutes, seconds)
-            : selectedEstimate;
+        final String finalTimeLeftText;
+        if (showLiveRemaining) {
+            // Check if streaming is active in STREAM_ONLY mode - if so, show "Unlimited"
+            boolean isStreamOnlyMode = false;
+            try {
+                boolean serverActive = RemoteStreamManager.getInstance().isStreamingEnabled();
+                com.fadcam.streaming.RemoteStreamManager.StreamingMode mode =
+                    sharedPreferencesManager.getStreamingMode();
+                isStreamOnlyMode = serverActive &&
+                    (mode == com.fadcam.streaming.RemoteStreamManager.StreamingMode.STREAM_ONLY);
+            } catch (Exception e) {
+                FLog.e(TAG, "Error checking streaming mode in camera recording UI", e);
+            }
+            finalTimeLeftText = isStreamOnlyMode ? "Unlimited" : formatRemainingTime(days, hours, minutes, seconds);
+        } else {
+            finalTimeLeftText = selectedEstimate;
+        }
         final String elapsedTimeText = String.format(
             Locale.getDefault(),
             "%02d:%02d",
@@ -6486,6 +6481,9 @@ public class HomeFragment extends BaseFragment {
             elapsedSeconds
         );
         latestElapsedDisplay = elapsedTimeText;
+
+        // Capture final value for lambda (lambda variables must be final or effectively final)
+        final long elapsedTimeMillis = elapsedTime;
 
         // Update UI on main thread
         if (getActivity() != null) {
@@ -6543,20 +6541,22 @@ public class HomeFragment extends BaseFragment {
                     cameraRowUiInitialized = true;
 
                     // Time-left row
-                    if (tvEstimateTitle != null) {
-                        String oldEstimate = tvEstimateTitle.getText() != null ? tvEstimateTitle.getText().toString() : "";
-                        if (!oldEstimate.equals(finalTimeLeftText)) {
-                            if (tvEstimateTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
-                                ((com.fadcam.ui.utils.AnimatedTextView) tvEstimateTitle).animateSlotDown(finalTimeLeftText, 400);
-                            } else {
-                                tvEstimateTitle.setText(finalTimeLeftText);
+                    if (!suppressDefaultTimeLeftRowUpdates()) {
+                        if (tvEstimateTitle != null) {
+                            String oldEstimate = tvEstimateTitle.getText() != null ? tvEstimateTitle.getText().toString() : "";
+                            if (!oldEstimate.equals(finalTimeLeftText)) {
+                                if (tvEstimateTitle instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                                    ((com.fadcam.ui.utils.AnimatedTextView) tvEstimateTitle).animateSlotDown(finalTimeLeftText, 400);
+                                } else {
+                                    tvEstimateTitle.setText(finalTimeLeftText);
+                                }
                             }
                         }
+                        if (tvEstimateSubtitle != null) tvEstimateSubtitle.setText(
+                            getString(R.string.recording_time_left)
+                        );
+                        applyTimeLeftAccentPreference();
                     }
-                    if (tvEstimateSubtitle != null) tvEstimateSubtitle.setText(
-                        getString(R.string.recording_time_left)
-                    );
-                    applyTimeLeftAccentPreference();
 
                     // Space row — value only on tvSpaceTitle, static total on tvSpaceTotal.
                     // Available space decreases during recording, so we animate DOWN.
@@ -6609,6 +6609,26 @@ public class HomeFragment extends BaseFragment {
                                 tvElapsedSubtitle.setText(newElapsedSub);
                             }
                         }
+                        
+                        // Update elapsed time labels (d • h • m • s) below timer
+                        if (tvElapsedReadable != null) {
+                            boolean showLabels = sharedPreferencesManager != null 
+                                ? sharedPreferencesManager.isScreenRecordingElapsedTimeLabelsVisible()
+                                : true; // Default to showing labels
+                            
+                            if (showLabels) {
+                                String elapsedTimeLabels = generateElapsedTimeLabels(elapsedTimeMillis);
+                                if (!elapsedTimeLabels.isEmpty()) {
+                                    tvElapsedReadable.setText(elapsedTimeLabels);
+                                    tvElapsedReadable.setVisibility(View.VISIBLE);
+                                } else {
+                                    tvElapsedReadable.setVisibility(View.GONE);
+                                }
+                            } else {
+                                tvElapsedReadable.setVisibility(View.GONE);
+                            }
+                        }
+                        
                         updateElapsedHeroAppearance();
                         applyElapsedAlignmentPreference();
                         applyElapsedSizePreference();
@@ -6901,15 +6921,10 @@ public class HomeFragment extends BaseFragment {
                     // Update stats every 3 seconds during recording for live feedback
                     updateCounter++;
                     if (updateCounter >= 3) {
-                        FLog.d(
-                            TAG,
-                            "📊 Stats Update Trigger: counter=" + updateCounter + 
-                            " (should call updateStats() every 3s for live data)"
-                        );
                         updateStats();
                         updateCounter = 0;
                     } else {
-                        FLog.d(TAG, "⏱️  Storage update only (counter=" + updateCounter + "/3)");
+                        // Storage-only update tick
                     }
 
                     handlerClock.postDelayed(this, 1000); // Update storage every second
@@ -6927,7 +6942,6 @@ public class HomeFragment extends BaseFragment {
 
         // Post immediately to start updates
         handlerClock.post(updateInfoRunnable);
-        FLog.d(TAG, "startUpdatingInfo: Started real-time storage/stats updates (1s intervals)");
     }
 
     private void stopUpdatingInfo() {
@@ -7101,7 +7115,6 @@ public class HomeFragment extends BaseFragment {
     // --- Updated updateStats Method ---
 
     private void updateStats() {
-        FLog.d(TAG, "updateStats: Starting calculation...");
 
         // -----------
 
@@ -7114,25 +7127,12 @@ public class HomeFragment extends BaseFragment {
             VideoStatsCache.VideoStats cachedStats =
                 VideoStatsCache.getCachedStats(sharedPreferencesManager);
             if (cachedStats != null && cachedStats.isValid()) {
-                FLog.d(
-                    TAG,
-                    "Using cached stats for instant display: " +
-                    cachedStats.videoCount +
-                    " videos, " +
-                    cachedStats.totalSizeMB +
-                    "MB"
-                );
                 updateStatsUI(cachedStats.videoCount, cachedStats.totalSizeMB);
                 return; // Show cached data instantly, no need to recalculate unless invalidated
             }
         } else {
-            FLog.d(
-                TAG,
-                "Recording in progress - forcing fresh stats calculation for live updates"
-            );
+            // recording in progress, skip cache
         }
-
-        FLog.d(TAG, "No valid cached stats found - calculating fresh stats");
 
         // Step 2: Calculate fresh stats in background
         if (executorService == null || executorService.isShutdown()) {
@@ -7157,13 +7157,11 @@ public class HomeFragment extends BaseFragment {
                     long activeBytes = com.fadcam.ActiveRecordingStats.getActiveFileSizeBytes(requireContext());
                     long activeMB = activeBytes / (1024 * 1024);
                     long totalMBWithActive = dbTotalMB + activeMB;
-                    FLog.d(TAG, "updateStats BG: Recording — DB=" + dbTotalMB + "MB + live=" + activeMB + "MB = " + totalMBWithActive + "MB, count=" + dbCount);
                     VideoStatsCache.updateStats(sharedPreferencesManager, dbCount, totalMBWithActive);
                     updateStatsUI(dbCount, totalMBWithActive);
                     return;
                 }
 
-                FLog.d(TAG, "updateStats BG: Room DB stats: " + dbCount + " videos, " + dbTotalMB + "MB");
                 VideoStatsCache.updateStats(sharedPreferencesManager, dbCount, dbTotalMB);
                 updateStatsUI(dbCount, dbTotalMB);
 
@@ -7339,8 +7337,6 @@ public class HomeFragment extends BaseFragment {
             final int[] videoCount = {numVideos};
             final long[] sizeInMB = {totalSizeMB};
 
-            FLog.d(TAG, "updateStatsUI CALLED: Input values = " + videoCount[0] + " videos, " + sizeInMB[0] + "MB");
-
             getActivity().runOnUiThread(() -> {
                 if (tvVideoCount == null && tvVideoSize == null) {
                     FLog.w(TAG, "updateStatsUI: stat views are null, skipping.");
@@ -7385,7 +7381,6 @@ public class HomeFragment extends BaseFragment {
                     tvVideoSize.setText(totalSizeFormatted);
                 }
 
-                FLog.d(TAG, "updateStatsUI: ✅ Updated stats - " + videoCount[0] + " videos, " + totalSizeFormatted);
             });
         }
     }
@@ -8542,7 +8537,6 @@ public class HomeFragment extends BaseFragment {
                 sharedPreferencesManager.getVideoFrameRate()
             );
         }
-        FLog.d(TAG, "setVideoBitrate: Set to " + videoBitrate + " bps");
     }
 
     // --- Stop Recording ---
@@ -8800,11 +8794,9 @@ public class HomeFragment extends BaseFragment {
         try {
             cameraId = getCameraWithFlash();
             if (cameraId == null) {
-                FLog.d(TAG, "No camera with flash found");
                 buttonTorchSwitch.setEnabled(false);
                 buttonTorchSwitch.setVisibility(View.GONE);
             } else {
-                FLog.d(TAG, "Flash available on camera: " + cameraId);
                 buttonTorchSwitch.setEnabled(true);
                 buttonTorchSwitch.setVisibility(View.VISIBLE);
             }
@@ -9237,11 +9229,9 @@ public class HomeFragment extends BaseFragment {
                 CameraCharacteristics.FLASH_INFO_AVAILABLE
             );
             if (flashAvailable != null && flashAvailable) {
-                FLog.d(TAG, "Found camera with flash: " + id);
                 return id;
             }
         }
-        FLog.d(TAG, "No camera with flash found");
         return null;
     }
 
@@ -9585,6 +9575,7 @@ public class HomeFragment extends BaseFragment {
         // ...existing code...
         tvElapsedTitle = view.findViewById(R.id.tvElapsedTitle);
         tvElapsedSubtitle = view.findViewById(R.id.tvElapsedSubtitle);
+        tvElapsedReadable = view.findViewById(R.id.tvElapsedReadable);
         cardElapsedHero = view.findViewById(R.id.cardElapsedHero);
         tvElapsedStateIcon = view.findViewById(R.id.tvElapsedStateIcon);
         ivElapsedAccent = view.findViewById(R.id.ivElapsedAccent);
@@ -10247,7 +10238,6 @@ public class HomeFragment extends BaseFragment {
                 // Mark as fullscreen transition when exiting fullscreen with valid surface
                 if (isReturningFromFullscreen) {
                     dualIntent.putExtra("IS_FULLSCREEN_TRANSITION", true);
-                    FLog.d(TAG, "Sending VALID surface with FULLSCREEN return flag to DualCam");
                 }
             } else {
                 dualIntent.putExtra("SURFACE", (Surface) null);
@@ -10259,7 +10249,6 @@ public class HomeFragment extends BaseFragment {
             if (ctx != null) {
                 ctx.startService(dualIntent);
             }
-            FLog.d(TAG, "updateServiceWithCurrentSurface: Sent to DualCameraRecordingService");
             return;
         }
 
@@ -10275,33 +10264,17 @@ public class HomeFragment extends BaseFragment {
                 // Mark as fullscreen transition when returning with valid surface
                 if (isReturningFromFullscreen) {
                     intent.putExtra("IS_FULLSCREEN_TRANSITION", true);
-                    FLog.d(TAG, "Sending VALID surface with FULLSCREEN return flag");
                 }
-                FLog.d(
-                    TAG,
-                    "updateServiceWithCurrentSurface: Sending new VALID surface to RecordingService with dimensions " +
-                    width +
-                    "x" +
-                    height
-                );
             } else {
                 // Mark as fullscreen return if coming back with valid surface but no dimensions yet
                 if (isReturningFromFullscreen) {
                     intent.putExtra("IS_FULLSCREEN_TRANSITION", true);
-                    FLog.d(TAG, "Sending VALID surface with FULLSCREEN return flag (no dimensions)");
                 }
-                FLog.d(
-                    TAG,
-                    "updateServiceWithCurrentSurface: Sending new VALID surface to RecordingService."
-                );
             }
         } else {
             intent.putExtra("SURFACE", (Surface) null);
             if (isFullscreenTransition) {
                 intent.putExtra("IS_FULLSCREEN_TRANSITION", true);
-                FLog.d(TAG, "updateServiceWithCurrentSurface: Sending NULL surface with FULLSCREEN_TRANSITION flag");
-            } else {
-                FLog.d(TAG, "updateServiceWithCurrentSurface: Sending NULL surface to RecordingService (preview disabled or surface invalid/destroyed).");
             }
         }
 
@@ -10457,14 +10430,8 @@ public class HomeFragment extends BaseFragment {
                         true
                     );
 
-                    areCameraResourcesAvailable = isAvailable && hasRequiredRecordingHardware;
+            areCameraResourcesAvailable = isAvailable && hasRequiredRecordingHardware;
                     updateStartButtonAvailability();
-
-                    FLog.d(
-                        TAG,
-                        "Received camera resource availability status: " +
-                        isAvailable
-                    );
                 }
             };
         }
@@ -11274,38 +11241,29 @@ public class HomeFragment extends BaseFragment {
 
     private void setupHomeCustomizationListeners() {
         if (cardElapsedHero != null) {
-            cardElapsedHero.setOnLongClickListener(v -> {
+            cardElapsedHero.setOnClickListener(v -> {
                 animatePressBounce(v, () -> {
                     performHapticFeedback();
                     showElapsedCustomizeSheet();
                 });
-                return true;
             });
         }
 
         if (rowStorageAvailable != null) {
             rowStorageAvailable.setOnClickListener(v -> {
-                // Keep the row visually pressable so ripple feedback works with long press.
-            });
-            rowStorageAvailable.setOnLongClickListener(v -> {
                 animatePressBounce(v, () -> {
                     performHapticFeedback();
                     showStorageCustomizeSheet();
                 });
-                return true;
             });
         }
 
         if (rowEstimateTime != null) {
             rowEstimateTime.setOnClickListener(v -> {
-                // Keep the row visually pressable so ripple feedback works with long press.
-            });
-            rowEstimateTime.setOnLongClickListener(v -> {
                 animatePressBounce(v, () -> {
                     performHapticFeedback();
                     showTimeLeftColorSheet();
                 });
-                return true;
             });
         }
     }
@@ -11511,6 +11469,13 @@ public class HomeFragment extends BaseFragment {
                 sharedPreferencesManager != null && sharedPreferencesManager.sharedPreferences.getBoolean(Constants.PREF_HOME_ELAPSED_SHOW_FLAG, true),
                 "flag"));
         items.add(new com.fadcam.ui.picker.OptionItem(
+                "elapsed_labels",
+                "Timer Labels",
+                "Show time unit labels (d/h/m/s) below timer",
+                null, null, null, true,
+                sharedPreferencesManager != null && sharedPreferencesManager.isScreenRecordingElapsedTimeLabelsVisible(),
+                "label"));
+        items.add(new com.fadcam.ui.picker.OptionItem(
                 "elapsed_background",
                 getString(R.string.home_elapsed_background_option),
                 getString(R.string.home_elapsed_background_option_desc),
@@ -11540,6 +11505,20 @@ public class HomeFragment extends BaseFragment {
                                     .apply();
                         }
                         applyElapsedFlagPreference();
+                    } else if ("elapsed_labels".equals(selected)) {
+                        boolean showLabels = bundle.getBoolean(
+                                com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SWITCH_STATE,
+                                true);
+                        if (sharedPreferencesManager != null) {
+                            sharedPreferencesManager.setScreenRecordingElapsedTimeLabelsVisible(showLabels);
+                            // Trigger immediate UI refresh for both HomeFragment and FadRecHomeFragment
+                            if (this instanceof com.fadcam.fadrec.ui.FadRecHomeFragment) {
+                                ((com.fadcam.fadrec.ui.FadRecHomeFragment) this).refreshTimerDisplay();
+                            } else {
+                                // For HomeFragment (camera recording), update storage info to refresh labels
+                                updateStorageInfo();
+                            }
+                        }
                     } else if ("elapsed_background".equals(selected)) {
                         showElapsedBackgroundSheet();
                     }
