@@ -152,15 +152,22 @@
     <string name="recording_time_left">Time left</string>
     <string name="recording_elapsed_time">Elapsed time</string>
     <string name="recording_remaining_time">Remaining time</string>
-    <string name="home_elapsed_customize_title">Elapsed Display</string>
-    <string name="home_elapsed_customize_helper">Customize elapsed alignment, size, font, accent flag, and background.</string>
+    <string name="home_elapsed_customize_title">Elapsed Time</string>
+    <string name="home_elapsed_customize_helper">Customize the elapsed timer display, alignment, size, font, accent flag, and background.</string>
+    <string name="home_elapsed_display_option">Display format</string>
+    <string name="home_elapsed_display_option_desc">Switch between compact inline elapsed time and a digital clock format</string>
+    <string name="home_elapsed_display_helper">Choose how the elapsed timer is shown on the card.</string>
+    <string name="home_elapsed_display_compact">Compact inline (Default)</string>
+    <string name="home_elapsed_display_compact_desc">Shows elapsed time as 5h 16m 23s with compact inline units</string>
+    <string name="home_elapsed_display_digital">Digital clock</string>
+    <string name="home_elapsed_display_digital_desc">Shows elapsed time as 00:00 or 01:05:23 without inline labels</string>
     <string name="home_elapsed_alignment_option">Alignment</string>
     <string name="home_elapsed_alignment_option_desc">Choose how the elapsed content is positioned inside its card</string>
-    <string name="home_elapsed_alignment_helper">Pick the alignment for the elapsed label and timer.</string>
+    <string name="home_elapsed_alignment_helper">Pick the alignment for the elapsed timer.</string>
     <string name="home_elapsed_align_center">Centered (Default)</string>
-    <string name="home_elapsed_align_center_desc">Keep the elapsed label and timer centered</string>
+    <string name="home_elapsed_align_center_desc">Keep the elapsed timer centered</string>
     <string name="home_elapsed_align_left">Left aligned</string>
-    <string name="home_elapsed_align_left_desc">Anchor the elapsed label and timer to the start</string>
+    <string name="home_elapsed_align_left_desc">Anchor the elapsed timer to the start</string>
     <string name="home_elapsed_size_option">Size</string>
     <string name="home_elapsed_size_option_desc">Switch between compact and larger elapsed timer presets</string>
     <string name="home_elapsed_size_helper">Choose how prominent the elapsed timer should appear.</string>
@@ -171,7 +178,7 @@
     <string name="home_elapsed_size_large">Large</string>
     <string name="home_elapsed_size_large_desc">Largest timer size for maximum emphasis</string>
     <string name="home_elapsed_font_option">Font</string>
-    <string name="home_elapsed_font_option_desc">Choose the font used by the elapsed timer digits only</string>
+    <string name="home_elapsed_font_option_desc">Choose the font used by the elapsed timer value</string>
     <string name="home_elapsed_font_helper">Pick the font used by the elapsed timer numbers.</string>
     <string name="home_elapsed_font_ubuntu">Ubuntu (Default)</string>
     <string name="home_elapsed_font_ubuntu_desc">Uses the app’s default Ubuntu font for the timer</string>
@@ -278,6 +285,79 @@
     <!-- Background Operation Progress Messages -->
     <string name="background_delete_progress">Deleting %1$s in background…</string>
     <string name="background_restore_progress">Restoring %1$s in background…</string>
+    <string name="records_delete_notification_channel_name">Deletion Progress</string>
+    <string name="records_delete_notification_channel_desc">Progress and results for background deletion in Records.</string>
+    <string name="records_delete_notification_title">Deleting recordings</string>
+    <string name="records_delete_notification_progress_text">%1$d of %2$d complete • %3$s</string>
+    <string name="records_delete_notification_summary_text">Deleted %1$d • Failed %2$d</string>
+    <string name="records_save_notification_summary_text_copy">Saved %1$d • Failed %2$d</string>
+    <string name="records_save_notification_summary_text_move">Moved %1$d • Failed %2$d</string>
+    <string name="records_delete_notification_complete_success">Deletion complete</string>
+    <string name="records_delete_notification_complete_partial">Deletion finished with issues</string>
+    <string name="records_delete_notification_complete_failed">Deletion failed</string>
+    <string name="records_delete_notification_cancelled">Deletion cancelled</string>
+    <string name="records_delete_notification_cancel">Cancel</string>
+    <string name="records_save_notification_title_copy">Saving to gallery</string>
+    <string name="records_save_notification_title_move">Moving to gallery</string>
+    <string name="records_save_notification_complete_success_copy">Save complete</string>
+    <string name="records_save_notification_complete_success_move">Move complete</string>
+    <string name="records_save_notification_complete_partial">Save finished with issues</string>
+    <string name="records_save_notification_complete_failed">Save failed</string>
+    <string name="records_save_notification_cancelled">Save cancelled</string>
+    <string name="records_delete_error_invalid_item">Could not delete one of the selected items.</string>
+    <string name="records_delete_error_failed_item">Could not delete %1$s.</string>
+    <string name="records_save_error_failed_item">Couldn\'t save %1$s.</string>
+    <string name="records_save_error_create_destination">Couldn\'t create destination folder.</string>
+    <string name="records_save_error_open_source">Couldn\'t read source file.</string>
+    <string name="records_save_error_delete_original">Copied, but couldn\'t remove original file.</string>
+    <string name="records_delete_header_default_title">Deleting recordings</string>
+    <string name="records_delete_header_action_ok">OK</string>
+    <string name="records_delete_header_action_cancel">Cancel</string>
+    <string name="records_delete_header_done_success">Deletion complete</string>
+    <string name="records_delete_header_done_partial">Deletion finished with issues</string>
+    <string name="records_delete_header_done_failed">Deletion failed</string>
+    <string name="records_delete_header_done_body_success">%1$d item(s) removed.</string>
+    <string name="records_delete_header_done_body_partial">%1$d removed • %2$d failed.</string>
+    <string name="records_delete_header_done_body_failed">%1$d item(s) failed.</string>
+    <string name="records_delete_header_preparing">Preparing deletion…</string>
+    <string name="records_save_header_preparing_copy">Preparing save…</string>
+    <string name="records_save_header_preparing_move">Preparing move…</string>
+    <string name="records_delete_header_working">Working…</string>
+    <string name="records_delete_header_finishing">Finishing…</string>
+    <string name="records_delete_header_dismiss_hint">Tap OK to dismiss</string>
+    <string name="records_delete_header_eta_seconds">ETA %1$ds</string>
+    <string name="records_delete_header_eta_minutes">ETA %1$dm %2$02ds</string>
+    <string name="records_delete_header_summary">%1$d of %2$d complete • %3$d failed</string>
+    <string name="records_delete_header_running_summary">%1$d done • %2$d failed</string>
+    <string name="records_delete_header_issue_prefix">Issue: %1$s</string>
+    <string name="records_save_header_done_success_copy">Save complete</string>
+    <string name="records_save_header_done_success_move">Move complete</string>
+    <string name="records_save_header_done_partial">Save finished with issues</string>
+    <string name="records_save_header_done_failed">Save failed</string>
+    <string name="records_save_header_done_body_success_copy">%1$d item(s) saved to gallery.</string>
+    <string name="records_save_header_done_body_success_move">%1$d item(s) moved to gallery.</string>
+    <string name="records_save_header_done_body_partial">%1$d done • %2$d failed.</string>
+    <string name="records_save_header_done_body_failed">%1$d item(s) failed.</string>
+    <plurals name="records_delete_header_running_title">
+        <item quantity="one">Deleting %d item</item>
+        <item quantity="other">Deleting %d items</item>
+    </plurals>
+    <plurals name="records_delete_header_progress_title">
+        <item quantity="one">Deleting %1$d of %2$d item</item>
+        <item quantity="other">Deleting %1$d of %2$d items</item>
+    </plurals>
+    <plurals name="records_save_copy_header_progress_title">
+        <item quantity="one">Saving %1$d of %2$d item</item>
+        <item quantity="other">Saving %1$d of %2$d items</item>
+    </plurals>
+    <plurals name="records_save_move_header_progress_title">
+        <item quantity="one">Moving %1$d of %2$d item</item>
+        <item quantity="other">Moving %1$d of %2$d items</item>
+    </plurals>
+    <plurals name="records_delete_queued_toast">
+        <item quantity="one">Deleting 1 item in background.</item>
+        <item quantity="other">Deleting %d items in background.</item>
+    </plurals>
     <string name="video_menu_rename">Rename</string>
     <string name="video_menu_info">Info</string>
     <string name="video_menu_copy_filename">Copy Filename</string>
@@ -2147,5 +2227,21 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="video_moved_to_trash">Video moved to trash</string>
     <string name="watch_fullscreen_hint">Camera is recording</string>
     <string name="watch_fullscreen_not_recording">Not recording</string>
+
+    <!-- Screen Recording Settings (FadRec) -->
+    <string name="screen_rec_settings_title">Screen Recording</string>
+    <string name="screen_rec_settings_subtitle">Quality, audio &amp; output settings</string>
+    <string name="screen_rec_resolution">Resolution</string>
+    <string name="screen_rec_framerate">Frame Rate</string>
+    <string name="screen_rec_bitrate">Bitrate</string>
+    <string name="screen_rec_orientation">Orientation</string>
+    <string name="screen_rec_bitrate_mode_auto">Auto (VBR)</string>
+    <string name="screen_rec_bitrate_mode_manual">Manual (CBR)</string>
+    <string name="screen_rec_bitrate_helper">VBR adapts to content complexity. CBR uses a fixed target bitrate.</string>
+    <string name="screen_rec_bitrate_range">1 \u2013 50 Mbps</string>
+    <string name="screen_rec_bitrate_low_hint">Lower values save storage</string>
+    <string name="screen_rec_bitrate_high_hint">Higher values improve quality</string>
+    <string name="screen_rec_orientation_portrait">Portrait</string>
+    <string name="screen_rec_orientation_landscape">Landscape</string>
 
 </resources>

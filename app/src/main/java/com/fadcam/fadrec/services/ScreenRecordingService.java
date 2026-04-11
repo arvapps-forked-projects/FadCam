@@ -73,6 +73,10 @@ public class ScreenRecordingService extends Service {
     // SAF storage support (for custom storage location)
     private android.os.ParcelFileDescriptor safRecordingPfd;
     private android.net.Uri safRecordingUri; // Track SAF URI for notification/broadcasting
+
+    // Segment rollover PFD management (deferred close for SAF auto-splitting)
+    private android.os.ParcelFileDescriptor previousSegmentPfd;
+    private android.os.ParcelFileDescriptor currentSegmentPfd;
     
     // State management
     private ScreenRecordingState recordingState = ScreenRecordingState.NONE;
@@ -130,16 +134,21 @@ public class ScreenRecordingService extends Service {
         backgroundThread = new HandlerThread("ScreenRecordingBackground");
         backgroundThread.start();
         backgroundHandler = new Handler(backgroundThread.getLooper());
-        
+
         // Get screen metrics
         WindowManager windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         if (windowManager != null) {
             DisplayMetrics metrics = new DisplayMetrics();
             windowManager.getDefaultDisplay().getRealMetrics(metrics);
-            screenWidth = metrics.widthPixels;
-            screenHeight = metrics.heightPixels;
             screenDensity = metrics.densityDpi;
-            FLog.d(TAG, String.format("Screen metrics: %dx%d @%ddpi", screenWidth, screenHeight, screenDensity));
+
+            // Read configured resolution from SharedPreferences, fall back to device screen size
+            com.fadcam.SharedPreferencesManager prefs = com.fadcam.SharedPreferencesManager.getInstance(this);
+            android.util.Size res = prefs.getScreenRecordingResolution();
+            screenWidth = res.getWidth();
+            screenHeight = res.getHeight();
+            FLog.d(TAG, String.format("Screen recording resolution: %dx%d (device: %dx%d @%ddpi)",
+                    screenWidth, screenHeight, metrics.widthPixels, metrics.heightPixels, screenDensity));
         }
         
         // Create notification channel
@@ -499,25 +508,48 @@ public class ScreenRecordingService extends Service {
         }
         
         // Calculate bitrate based on resolution
-        int calculatedBitrate = calculateBitrate(screenWidth, screenHeight);
-        
-        FLog.d(TAG, String.format("Video config: %dx%d @%dfps, bitrate=%d, audio=%s (source=%s)",
-            screenWidth, screenHeight,
-            Constants.DEFAULT_SCREEN_RECORDING_FPS,
-            calculatedBitrate,
+        int fps = sharedPreferencesManager.getScreenRecordingFrameRate();
+        String screenOrientation = sharedPreferencesManager.getScreenRecordingOrientation();
+        boolean isLandscape = SharedPreferencesManager.ORIENTATION_LANDSCAPE.equals(screenOrientation);
+
+        // Apply orientation to dimensions: swap W/H for landscape, keep as-is for portrait
+        int videoWidth = isLandscape ? Math.max(screenWidth, screenHeight) : Math.min(screenWidth, screenHeight);
+        int videoHeight = isLandscape ? Math.min(screenWidth, screenHeight) : Math.max(screenWidth, screenHeight);
+
+        // Bitrate: 0 = Auto (VBR, encoder adapts); positive = fixed CBR bitrate
+        int userBitrate = sharedPreferencesManager.getScreenRecordingBitrate();
+
+        int finalBitrate;
+        String bitrateMode;
+        if (userBitrate <= 0) {
+            // Auto mode: use calculated bitrate with VBR encoding
+            finalBitrate = calculateBitrate(videoWidth, videoHeight, fps);
+            bitrateMode = getString(R.string.screen_rec_bitrate_mode_auto);
+        } else {
+            // Manual mode: use user-selected fixed bitrate
+            finalBitrate = userBitrate;
+            bitrateMode = getString(R.string.screen_rec_bitrate_mode_manual);
+        }
+
+        FLog.d(TAG, String.format("Video config: %dx%d @%dfps, bitrate=%d (%s), orientation=%s, audio=%s (source=%s)",
+            videoWidth, videoHeight,
+            fps,
+            finalBitrate,
+            bitrateMode,
+            screenOrientation,
             enableAudio ? "enabled" : "disabled",
             audioSource));
-        
+
         // Build recording pipeline
         try {
             ScreenRecordingPipeline.Builder pipelineBuilder = new ScreenRecordingPipeline.Builder(this)
-                .setScreenDimensions(screenWidth, screenHeight, screenDensity)
-                .setVideoConfig(Constants.DEFAULT_SCREEN_RECORDING_FPS, calculatedBitrate)
+                .setScreenDimensions(videoWidth, videoHeight, screenDensity)
+                .setVideoConfig(fps, finalBitrate)
                 .setEnableAudio(enableAudio)
                 .setAudioSource(audioSource)
                 .setMediaProjection(mediaProjection)
                 .setWatermarkInfoProvider(createWatermarkInfoProvider());
-            
+
             // Use FileDescriptor for SAF mode, file path for internal storage
             if (safRecordingPfd != null) {
                 FLog.d(TAG, "Using SAF FileDescriptor for output");
@@ -526,7 +558,98 @@ public class ScreenRecordingService extends Service {
                 FLog.d(TAG, "Using internal storage file path for output");
                 pipelineBuilder.setOutputFile(outputFile.getAbsolutePath());
             }
-            
+
+            // Auto-splitting: works for both internal storage and SAF
+            try {
+                boolean splitEnabled = sharedPreferencesManager.sharedPreferences.getBoolean(
+                        SharedPreferencesManager.PREF_VIDEO_SPLITTING_ENABLED, false);
+                if (splitEnabled) {
+                    int splitSizeMb = sharedPreferencesManager.sharedPreferences.getInt(
+                            SharedPreferencesManager.PREF_VIDEO_SPLIT_SIZE_MB, 2048);
+                    long maxBytes = splitSizeMb * 1024L * 1024L;
+                    String storageMode = sharedPreferencesManager.getStorageMode();
+                    final boolean isSaf = SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode);
+
+                    if (isSaf) {
+                        FLog.d(TAG, "Auto-splitting enabled (SAF mode): " + splitSizeMb + " MB per segment");
+                    } else {
+                        FLog.d(TAG, "Auto-splitting enabled (internal): " + splitSizeMb + " MB per segment, base: "
+                                + outputFile.getAbsolutePath());
+                    }
+
+                    pipelineBuilder.setMaxFileSize(maxBytes, new ScreenRecordingPipeline.SegmentCallback() {
+                        @Override
+                        public void onSegmentRollover(int nextSegmentNumber) {
+                            if (isSaf) {
+                                // SAF: create new DocumentFile entry for the segment
+                                try {
+                                    String customUriString = sharedPreferencesManager.getCustomStorageUri();
+                                    androidx.documentfile.provider.DocumentFile pickedDir =
+                                            RecordingStoragePaths.getSafCategoryDir(
+                                                    ScreenRecordingService.this,
+                                                    customUriString,
+                                                    RecordingStoragePaths.Category.SCREEN,
+                                                    true);
+
+                                    if (pickedDir == null) {
+                                        FLog.e(TAG, "SAF directory null during segment rollover");
+                                        return;
+                                    }
+
+                                    String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss",
+                                            java.util.Locale.US).format(new java.util.Date());
+                                    String segmentSuffix = "_part" + nextSegmentNumber;
+                                    String baseFilename = Constants.RECORDING_FILE_PREFIX_FADREC + timestamp
+                                            + segmentSuffix + "." + Constants.RECORDING_FILE_EXTENSION;
+
+                                    androidx.documentfile.provider.DocumentFile videoFile =
+                                            pickedDir.createFile("video/" + Constants.RECORDING_FILE_EXTENSION,
+                                                    baseFilename);
+
+                                    if (videoFile == null) {
+                                        FLog.e(TAG, "Failed to create SAF segment file: " + baseFilename);
+                                        return;
+                                    }
+
+                                    android.net.Uri safUri = videoFile.getUri();
+                                    android.os.ParcelFileDescriptor pfd =
+                                            getContentResolver().openFileDescriptor(safUri, "w");
+
+                                    if (pfd == null) {
+                                        FLog.e(TAG, "Failed to open PFD for SAF segment: " + safUri);
+                                        return;
+                                    }
+
+                                    // Defer closing previous PFD until next rollover
+                                    if (previousSegmentPfd != null) {
+                                        try {
+                                            previousSegmentPfd.close();
+                                        } catch (Exception ignore) {
+                                        }
+                                    }
+                                    previousSegmentPfd = currentSegmentPfd;
+                                    currentSegmentPfd = pfd;
+
+                                    recordingPipeline.setNextOutputPath(null, pfd.getFileDescriptor());
+                                    FLog.d(TAG, "SAF segment " + nextSegmentNumber + " created: " + safUri);
+                                } catch (Exception e) {
+                                    FLog.e(TAG, "Error creating SAF segment " + nextSegmentNumber, e);
+                                }
+                            } else {
+                                // Internal storage: just set the file path
+                                String basePath = outputFile.getAbsolutePath();
+                                String segmentPath = basePath.substring(0, basePath.lastIndexOf(".mp4"))
+                                        + "_part" + nextSegmentNumber + ".mp4";
+                                recordingPipeline.setNextOutputPath(segmentPath, null);
+                                FLog.d(TAG, "Internal segment " + nextSegmentNumber + ": " + segmentPath);
+                            }
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                FLog.w(TAG, "Failed to configure auto-splitting, continuing without it", e);
+            }
+
             recordingPipeline = pipelineBuilder.build();
             recordingPipeline.setAudioMuted(initialMuted);
             recordingPipeline.setPreviewSurface(
@@ -727,6 +850,16 @@ public class ScreenRecordingService extends Service {
                 FLog.e(TAG, "Error closing SAF ParcelFileDescriptor", e);
             }
             safRecordingPfd = null;
+        }
+
+        // Close any pending segment rollover PFDs
+        if (previousSegmentPfd != null) {
+            try { previousSegmentPfd.close(); } catch (Exception ignore) {}
+            previousSegmentPfd = null;
+        }
+        if (currentSegmentPfd != null) {
+            try { currentSegmentPfd.close(); } catch (Exception ignore) {}
+            currentSegmentPfd = null;
         }
     }
 
@@ -971,21 +1104,20 @@ public class ScreenRecordingService extends Service {
     }
 
     /**
-     * Calculate appropriate bitrate based on resolution.
+     * Calculate appropriate bitrate based on resolution and frame rate.
      * Formula: pixels * fps * bpp (bits per pixel)
      */
-    private int calculateBitrate(int width, int height) {
+    private int calculateBitrate(int width, int height, int fps) {
         int pixels = width * height;
-        int fps = Constants.DEFAULT_SCREEN_RECORDING_FPS;
-        
+
         // Use 0.07 bits per pixel for good quality
         double bitsPerPixel = 0.07;
         int bitrate = (int) (pixels * fps * bitsPerPixel);
-        
+
         // Clamp between 2Mbps and 16Mbps
         int minBitrate = 2_000_000;  // 2Mbps
         int maxBitrate = 16_000_000; // 16Mbps
-        
+
         return Math.max(minBitrate, Math.min(maxBitrate, bitrate));
     }
 

@@ -40,6 +40,7 @@ public abstract class Constants {
     public static final String PREF_RECORDING_PAUSE_STARTED_AT = "recording_pause_started_at";
     public static final String PREF_RECORDING_ACCUMULATED_PAUSED_DURATION = "recording_accumulated_paused_duration";
     public static final String PREF_HOME_ELAPSED_ALIGNMENT = "pref_home_elapsed_alignment";
+    public static final String PREF_HOME_ELAPSED_DISPLAY_MODE = "pref_home_elapsed_display_mode";
     public static final String PREF_HOME_ELAPSED_SIZE = "pref_home_elapsed_size";
     public static final String PREF_HOME_ELAPSED_FONT = "pref_home_elapsed_font";
     public static final String PREF_HOME_ELAPSED_SHOW_FLAG = "pref_home_elapsed_show_flag";
@@ -307,6 +308,18 @@ public abstract class Constants {
         "com.fadcam.ACTION_BATCH_MEDIA_COMPLETED";
     public static final String EXTRA_BATCH_COMPLETED_MESSAGE =
         "com.fadcam.EXTRA_BATCH_COMPLETED_MESSAGE";
+    public static final String ACTION_RECORDS_DELETE_SESSION_UPDATED =
+        "com.fadcam.ACTION_RECORDS_DELETE_SESSION_UPDATED";
+    public static final String ACTION_RECORDS_DELETE_ITEM_COMPLETED =
+        "com.fadcam.ACTION_RECORDS_DELETE_ITEM_COMPLETED";
+    public static final String ACTION_RECORDS_DELETE_SESSION_FINISHED =
+        "com.fadcam.ACTION_RECORDS_DELETE_SESSION_FINISHED";
+    public static final String EXTRA_RECORDS_DELETE_SESSION_JSON =
+        "com.fadcam.EXTRA_RECORDS_DELETE_SESSION_JSON";
+    public static final String EXTRA_RECORDS_DELETE_COMPLETED_URIS =
+        "com.fadcam.EXTRA_RECORDS_DELETE_COMPLETED_URIS";
+    public static final String EXTRA_RECORDS_DELETE_SESSION_ID =
+        "com.fadcam.EXTRA_RECORDS_DELETE_SESSION_ID";
 
     // Screen recording broadcast actions
     public static final String BROADCAST_ON_SCREEN_RECORDING_STARTED =
@@ -339,6 +352,10 @@ public abstract class Constants {
         "pref_screen_recording_state"; // NONE/IN_PROGRESS/PAUSED
 
     // Default screen recording quality settings
+    public static final String PREF_SCREEN_RECORDING_RESOLUTION = "screen_recording_resolution"; // e.g. "1920x1080"
+    public static final String PREF_SCREEN_RECORDING_FPS = "screen_recording_fps";
+    public static final String PREF_SCREEN_RECORDING_BITRATE = "screen_recording_bitrate";
+    public static final String PREF_SCREEN_RECORDING_ORIENTATION = "screen_recording_orientation";
     public static final int DEFAULT_SCREEN_RECORDING_WIDTH = 1920; // FHD
     public static final int DEFAULT_SCREEN_RECORDING_HEIGHT = 1080; // FHD
     public static final int DEFAULT_SCREEN_RECORDING_FPS = 30;

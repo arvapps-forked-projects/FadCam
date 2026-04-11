@@ -45,6 +45,10 @@ public class AnimatedMaterialButton extends MaterialButton {
 
     private float slotPrefixWidth;
     private float slotColumnWidth;
+    private float slotOldChangedWidth;
+    private float slotNewChangedWidth;
+    private float slotDrawBaseX;
+    private boolean slotHasDifferentialRegions;
 
     public AnimatedMaterialButton(Context context) {
         super(context);
@@ -166,20 +170,32 @@ public class AnimatedMaterialButton extends MaterialButton {
                 newStr.isEmpty() ? 0f : paint.measureText(newStr)));
         int layoutW = Math.max(usableW, maxNeededW);
 
+        int prefixLen = 0;
+        int suffixLen = 0;
+        boolean hasDiff = false;
+        if (!forceFull) {
+            prefixLen = commonPrefixLength(oldStr, newStr);
+            suffixLen = commonSuffixLength(oldStr, newStr, prefixLen);
+            prefixLen = adjustPrefixForNumericUnit(oldStr, newStr, prefixLen, suffixLen);
+            hasDiff = (prefixLen > 0 || suffixLen > 0);
+        }
+
+        Layout.Alignment alignment = hasDiff
+                ? Layout.Alignment.ALIGN_NORMAL
+                : resolveLayoutAlignment();
+
         slotOldLayout = StaticLayout.Builder
                 .obtain(oldStr, 0, oldStr.length(), paint, layoutW)
-                .setAlignment(resolveLayoutAlignment())
+                .setAlignment(alignment)
                 .setIncludePad(getIncludeFontPadding())
                 .build();
         slotNewLayout = StaticLayout.Builder
                 .obtain(newStr, 0, newStr.length(), paint, layoutW)
-                .setAlignment(resolveLayoutAlignment())
+                .setAlignment(alignment)
                 .setIncludePad(getIncludeFontPadding())
                 .build();
 
         if (!forceFull) {
-            int prefixLen = commonPrefixLength(oldStr, newStr);
-            int suffixLen = commonSuffixLength(oldStr, newStr, prefixLen);
             String prefix = newStr.substring(0, prefixLen);
             float prefixW = prefixLen > 0 ? paint.measureText(prefix) : 0f;
             String oldChanged = oldStr.substring(prefixLen, oldStr.length() - suffixLen);
@@ -188,9 +204,18 @@ public class AnimatedMaterialButton extends MaterialButton {
             float newChangedW = newChanged.isEmpty() ? 0f : paint.measureText(newChanged);
             slotPrefixWidth = prefixW;
             slotColumnWidth = Math.max(oldChangedW, newChangedW);
+            slotOldChangedWidth = oldChangedW;
+            slotNewChangedWidth = newChangedW;
+            slotHasDifferentialRegions = hasDiff;
+            slotDrawBaseX = getCompoundPaddingLeft() + computeHorizontalOffset(usableW,
+                    oldStr.isEmpty() ? 0f : paint.measureText(oldStr));
         } else {
             slotPrefixWidth = 0f;
             slotColumnWidth = layoutW;
+            slotOldChangedWidth = layoutW;
+            slotNewChangedWidth = layoutW;
+            slotHasDifferentialRegions = false;
+            slotDrawBaseX = getCompoundPaddingLeft();
         }
 
         slotPendingFinalText = newText;
@@ -262,6 +287,7 @@ public class AnimatedMaterialButton extends MaterialButton {
         slotOldLayout = null;
         slotNewLayout = null;
         slotPendingFinalText = null;
+        slotHasDifferentialRegions = false;
     }
 
     @Override
@@ -298,7 +324,7 @@ public class AnimatedMaterialButton extends MaterialButton {
             newY = top - slideDistance * (1f - slotProgress);
         }
 
-        float colLeft  = left + slotPrefixWidth;
+        float colLeft  = slotDrawBaseX + slotPrefixWidth;
         float colRight = colLeft + slotColumnWidth;
 
         int viewW = getWidth();
@@ -307,10 +333,10 @@ public class AnimatedMaterialButton extends MaterialButton {
         canvas.clipRect(0, top, viewW, bottom);
 
         // Static prefix (differential mode only)
-        if (slotPrefixWidth > 0f) {
+        if (slotHasDifferentialRegions && slotPrefixWidth > 0f) {
             canvas.save();
-            canvas.clipRect(left, top, colLeft, bottom);
-            canvas.translate(left, top);
+            canvas.clipRect(slotDrawBaseX, top, colLeft, bottom);
+            canvas.translate(slotDrawBaseX, top);
             slotNewLayout.draw(canvas);
             canvas.restore();
         }
@@ -320,38 +346,31 @@ public class AnimatedMaterialButton extends MaterialButton {
         canvas.clipRect(colLeft, top, colRight, bottom);
 
         canvas.save();
-        canvas.translate(left, oldY);
+        canvas.translate(slotDrawBaseX, oldY);
         slotOldLayout.draw(canvas);
         canvas.restore();
 
         canvas.save();
-        canvas.translate(left, newY);
+        canvas.translate(slotDrawBaseX, newY);
         slotNewLayout.draw(canvas);
         canvas.restore();
 
         canvas.restore(); // end column clip
 
         // Static suffix (differential mode only)
-        if (slotPrefixWidth > 0f) {
-            int suffixL = (int) colRight;
+        if (slotHasDifferentialRegions) {
+            int suffixL = (int) Math.ceil(colLeft + slotOldChangedWidth);
             int suffixR = viewW - getCompoundPaddingRight();
             if (suffixL < suffixR) {
                 canvas.save();
                 canvas.clipRect(suffixL, top, suffixR, bottom);
-                canvas.translate(left, top);
+                canvas.translate(slotDrawBaseX, top);
                 slotNewLayout.draw(canvas);
                 canvas.restore();
             }
         }
 
         canvas.restore(); // end Y clip
-    }
-
-    private Layout.Alignment resolveLayoutAlignment() {
-        int gravity = getGravity() & Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK;
-        if (gravity == Gravity.CENTER_HORIZONTAL) return Layout.Alignment.ALIGN_CENTER;
-        if (gravity == Gravity.END) return Layout.Alignment.ALIGN_OPPOSITE;
-        return Layout.Alignment.ALIGN_NORMAL;
     }
 
     // ---- Diff helpers ----------------------------------------------------------
@@ -371,5 +390,72 @@ public class AnimatedMaterialButton extends MaterialButton {
             i++;
         }
         return i;
+    }
+
+    private Layout.Alignment resolveLayoutAlignment() {
+        int gravity = getGravity() & Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK;
+        if (gravity == Gravity.CENTER_HORIZONTAL) return Layout.Alignment.ALIGN_CENTER;
+        if (gravity == Gravity.END) return Layout.Alignment.ALIGN_OPPOSITE;
+        return Layout.Alignment.ALIGN_NORMAL;
+    }
+
+    private float computeHorizontalOffset(int availableWidth, float textWidth) {
+        int gravity = getGravity() & Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK;
+        if (gravity == Gravity.CENTER_HORIZONTAL) {
+            return Math.max(0f, (availableWidth - textWidth) / 2f);
+        }
+        if (gravity == Gravity.END) {
+            return Math.max(0f, availableWidth - textWidth);
+        }
+        return 0f;
+    }
+
+    private static int adjustPrefixForNumericUnit(
+            String oldText,
+            String newText,
+            int prefixLen,
+            int suffixLen
+    ) {
+        if (suffixLen <= 0) {
+            return prefixLen;
+        }
+
+        int newSuffixStart = newText.length() - suffixLen;
+        int oldSuffixStart = oldText.length() - suffixLen;
+        if (newSuffixStart <= 0 || oldSuffixStart <= 0) {
+            return prefixLen;
+        }
+
+        char suffixHead = newText.charAt(newSuffixStart);
+        if (!Character.isLetter(suffixHead)) {
+            return prefixLen;
+        }
+
+        int newNumEnd = newSuffixStart - 1;
+        int oldNumEnd = oldSuffixStart - 1;
+        if (newNumEnd < 0 || oldNumEnd < 0) {
+            return prefixLen;
+        }
+        if (!Character.isDigit(newText.charAt(newNumEnd)) || !Character.isDigit(oldText.charAt(oldNumEnd))) {
+            return prefixLen;
+        }
+
+        int newRunStart = newNumEnd;
+        while (newRunStart > 0 && Character.isDigit(newText.charAt(newRunStart - 1))) {
+            newRunStart--;
+        }
+
+        int oldRunStart = oldNumEnd;
+        while (oldRunStart > 0 && Character.isDigit(oldText.charAt(oldRunStart - 1))) {
+            oldRunStart--;
+        }
+
+        int newRunLen = newSuffixStart - newRunStart;
+        int oldRunLen = oldSuffixStart - oldRunStart;
+        if (newRunLen == oldRunLen) {
+            return prefixLen;
+        }
+
+        return Math.min(prefixLen, Math.min(newRunStart, oldRunStart));
     }
 }

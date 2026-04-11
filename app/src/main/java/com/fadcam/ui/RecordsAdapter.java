@@ -37,9 +37,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
 import androidx.documentfile.provider.DocumentFile;
+import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.card.MaterialCardView;
 // For getting drawables
@@ -50,6 +52,7 @@ import com.bumptech.glide.request.RequestOptions;
 import com.fadcam.utils.ShimmerEffectHelper;
 import com.fadcam.utils.RuntimeCompat;
 import com.fadcam.Constants;
+import com.fadcam.MainActivity;
 import com.fadcam.R;
 // Ensure VideoItem import is correct
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -85,7 +88,8 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import com.fadcam.ui.picker.PickerBottomSheetFragment;
 import com.fadcam.ui.picker.OptionItem;
-import com.fadcam.service.FileOperationService;
+import com.fadcam.service.RecordsDeletionRequestItem;
+import com.fadcam.service.RecordsDeletionService;
 
 // Modify the class declaration to remove the ListPreloader implementation
 public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
@@ -1457,12 +1461,10 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             
             switch (id) {
                 case "save_copy":
-                    // Start copy operation in background
-                    FileOperationService.startCopyToGallery(ctx, videoItem.uri, videoItem.displayName, videoItem.displayName);
+                    enqueueSaveToGallery(videoItem, false);
                     break;
                 case "save_move":
-                    // Start move operation in background
-                    FileOperationService.startMoveToGallery(ctx, videoItem.uri, videoItem.displayName, videoItem.displayName);
+                    enqueueSaveToGallery(videoItem, true);
                     break;
                 case "save_export_custom_location":
                     if (actionListener != null) {
@@ -1674,18 +1676,6 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         if (context == null)
             return;
         Uri videoUri = videoItem.uri;
-        int position = findPositionByUri(videoUri);
-
-        if (position == -1) {
-            FLog.e(TAG, "Cannot rename, item not found in adapter list: " + videoUri);
-            if (context instanceof Activity) {
-                ((Activity) context).runOnUiThread(() -> Toast.makeText(context,
-                        context.getString(R.string.toast_rename_failed) + " (Item not found)", Toast.LENGTH_SHORT)
-                        .show());
-            }
-            return;
-        }
-
         boolean renameSuccess = false;
         Uri newUri = null;
 
@@ -1765,8 +1755,13 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 VideoItem updatedItem = new VideoItem(
                         finalNewUri,
                         newFullName,
-                        videoItem.size, // Ideally, re-query size from newUri if possible
-                        System.currentTimeMillis());
+                        videoItem.size,
+                        System.currentTimeMillis(),
+                        videoItem.category,
+                        videoItem.mediaType,
+                        videoItem.shotSubtype,
+                        videoItem.cameraSubtype,
+                        videoItem.faditorSubtype);
 
                 // Update the persistent DB index: remove old URI, invalidate so
                 // the next loadRecordsList() picks up the renamed file.
@@ -1774,28 +1769,19 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     com.fadcam.data.VideoIndexRepository repo =
                             com.fadcam.data.VideoIndexRepository.getInstance(context);
                     repo.removeFromIndex(videoItem.uri.toString());
+                    repo.invalidateIndex();
                     FLog.d(TAG, "Removed old URI from index after rename: " + videoItem.uri);
                 } catch (Exception e) {
                     FLog.w(TAG, "Failed to update index after rename", e);
                 }
 
+                evictRenameCaches(videoItem.uri, finalNewUri);
+
                 if (context instanceof Activity) {
                     ((Activity) context).runOnUiThread(() -> {
-                        if (position >= 0 && position < records.size()) {
-                            records.set(position, updatedItem);
-                            if (selectedVideosUris.contains(videoItem.uri)) { // If old URI was selected
-                                selectedVideosUris.remove(videoItem.uri);
-                                selectedVideosUris.add(finalNewUri); // Replace with new URI
-                            }
-                            notifyItemChanged(position);
-                            Toast.makeText(context, R.string.toast_rename_success, Toast.LENGTH_SHORT).show();
-                        } else {
-                            FLog.e(TAG, "Rename success but position " + position + " is invalid for records list size "
-                                    + records.size());
-                            Toast.makeText(context, "Rename successful, but list update failed.", Toast.LENGTH_LONG)
-                                    .show();
-                            // Consider a full reload if this happens.
-                        }
+                        applyRenameLocally(videoItem, updatedItem);
+                        requestVisibleRecordsRefresh();
+                        Toast.makeText(context, R.string.toast_rename_success, Toast.LENGTH_SHORT).show();
                     });
                 }
             } else if (!renameSuccess) {
@@ -1813,15 +1799,101 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
     }
 
+    private void requestVisibleRecordsRefresh() {
+        if (!(context instanceof MainActivity)) {
+            return;
+        }
+        MainActivity activity = (MainActivity) context;
+        for (Fragment fragment : activity.getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof RecordsFragment) {
+                ((RecordsFragment) fragment).refreshList();
+                return;
+            }
+        }
+        RecordsFragment.requestRefresh();
+    }
+
+    private void applyRenameLocally(@NonNull VideoItem originalItem, @NonNull VideoItem updatedItem) {
+        int recordsIndex = findRecordIndexByUri(originalItem.uri);
+        if (recordsIndex == -1) {
+            recordsIndex = findRecordIndexByUri(updatedItem.uri);
+        }
+
+        int entryIndex = findPositionByUri(originalItem.uri);
+        if (entryIndex == -1) {
+            entryIndex = findPositionByUri(updatedItem.uri);
+        }
+
+        if (recordsIndex >= 0 && recordsIndex < records.size()) {
+            records.set(recordsIndex, updatedItem);
+            entries = buildEntries(records);
+            updateSelectionUri(originalItem.uri, updatedItem.uri);
+            if (entryIndex >= 0 && entryIndex < entries.size()) {
+                notifyItemChanged(entryIndex);
+            } else {
+                notifyDataSetChanged();
+            }
+            FLog.d(TAG, "applyRenameLocally: updated record at recordsIndex=" + recordsIndex
+                    + ", entryIndex=" + entryIndex + ", newUri=" + updatedItem.uri);
+            return;
+        }
+
+        FLog.w(TAG, "applyRenameLocally: could not find renamed item in adapter. recordsSize="
+                + (records == null ? 0 : records.size()) + ", oldUri=" + originalItem.uri + ", newUri="
+                + updatedItem.uri);
+        notifyDataSetChanged();
+    }
+
+    private int findRecordIndexByUri(@Nullable Uri uri) {
+        if (uri == null || records == null) {
+            return -1;
+        }
+        for (int i = 0; i < records.size(); i++) {
+            VideoItem item = records.get(i);
+            if (item != null && uri.equals(item.uri)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void updateSelectionUri(@Nullable Uri oldUri, @Nullable Uri newUri) {
+        if (oldUri == null || newUri == null) {
+            return;
+        }
+
+        if (selectedVideosUris.remove(oldUri) && !selectedVideosUris.contains(newUri)) {
+            selectedVideosUris.add(newUri);
+        }
+
+        if (currentSelectedUris.remove(oldUri) && !currentSelectedUris.contains(newUri)) {
+            currentSelectedUris.add(newUri);
+        }
+    }
+
+    private void evictRenameCaches(@Nullable Uri oldUri, @Nullable Uri newUri) {
+        List<Uri> urisToEvict = new ArrayList<>(2);
+        if (oldUri != null) {
+            urisToEvict.add(oldUri);
+        }
+        if (newUri != null) {
+            urisToEvict.add(newUri);
+        }
+        evictCachesForUris(urisToEvict);
+    }
+
     // --- Restored Save to Gallery Logic (using actionListener for progress) ---
     // Wrapper for backward compatibility
     private void saveVideoToGalleryInternal(VideoItem videoItem) {
-        // Use background service for copy operation
-        FileOperationService.startCopyToGallery(context, videoItem.uri, videoItem.displayName, videoItem.displayName);
+        enqueueSaveToGallery(videoItem, false);
     }
     
     // Enhanced version with copy/move option
     private void saveVideoToGalleryInternal(VideoItem videoItem, boolean moveFile) {
+        enqueueSaveToGallery(videoItem, moveFile);
+    }
+
+    private void enqueueSaveToGallery(@Nullable VideoItem videoItem, boolean moveFile) {
         if (context == null || videoItem == null || videoItem.uri == null || videoItem.displayName == null) {
             if (actionListener != null) {
                 // Run on UI thread if context is available to show Toast
@@ -1835,132 +1907,14 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return;
         }
 
-        final Uri sourceUri = videoItem.uri;
-        final String filename = videoItem.displayName;
-
-        if (actionListener != null) {
-            actionListener.onSaveToGalleryStarted(filename); // Notify fragment (UI thread)
-        }
-
-        executorService.submit(() -> {
-            boolean success = false;
-            Uri resultUri = null;
-            String message;
-            File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-            File fadCamDir = new File(downloadsDir, Constants.RECORDING_DIRECTORY); // Use Constant
-            if (!fadCamDir.exists()) {
-                if (!fadCamDir.mkdirs()) {
-                    FLog.e(TAG, "Failed to create FadCam directory in Downloads.");
-                    message = "Save Failed: Cannot create directory.";
-                    final String finalMessageForLambda = message;
-                    // Notify listener on UI thread
-                    if (context instanceof Activity && actionListener != null) {
-                        ((Activity) context).runOnUiThread(
-                                () -> actionListener.onSaveToGalleryFinished(false, finalMessageForLambda, null));
-                    }
-                    return;
-                }
-            }
-            File destFile = new File(fadCamDir, filename);
-            int counter = 0;
-            // Handle potential name conflicts by appending (1), (2), etc.
-            while (destFile.exists()) {
-                counter++;
-                String nameWithoutExt = filename;
-                String extension = "";
-                int dotIndex = filename.lastIndexOf('.');
-                if (dotIndex > 0 && dotIndex < filename.length() - 1) {
-                    nameWithoutExt = filename.substring(0, dotIndex);
-                    extension = filename.substring(dotIndex);
-                }
-                destFile = new File(fadCamDir, nameWithoutExt + " (" + counter + ")" + extension);
-            }
-
-            try (InputStream in = context.getContentResolver().openInputStream(sourceUri);
-                    OutputStream out = new FileOutputStream(destFile)) {
-
-                if (in == null)
-                    throw new IOException("Failed to open input stream for " + sourceUri);
-
-                byte[] buf = new byte[8192]; // Increased buffer size
-                int len;
-                while ((len = in.read(buf)) > 0) {
-                    out.write(buf, 0, len);
-                }
-                out.flush();
-                Utils.scanFileWithMediaStore(context, destFile.getAbsolutePath()); // Scan the new file
-                resultUri = Uri.fromFile(destFile); // Not entirely correct for MediaStore, but good for logs
-                success = true;
-                
-                // If move operation, delete the original file
-                if (moveFile && success) {
-                    try {
-                        boolean deleted = false;
-                        
-                        // Try to delete using File path (for app private directory files)
-                        if ("file".equals(sourceUri.getScheme())) {
-                            File originalFile = new File(sourceUri.getPath());
-                            if (originalFile.exists()) {
-                                deleted = originalFile.delete();
-                                FLog.d(TAG, "Attempted File.delete() on: " + originalFile.getAbsolutePath() + ", success: " + deleted);
-                            }
-                        } else {
-                            // Fallback to ContentResolver for other URI schemes
-                            deleted = context.getContentResolver().delete(sourceUri, null, null) > 0;
-                            FLog.d(TAG, "Attempted ContentResolver.delete() on: " + sourceUri + ", success: " + deleted);
-                        }
-                        
-                        if (deleted) {
-                            message = "Video moved to Downloads/FadCam";
-                            FLog.i(TAG, "Original file deleted after move to: " + destFile.getAbsolutePath());
-                            // Notify the adapter to refresh the list
-                            if (context instanceof Activity) {
-                                ((Activity) context).runOnUiThread(() -> {
-                                    // Remove the item from the list if successfully moved
-                                    removeVideoItemFromList(videoItem);
-                                });
-                            }
-                        } else {
-                            message = "Video copied to Downloads/FadCam (original could not be deleted)";
-                            FLog.w(TAG, "Could not delete original file after copy: " + sourceUri);
-                        }
-                    } catch (Exception moveEx) {
-                        FLog.e(TAG, "Error deleting original file after copy: " + moveEx.getMessage());
-                        message = "Video copied to Downloads/FadCam (original could not be deleted)";
-                    }
-                } else {
-                    message = "Video saved to Downloads/FadCam";
-                }
-                
-                FLog.i(TAG, "Video " + (moveFile ? "moved" : "copied") + " successfully to: " + destFile.getAbsolutePath());
-
-            } catch (Exception e) {
-                FLog.e(TAG, "Error saving video to gallery", e);
-                message = "Save Failed: " + e.getMessage();
-                if (destFile.exists()) { // Clean up partial file
-                    destFile.delete();
-                }
-            }
-
-            final boolean finalSuccess = success;
-            final String finalMessage = message;
-            final Uri finalResultUri = success ? Uri.fromFile(destFile) : null; // Use actual destFile URI if successful
-                                                                                // for listener
-
-            if (context instanceof Activity && actionListener != null) {
-                ((Activity) context).runOnUiThread(
-                        () -> actionListener.onSaveToGalleryFinished(finalSuccess, finalMessage, finalResultUri));
-            } else if (actionListener != null) { // Fallback if context not an activity (e.g. service context)
-                // This case is less likely for UI-triggered actions but good for robustness
-                // Directly call if Looper is available or handle differently
-                if (Looper.myLooper() == Looper.getMainLooper()) {
-                    actionListener.onSaveToGalleryFinished(finalSuccess, finalMessage, finalResultUri);
-                } else {
-                    new Handler(Looper.getMainLooper()).post(
-                            () -> actionListener.onSaveToGalleryFinished(finalSuccess, finalMessage, finalResultUri));
-                }
-            }
-        });
+        List<RecordsDeletionRequestItem> requestItems = new ArrayList<>(1);
+        requestItems.add(new RecordsDeletionRequestItem(
+                videoItem.uri.toString(),
+                videoItem.displayName,
+                Math.max(0L, videoItem.size),
+                "content".equals(videoItem.uri.getScheme())
+        ));
+        RecordsDeletionService.startSaveSession(context, requestItems, moveFile);
     }
     
     // Helper method to remove video item from list after move operation

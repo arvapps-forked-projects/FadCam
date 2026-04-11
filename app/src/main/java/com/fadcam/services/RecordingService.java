@@ -197,9 +197,9 @@ public class RecordingService extends Service {
     private ImageReader motionAnalysisReader;
     private long motionAnalysisIntervalMs = 333L; // ~3fps default
     private long lastMotionAnalysisTimestampMs = 0L;
-    private com.fadcam.motion.domain.detector.MotionDetector motionDetector =
+    private volatile com.fadcam.motion.domain.detector.MotionDetector motionDetector =
             new com.fadcam.motion.domain.detector.FrameDiffMotionDetector();
-    private com.fadcam.motion.domain.detector.EfficientDetLite1Detector efficientDetDetector;
+    private volatile com.fadcam.motion.domain.detector.EfficientDetLite1Detector efficientDetDetector;
     private com.fadcam.motion.domain.policy.MotionPolicy motionPolicy =
             new com.fadcam.motion.domain.policy.MotionPolicy();
     private com.fadcam.motion.domain.state.MotionStateMachine motionStateMachine;
@@ -213,7 +213,10 @@ public class RecordingService extends Service {
     private long motionLastDebugBroadcastMs = 0L;
     private long motionLastTelemetryLogMs = 0L;
     private long motionPersonLikelyUntilMs = 0L;
-    private boolean motionOpenCvActive = false;
+    private volatile boolean motionOpenCvActive = false;
+    private volatile boolean motionDetectorWarmupScheduled = false;
+    private volatile boolean motionDetectorWarmupCompleted = false;
+    private java.util.concurrent.ExecutorService motionDetectorWarmupExecutor;
     private DigitalForensicsEventRecorder digitalForensicsEventRecorder;
     private boolean motionLastPersonDetected = false;
     private float motionLastPersonConfidence = 0f;
@@ -277,31 +280,11 @@ public class RecordingService extends Service {
         backgroundThread = new HandlerThread("CameraBackground");
         backgroundThread.start();
         backgroundHandler = new Handler(backgroundThread.getLooper());
+        motionDetectorWarmupExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
 
         // Initialize PowerManager and WakeLock
         android.os.PowerManager powerManager = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
         recordingWakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "FadCam:RecordingService");
-
-        try {
-            efficientDetDetector = new com.fadcam.motion.domain.detector.EfficientDetLite1Detector(getApplicationContext());
-            if (!efficientDetDetector.isAvailable()) {
-                throw new IllegalStateException("EfficientDet-Lite1 is unavailable");
-            }
-            FLog.i(TAG, "EfficientDet detector available: true");
-        } catch (Throwable t) {
-            FLog.e(TAG, "Failed to initialize mandatory EfficientDet-Lite1 detector", t);
-            stopSelf();
-            return;
-        }
-        try {
-            motionDetector = new com.fadcam.motion.domain.detector.OpenCvMog2MotionDetector();
-            motionOpenCvActive = true;
-            FLog.i(TAG, "Motion detector backend: OpenCV MOG2");
-        } catch (Throwable t) {
-            motionDetector = new com.fadcam.motion.domain.detector.FrameDiffMotionDetector();
-            motionOpenCvActive = false;
-            FLog.w(TAG, "OpenCV backend unavailable; falling back to FrameDiffMotionDetector", t);
-        }
         try {
             digitalForensicsEventRecorder = new DigitalForensicsEventRecorder(getApplicationContext());
         } catch (Exception e) {
@@ -309,8 +292,61 @@ public class RecordingService extends Service {
             digitalForensicsEventRecorder = null;
         }
 
+        FLog.i(TAG, "Motion detectors deferred: service startup uses lazy background warmup only when Motion Lab is enabled");
+
         // Broadcast initial camera resource availability
         broadcastCameraResourceAvailability(true);
+    }
+
+    private void scheduleMotionDetectorWarmupIfNeeded() {
+        if (!motionLabEnabledForSession || motionDetectorWarmupCompleted || motionDetectorWarmupScheduled) {
+            return;
+        }
+        if (motionDetectorWarmupExecutor == null) {
+            FLog.w(TAG, "Motion detector warmup requested before executor was ready");
+            return;
+        }
+
+        motionDetectorWarmupScheduled = true;
+        motionDetectorWarmupExecutor.execute(() -> {
+            long startMs = SystemClock.elapsedRealtime();
+            FLog.i(TAG, "Motion detector warmup started off the recording hot path");
+
+            try {
+                if (efficientDetDetector == null) {
+                    try {
+                        com.fadcam.motion.domain.detector.EfficientDetLite1Detector detector =
+                                new com.fadcam.motion.domain.detector.EfficientDetLite1Detector(getApplicationContext());
+                        if (detector.isAvailable()) {
+                            efficientDetDetector = detector;
+                            FLog.i(TAG, "EfficientDet detector available: true");
+                        } else {
+                            FLog.w(TAG, "EfficientDet detector warmup completed but detector is unavailable");
+                        }
+                    } catch (Throwable t) {
+                        FLog.w(TAG, "EfficientDet warmup failed; continuing without AI detector", t);
+                    }
+                }
+
+                if (!motionOpenCvActive) {
+                    try {
+                        motionDetector = new com.fadcam.motion.domain.detector.OpenCvMog2MotionDetector();
+                        motionOpenCvActive = true;
+                        FLog.i(TAG, "Motion detector backend: OpenCV MOG2");
+                    } catch (Throwable t) {
+                        motionDetector = new com.fadcam.motion.domain.detector.FrameDiffMotionDetector();
+                        motionOpenCvActive = false;
+                        FLog.w(TAG, "OpenCV backend unavailable; keeping FrameDiffMotionDetector", t);
+                    }
+                }
+            } finally {
+                motionDetectorWarmupCompleted = true;
+                long elapsedMs = SystemClock.elapsedRealtime() - startMs;
+                FLog.i(TAG, "Motion detector warmup finished in " + elapsedMs
+                        + " ms, aiReady=" + (efficientDetDetector != null)
+                        + ", openCv=" + motionOpenCvActive);
+            }
+        });
     }
 
     // method(applyExposureCompensation)-----------
@@ -1082,6 +1118,7 @@ public class RecordingService extends Service {
             if (recordingState == RecordingState.NONE) {
                 // Update the UI and Service state atomically
                 recordingState = RecordingState.STARTING;
+                clearRecordingTimelineState();
                 sharedPreferencesManager.setRecordingInProgress(true);
                 CameraType selectedType = sharedPreferencesManager.getCameraSelection();
                 recordingSessionCameraSource = selectedType == CameraType.FRONT
@@ -1616,6 +1653,15 @@ public class RecordingService extends Service {
                 FLog.e(TAG, "Error stopping background thread", e);
                 Thread.currentThread().interrupt();
             }
+        }
+
+        if (motionDetectorWarmupExecutor != null) {
+            try {
+                motionDetectorWarmupExecutor.shutdownNow();
+            } catch (Exception e) {
+                FLog.w(TAG, "Error shutting down motion detector warmup executor", e);
+            }
+            motionDetectorWarmupExecutor = null;
         }
 
         FLog.d(TAG, "Service destroyed.");
@@ -2305,6 +2351,8 @@ public class RecordingService extends Service {
                 : null;
         if (!motionLabEnabledForSession) {
             releaseMotionAnalysisReader();
+        } else {
+            scheduleMotionDetectorWarmupIfNeeded();
         }
         if (sharedPreferencesManager != null) {
             int sensitivity = sharedPreferencesManager.getMotionSensitivity();
@@ -4958,7 +5006,7 @@ public class RecordingService extends Service {
                 return null;
             }
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            String segmentSuffix = String.format(Locale.US, "_%03d", nextSegmentNumber);
+            String segmentSuffix = String.format(Locale.US, "_part%d", nextSegmentNumber);
             String baseFilename = filenamePrefix + timestamp + segmentSuffix + "."
                     + Constants.RECORDING_FILE_EXTENSION;
             DocumentFile nextDocFile = pickedDir.createFile("video/" + Constants.RECORDING_FILE_EXTENSION,
@@ -4985,7 +5033,7 @@ public class RecordingService extends Service {
         } else {
             // Internal storage mode - Use same directory and naming as first segment
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            String segmentSuffix = String.format(Locale.US, "_%03d", nextSegmentNumber);
+            String segmentSuffix = String.format(Locale.US, "_part%d", nextSegmentNumber);
             String baseFilename = filenamePrefix + timestamp + segmentSuffix + "."
                     + Constants.RECORDING_FILE_EXTENSION;
 
@@ -5874,7 +5922,7 @@ public class RecordingService extends Service {
                     return;
                 }
                 String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-                String segmentSuffix = String.format(Locale.US, "_%03d", nextSegmentNumber);
+                String segmentSuffix = String.format(Locale.US, "_part%d", nextSegmentNumber);
                 String filenamePrefix = isStreamAndSave ? "Stream_" : Constants.RECORDING_DIRECTORY + "_";
                 String baseFilename = filenamePrefix + timestamp + segmentSuffix + ".mp4";
                 FLog.d(TAG, "Creating new segment file: " + baseFilename);
