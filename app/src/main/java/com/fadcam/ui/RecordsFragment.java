@@ -72,6 +72,9 @@ import com.fadcam.service.RecordsDeletionRequestItem;
 import com.fadcam.service.RecordsDeletionService;
 import com.fadcam.service.RecordsDeletionSessionSnapshot;
 import com.fadcam.service.RecordsDeletionSessionStore;
+import com.fadcam.service.BatchOperationSessionSnapshot;
+import com.fadcam.service.BatchOperationSessionStore;
+import com.fadcam.service.BatchOperationConstants;
 // Import the new VideoItem class
 // Ensure adapter import is correct
 import com.fadcam.utils.TrashManager; // <<< ADD IMPORT FOR TrashManager
@@ -408,16 +411,20 @@ public class RecordsFragment extends BaseFragment implements
     private boolean isBatchMediaReceiverRegistered = false;
     private BroadcastReceiver recordsDeletionUpdateReceiver;
     private boolean isRecordsDeletionReceiverRegistered = false;
+    private BroadcastReceiver batchOperationUpdateReceiver;
+    private boolean isBatchOperationReceiverRegistered = false;
     private RecordsDeletionSessionStore deletionSessionStore;
+    private BatchOperationSessionStore batchOperationSessionStore;
     private RecordsDeletionSessionSnapshot deletionSnapshot;
+    private BatchOperationSessionSnapshot batchOperationSnapshot;
     private View deletionDock;
     private ImageView deletionDockIcon;
-    private TextView deletionDockTitle;
+    private com.fadcam.ui.utils.AnimatedTextView deletionDockTitle;
     private LinearProgressIndicator deletionDockProgress;
     private TextView deletionDockCurrentItem;
     private TextView deletionDockEta;
     private TextView deletionDockSummary;
-    private TextView deletionDockOk;
+    private com.fadcam.ui.utils.AnimatedTextView deletionDockOk;
     private boolean isDeletionDockVisible = false;
     private ValueAnimator deletionDockHeightAnimator;
 
@@ -524,6 +531,22 @@ public class RecordsFragment extends BaseFragment implements
                 + " items without forcing a full records reload");
     }
 
+    /**
+     * Apply deleted items to UI based on operation kind.
+     * Only removes items if operation is DELETE or SAVE_MOVE_TO_GALLERY.
+     * For SAVE_COPY_TO_GALLERY, does not remove items from UI (they still exist on device).
+     */
+    private void applyDeletedItemsToUi(@NonNull List<Uri> deletedUris, @NonNull String operationKindStr) {
+        // Only remove items from UI if it's a destructive operation
+        if (operationKindStr.equals(RecordsDeletionSessionSnapshot.OperationKind.DELETE.name()) ||
+            operationKindStr.equals(RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY.name())) {
+            applyDeletedItemsToUi(deletedUris);
+        } else {
+            // For SAVE_COPY_TO_GALLERY, just update UI visibility without removing items
+            updateUiVisibility();
+        }
+    }
+
     private void syncDeletionUiFromStore(boolean immediate) {
         if (deletionSessionStore == null) {
             return;
@@ -573,19 +596,19 @@ public class RecordsFragment extends BaseFragment implements
 
         if (snapshot.isFinished()) {
             if (snapshot.state == RecordsDeletionSessionSnapshot.State.CANCELLED) {
-                deletionDockTitle.setText(getFinishedCancelledTitle(snapshot));
+                deletionDockTitle.animateSlot(getFinishedCancelledTitle(snapshot), 300);
                 deletionDockIcon.setImageResource(R.drawable.ic_error);
                 deletionDockCurrentItem.setText(getFinishedBodyPartial(snapshot));
             } else if (snapshot.state == RecordsDeletionSessionSnapshot.State.COMPLETED_SUCCESS) {
-                deletionDockTitle.setText(getFinishedSuccessTitle(snapshot));
+                deletionDockTitle.animateSlot(getFinishedSuccessTitle(snapshot), 300);
                 deletionDockIcon.setImageResource(R.drawable.ic_check_circle);
                 deletionDockCurrentItem.setText(getFinishedBodySuccess(snapshot));
             } else if (snapshot.state == RecordsDeletionSessionSnapshot.State.COMPLETED_PARTIAL) {
-                deletionDockTitle.setText(getFinishedPartialTitle(snapshot));
+                deletionDockTitle.animateSlot(getFinishedPartialTitle(snapshot), 300);
                 deletionDockIcon.setImageResource(R.drawable.ic_error);
                 deletionDockCurrentItem.setText(getFinishedBodyPartial(snapshot));
             } else {
-                deletionDockTitle.setText(getFinishedFailedTitle(snapshot));
+                deletionDockTitle.animateSlot(getFinishedFailedTitle(snapshot), 300);
                 deletionDockIcon.setImageResource(R.drawable.ic_error);
                 deletionDockCurrentItem.setText(getFinishedBodyFailed(snapshot));
             }
@@ -609,8 +632,10 @@ public class RecordsFragment extends BaseFragment implements
             return;
         }
 
-        int activeIndex = Math.max(1, Math.min(Math.max(1, snapshot.totalItemCount), snapshot.currentItemIndex));
-        deletionDockTitle.setText(getRunningTitle(snapshot, activeIndex));
+        // Use completedItemCount + 1 for progress display (shows items completed + current being processed)
+        // This updates more reliably than currentItemIndex and gives accurate live progress
+        int progressIndex = Math.min(snapshot.completedItemCount + 1, snapshot.totalItemCount);
+        deletionDockTitle.animateSlot(getRunningTitle(snapshot, progressIndex), 300);
         deletionDockIcon.setImageResource(getRunningIcon(snapshot));
         deletionDockProgress.setProgress(snapshot.getProgressPercent());
         deletionDockCurrentItem.setText(snapshot.currentItemName == null || snapshot.currentItemName.trim().isEmpty()
@@ -646,6 +671,14 @@ public class RecordsFragment extends BaseFragment implements
                     total
             );
         }
+        if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
+            return getResources().getQuantityString(
+                    R.plurals.records_save_export_header_progress_title,
+                    total,
+                    activeIndex,
+                    total
+            );
+        }
         return getResources().getQuantityString(
                 R.plurals.records_delete_header_progress_title,
                 total,
@@ -661,6 +694,9 @@ public class RecordsFragment extends BaseFragment implements
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
             return R.drawable.ic_drive;
         }
+        if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
+            return R.drawable.ic_export_video;
+        }
         return R.drawable.ic_delete_white;
     }
 
@@ -671,6 +707,9 @@ public class RecordsFragment extends BaseFragment implements
         }
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
             return getString(R.string.records_save_header_preparing_move);
+        }
+        if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
+            return getString(R.string.records_save_header_preparing_export);
         }
         return getString(R.string.records_delete_header_preparing);
     }
@@ -683,13 +722,17 @@ public class RecordsFragment extends BaseFragment implements
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
             return getString(R.string.records_save_header_done_success_move);
         }
+        if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
+            return getString(R.string.records_save_header_done_success_export);
+        }
         return getString(R.string.records_delete_header_done_success);
     }
 
     @NonNull
     private String getFinishedPartialTitle(@NonNull RecordsDeletionSessionSnapshot snapshot) {
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_COPY_TO_GALLERY
-                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
             return getString(R.string.records_save_header_done_partial);
         }
         return getString(R.string.records_delete_header_done_partial);
@@ -698,7 +741,8 @@ public class RecordsFragment extends BaseFragment implements
     @NonNull
     private String getFinishedFailedTitle(@NonNull RecordsDeletionSessionSnapshot snapshot) {
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_COPY_TO_GALLERY
-                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
             return getString(R.string.records_save_header_done_failed);
         }
         return getString(R.string.records_delete_header_done_failed);
@@ -721,13 +765,17 @@ public class RecordsFragment extends BaseFragment implements
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
             return getString(R.string.records_save_header_done_body_success_move, snapshot.completedItemCount);
         }
+        if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
+            return getString(R.string.records_save_header_done_body_success_export, snapshot.completedItemCount);
+        }
         return getString(R.string.records_delete_header_done_body_success, snapshot.completedItemCount);
     }
 
     @NonNull
     private String getFinishedBodyPartial(@NonNull RecordsDeletionSessionSnapshot snapshot) {
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_COPY_TO_GALLERY
-                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
             return getString(
                     R.string.records_save_header_done_body_partial,
                     snapshot.completedItemCount,
@@ -744,7 +792,8 @@ public class RecordsFragment extends BaseFragment implements
     @NonNull
     private String getFinishedBodyFailed(@NonNull RecordsDeletionSessionSnapshot snapshot) {
         if (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_COPY_TO_GALLERY
-                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY) {
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_MOVE_TO_GALLERY
+                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE) {
             return getString(R.string.records_save_header_done_body_failed, snapshot.failedItemCount);
         }
         return getString(R.string.records_delete_header_done_body_failed, snapshot.failedItemCount);
@@ -886,14 +935,19 @@ public class RecordsFragment extends BaseFragment implements
             return;
         }
         deletionDockOk.animate().cancel();
-        deletionDockOk.setText(activeSession
+        deletionDockOk.animateSlot(getString(activeSession
                 ? R.string.records_delete_header_action_cancel
-                : R.string.records_delete_header_action_ok);
+                : R.string.records_delete_header_action_ok), 300);
         deletionDockOk.setOnClickListener(v -> {
             if (activeSession) {
                 cancelDeletionSession();
             } else {
-                acknowledgeDeletionCompletion();
+                // Check which operation is finished
+                if (deletionSnapshot != null && deletionSnapshot.isFinished() && !deletionSnapshot.completionAcknowledged) {
+                    acknowledgeDeletionCompletion();
+                } else if (batchOperationSnapshot != null && batchOperationSnapshot.isFinished() && !batchOperationSnapshot.completionAcknowledged) {
+                    acknowledgeBatchOperationCompletion();
+                }
             }
         });
         if (immediate) {
@@ -964,6 +1018,151 @@ public class RecordsFragment extends BaseFragment implements
         );
     }
 
+    private void acknowledgeBatchOperationCompletion() {
+        if (!isAdded() || batchOperationSnapshot == null || !batchOperationSnapshot.isFinished()) {
+            return;
+        }
+        // Mark as acknowledged
+        batchOperationSnapshot.completionAcknowledged = true;
+        batchOperationSessionStore.write(batchOperationSnapshot);
+        batchOperationSnapshot = null;
+        renderBatchOperationSnapshot(null, false);
+        new Handler(Looper.getMainLooper()).postDelayed(
+                () -> {
+                    if (isAdded() && batchOperationSessionStore != null) {
+                        batchOperationSessionStore.clear();
+                    }
+                },
+                260L
+        );
+    }
+
+    private void syncBatchOperationUiFromStore(boolean immediate) {
+        if (batchOperationSessionStore == null) {
+            return;
+        }
+        BatchOperationSessionSnapshot snapshot = batchOperationSessionStore.read();
+        batchOperationSnapshot = snapshot;
+        renderBatchOperationSnapshot(snapshot, immediate);
+    }
+
+    private void renderBatchOperationSnapshot(
+            @Nullable BatchOperationSessionSnapshot snapshot,
+            boolean immediate
+    ) {
+        if (deletionDock == null || deletionDockTitle == null || deletionDockProgress == null
+                || deletionDockCurrentItem == null || deletionDockEta == null
+                || deletionDockSummary == null || deletionDockOk == null || deletionDockIcon == null) {
+            return;
+        }
+
+        // Don't show dock if we already have a deletion session active
+        if (deletionSnapshot != null && deletionSnapshot.isActive()) {
+            return;
+        }
+
+        boolean showDock = snapshot != null && (!snapshot.completionAcknowledged)
+                && (snapshot.isActive() || snapshot.isFinished());
+        if (!showDock) {
+            animateDeletionDock(false, immediate);
+            return;
+        }
+
+        if (snapshot.isFinished()) {
+            // Finished state
+            if (snapshot.getState() == BatchOperationSessionSnapshot.State.COMPLETED_SUCCESS) {
+                deletionDockTitle.animateSlot(
+                        getOperationTypeName(snapshot.getOperationType()) + " completed", 300);
+                deletionDockIcon.setImageResource(R.drawable.ic_check_circle);
+                deletionDockCurrentItem.setText("Successfully processed " + snapshot.getCompletedItemCount() + " items");
+            } else if (snapshot.getState() == BatchOperationSessionSnapshot.State.COMPLETED_PARTIAL) {
+                deletionDockTitle.animateSlot(
+                        getOperationTypeName(snapshot.getOperationType()) + " completed",
+                        300);
+                deletionDockIcon.setImageResource(R.drawable.ic_error);
+                deletionDockCurrentItem.setText("Processed " + snapshot.getCompletedItemCount() + ", skipped " + snapshot.getSkippedItemCount());
+            } else {
+                deletionDockTitle.animateSlot(
+                        getOperationTypeName(snapshot.getOperationType()) + " failed", 300);
+                deletionDockIcon.setImageResource(R.drawable.ic_error);
+                deletionDockCurrentItem.setText("Failed to process " + snapshot.getFailedItemCount() + " items");
+            }
+            deletionDockProgress.setProgress(100);
+            deletionDockEta.setText(getString(R.string.records_delete_header_dismiss_hint));
+            deletionDockSummary.setText("Completed: " + snapshot.getCompletedItemCount() + "/" + snapshot.getTotalItemCount() + " (Failed: " + snapshot.getFailedItemCount() + ")");
+            showDeletionDockActionButton(true, false, immediate);
+            animateDeletionDock(true, immediate);
+            return;
+        }
+
+        // Active/running state
+        int progressIndex = Math.min(snapshot.getCompletedItemCount() + 1, snapshot.getTotalItemCount());
+        deletionDockTitle.animateSlot(
+                getOperationTypeName(snapshot.getOperationType()) + " " + progressIndex + "/" + snapshot.getTotalItemCount(), 300);
+        deletionDockIcon.setImageResource(getOperationTypeIcon(snapshot.getOperationType()));
+        deletionDockProgress.setProgress(snapshot.getProgressPercent());
+        deletionDockCurrentItem.setText(snapshot.getCurrentItemName() == null || snapshot.getCurrentItemName().trim().isEmpty()
+                ? "Preparing..."
+                : snapshot.getCurrentItemName());
+        String eta = buildBatchOperationEta(snapshot);
+        deletionDockEta.setText(eta == null ? getString(R.string.records_delete_header_working) : eta);
+        deletionDockSummary.setText("Completed: " + snapshot.getCompletedItemCount() + ", Failed: " + snapshot.getFailedItemCount());
+        showDeletionDockActionButton(true, true, immediate);
+        animateDeletionDock(true, immediate);
+    }
+
+    @NonNull
+    private String getOperationTypeName(@NonNull BatchOperationSessionSnapshot.OperationType type) {
+        switch (type) {
+            case MERGE_VIDEOS:
+                return "Merge";
+            case EXPORT_STANDARD_MP4:
+                return "Export";
+            case EXPORT_CUSTOM:
+                return "Export Custom";
+            default:
+                return "Batch Operation";
+        }
+    }
+
+    private int getOperationTypeIcon(@NonNull BatchOperationSessionSnapshot.OperationType type) {
+        switch (type) {
+            case MERGE_VIDEOS:
+            case EXPORT_STANDARD_MP4:
+            case EXPORT_CUSTOM:
+                return R.drawable.ic_drive;
+            default:
+                return R.drawable.ic_delete_white;
+        }
+    }
+
+    @Nullable
+    private String buildBatchOperationEta(@NonNull BatchOperationSessionSnapshot snapshot) {
+        if (snapshot.getTotalBytes() <= 0L || snapshot.getProcessedBytes() <= 0L || snapshot.getStartedAtMs() <= 0L) {
+            return null;
+        }
+        long elapsedMs = System.currentTimeMillis() - snapshot.getStartedAtMs();
+        if (elapsedMs < 1500L) {
+            return null;
+        }
+        long remainingBytes = snapshot.getTotalBytes() - snapshot.getProcessedBytes();
+        if (remainingBytes <= 0L) {
+            return getString(R.string.records_delete_header_finishing);
+        }
+        double bytesPerMs = snapshot.getProcessedBytes() / (double) Math.max(1L, elapsedMs);
+        if (bytesPerMs <= 0d) {
+            return null;
+        }
+        long remainingMs = (long) (remainingBytes / bytesPerMs);
+        long totalSeconds = Math.max(1L, remainingMs / 1000L);
+        long minutes = totalSeconds / 60L;
+        long seconds = totalSeconds % 60L;
+        if (minutes > 0L) {
+            return getString(R.string.records_delete_header_eta_minutes, minutes, seconds);
+        }
+        return getString(R.string.records_delete_header_eta_seconds, seconds);
+    }
+
     // *** Register in onStart ***
     @Override
     public void onStart() {
@@ -974,6 +1173,7 @@ public class RecordsFragment extends BaseFragment implements
         registerSegmentCompleteReceiver();
         registerBatchMediaCompletedReceiver();
         registerRecordsDeletionReceiver();
+        registerBatchOperationReceiver();
         if (invalidationCoordinator == null && getContext() != null) {
             invalidationCoordinator = new RealtimeMediaInvalidationCoordinator(requireContext());
             invalidationCoordinator.addListener(reason -> requestRealtimeRefresh("coordinator:" + reason));
@@ -1004,6 +1204,7 @@ public class RecordsFragment extends BaseFragment implements
         unregisterSegmentCompleteReceiver();
         unregisterBatchMediaCompletedReceiver();
         unregisterRecordsDeletionReceiver();
+        unregisterBatchOperationReceiver();
     }
 
     private void registerBatchMediaCompletedReceiver() {
@@ -1057,7 +1258,12 @@ public class RecordsFragment extends BaseFragment implements
                     if (Constants.ACTION_RECORDS_DELETE_ITEM_COMPLETED.equals(action)) {
                         ArrayList<String> completedUris = intent.getStringArrayListExtra(
                                 Constants.EXTRA_RECORDS_DELETE_COMPLETED_URIS);
-                        applyDeletedItemsToUi(parseUriList(completedUris));
+                        // Get operation kind from intent, default to DELETE if not provided
+                        String operationKind = intent.getStringExtra(Constants.EXTRA_RECORDS_DELETE_OPERATION_KIND);
+                        if (operationKind == null) {
+                            operationKind = RecordsDeletionSessionSnapshot.OperationKind.DELETE.name();
+                        }
+                        applyDeletedItemsToUi(parseUriList(completedUris), operationKind);
                     }
                     if (Constants.ACTION_RECORDS_DELETE_SESSION_UPDATED.equals(action)
                             || Constants.ACTION_RECORDS_DELETE_SESSION_FINISHED.equals(action)) {
@@ -1065,6 +1271,14 @@ public class RecordsFragment extends BaseFragment implements
                                 intent.getStringExtra(Constants.EXTRA_RECORDS_DELETE_SESSION_JSON));
                         deletionSnapshot = snapshot;
                         renderDeletionSnapshot(snapshot, false);
+                        
+                        // For COPY and EXPORT operations, trigger delta scan to refresh records list
+                        if (Constants.ACTION_RECORDS_DELETE_SESSION_FINISHED.equals(action)
+                                && snapshot != null
+                                && (snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_COPY_TO_GALLERY
+                                || snapshot.operationKind == RecordsDeletionSessionSnapshot.OperationKind.SAVE_EXPORT_TO_CUSTOM_TREE)) {
+                            triggerRecordsDeltaScanWithDelay(200);
+                        }
                     }
                 }
             };
@@ -1092,6 +1306,52 @@ public class RecordsFragment extends BaseFragment implements
         } catch (IllegalArgumentException ignored) {
         }
         isRecordsDeletionReceiverRegistered = false;
+    }
+
+    private void registerBatchOperationReceiver() {
+        if (isBatchOperationReceiverRegistered || getContext() == null) {
+            return;
+        }
+        if (batchOperationUpdateReceiver == null) {
+            batchOperationUpdateReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (!isAdded() || intent == null) {
+                        return;
+                    }
+                    String action = intent.getAction();
+                    if (BatchOperationConstants.ACTION_BATCH_OPERATION_UPDATED.equals(action)
+                            || BatchOperationConstants.ACTION_BATCH_OPERATION_FINISHED.equals(action)) {
+                        BatchOperationSessionSnapshot snapshot = BatchOperationSessionSnapshot.fromJson(
+                                intent.getStringExtra(BatchOperationConstants.EXTRA_SESSION_SNAPSHOT_JSON));
+                        batchOperationSnapshot = snapshot;
+                        renderBatchOperationSnapshot(snapshot, false);
+                    }
+                }
+            };
+        }
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(BatchOperationConstants.ACTION_BATCH_OPERATION_UPDATED);
+        filter.addAction(BatchOperationConstants.ACTION_BATCH_OPERATION_FINISHED);
+        ContextCompat.registerReceiver(
+                requireContext(),
+                batchOperationUpdateReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+        );
+        isBatchOperationReceiverRegistered = true;
+        syncBatchOperationUiFromStore(true);
+    }
+
+    private void unregisterBatchOperationReceiver() {
+        if (!isBatchOperationReceiverRegistered || batchOperationUpdateReceiver == null || getContext() == null) {
+            return;
+        }
+        try {
+            requireContext().unregisterReceiver(batchOperationUpdateReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
+        isBatchOperationReceiverRegistered = false;
     }
 
     // ** NEW: Method to register the storage location change receiver **
@@ -1370,6 +1630,7 @@ public class RecordsFragment extends BaseFragment implements
 
         sharedPreferencesManager = SharedPreferencesManager.getInstance(requireContext());
         deletionSessionStore = new RecordsDeletionSessionStore(requireContext());
+        batchOperationSessionStore = new BatchOperationSessionStore(requireContext());
 
         // Initialize header elements
         titleText = view.findViewById(R.id.title_text);
@@ -1702,7 +1963,12 @@ public class RecordsFragment extends BaseFragment implements
         }
         // Update title text
         if (titleText != null) {
-            titleText.setText(originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title));
+            CharSequence normalTitle = originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title);
+            if (titleText instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                ((com.fadcam.ui.utils.AnimatedTextView) titleText).animateSlot(normalTitle, 300);
+            } else {
+                titleText.setText(normalTitle);
+            }
             FLog.d(TAG, "Title text updated in onResume.");
         } else {
             FLog.w(TAG, "Could not update title in onResume - titleText is null.");
@@ -1793,7 +2059,12 @@ public class RecordsFragment extends BaseFragment implements
             
             // Update title
             if (titleText != null) {
-                titleText.setText(originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title));
+                CharSequence normalTitle = originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title);
+                if (titleText instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                    ((com.fadcam.ui.utils.AnimatedTextView) titleText).animateSlot(normalTitle, 300);
+                } else {
+                    titleText.setText(normalTitle);
+                }
             }
             syncDeletionUiFromStore(true);
             
@@ -2829,6 +3100,29 @@ public class RecordsFragment extends BaseFragment implements
     }
 
     // --- UI Updates ---
+    /** Calculates total size of selected items */
+    private String getSelectedItemsSizeText() {
+        long totalBytes = 0;
+        for (Uri selectedUri : selectedUris) {
+            for (VideoItem item : videoItems) {
+                if (item.uri.equals(selectedUri)) {
+                    totalBytes += item.size;
+                    break;
+                }
+            }
+        }
+        return formatFileSize(totalBytes);
+    }
+
+    /** Format file size helper */
+    private String formatFileSize(long bytes) {
+        if (bytes < 1024)
+            return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        char pre = "KMGTPE".charAt(exp - 1);
+        return String.format(Locale.US, "%.1f %sB", bytes / Math.pow(1024, exp), pre);
+    }
+
     /** Updates Title, FABs based on whether selection mode is active */
     private void updateUiForSelectionMode() {
         if (!isAdded() || titleText == null || getActivity() == null) {
@@ -2838,7 +3132,13 @@ public class RecordsFragment extends BaseFragment implements
 
         if (isInSelectionMode) {
             int count = selectedUris.size();
-            titleText.setText(count > 0 ? count + " selected" : "Select items");
+            String sizeText = count > 0 ? " • " + getSelectedItemsSizeText() : "";
+            String newTitle = count > 0 ? count + " selected" + sizeText : "Select items";
+            if (titleText instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                ((com.fadcam.ui.utils.AnimatedTextView) titleText).animateSlot(newTitle, 300);
+            } else {
+                titleText.setText(newTitle);
+            }
             showBatchFabAnimated();
             if (filterChecklistButton != null) {
                 filterChecklistButton.setTextColor(resolveThemeColor(R.attr.colorToggle));
@@ -2857,7 +3157,12 @@ public class RecordsFragment extends BaseFragment implements
                 selectAllContainer.setVisibility(View.GONE);
             }
         } else {
-            titleText.setText(originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title));
+            CharSequence normalTitle = originalToolbarTitle != null ? originalToolbarTitle : getString(R.string.records_title);
+            if (titleText instanceof com.fadcam.ui.utils.AnimatedTextView) {
+                ((com.fadcam.ui.utils.AnimatedTextView) titleText).animateSlot(normalTitle, 300);
+            } else {
+                titleText.setText(normalTitle);
+            }
             hideBatchFabAnimated();
             if (filterChecklistButton != null) {
                 filterChecklistButton.setTextColor(0xFF666666);
@@ -4016,75 +4321,35 @@ public class RecordsFragment extends BaseFragment implements
             return;
         }
         if (getContext() == null) return;
-        final List<Uri> urisToExport = new ArrayList<>(pendingCustomExportUris);
+
+        // Convert URIs to RecordsDeletionRequestItem list
+        List<RecordsDeletionRequestItem> requestItems = new ArrayList<>(pendingCustomExportUris.size());
+        for (Uri uri : pendingCustomExportUris) {
+            VideoItem item = findVideoItemByUri(allLoadedItems, uri);
+            if (item != null && item.displayName != null) {
+                requestItems.add(new RecordsDeletionRequestItem(
+                        uri.toString(),
+                        item.displayName,
+                        Math.max(0L, item.size),
+                        "content".equals(uri.getScheme())
+                ));
+            }
+        }
         pendingCustomExportUris.clear();
-        Toast.makeText(requireContext(), getString(R.string.records_batch_custom_export_started, urisToExport.size()),
+
+        if (requestItems.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.records_delete_error_invalid_item, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Use RecordsDeletionService for consistent dock UI and progress tracking
+        RecordsDeletionService.startExportSession(requireContext(), requestItems, treeUri);
+        syncDeletionUiFromStore(false);
+        Toast.makeText(requireContext(),
+                getString(R.string.records_batch_save_queued, requestItems.size()),
                 Toast.LENGTH_SHORT).show();
-        executorService.submit(() -> {
-            int success = 0;
-            int failed = 0;
-            DocumentFile targetDir = DocumentFile.fromTreeUri(requireContext(), treeUri);
-            if (targetDir == null || !targetDir.isDirectory() || !targetDir.canWrite()) {
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> Toast.makeText(requireContext(),
-                            getString(R.string.records_batch_custom_export_invalid_folder), Toast.LENGTH_LONG).show());
-                }
-                return;
-            }
-            for (Uri uri : urisToExport) {
-                try {
-                    VideoItem item = findVideoItemByUri(allLoadedItems, uri);
-                    String name = item != null && item.displayName != null ? item.displayName : "video.mp4";
-                    DocumentFile out = createUniqueSafFile(targetDir, name);
-                    if (out == null) {
-                        failed++;
-                        continue;
-                    }
-                    try (java.io.InputStream in = requireContext().getContentResolver().openInputStream(uri);
-                         java.io.OutputStream os = requireContext().getContentResolver().openOutputStream(out.getUri(), "w")) {
-                        if (in == null || os == null) {
-                            failed++;
-                            continue;
-                        }
-                        byte[] buffer = new byte[16 * 1024];
-                        int len;
-                        while ((len = in.read(buffer)) > 0) {
-                            os.write(buffer, 0, len);
-                        }
-                        os.flush();
-                        success++;
-                    }
-                } catch (Exception e) {
-                    failed++;
-                }
-            }
-            final int successFinal = success;
-            final int failedFinal = failed;
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> Toast.makeText(requireContext(),
-                        getString(R.string.records_batch_custom_export_done, successFinal, failedFinal),
-                        Toast.LENGTH_LONG).show());
-            }
-        });
     }
 
-    @Nullable
-    private DocumentFile createUniqueSafFile(@NonNull DocumentFile targetDir, @NonNull String originalName) {
-        String base = originalName;
-        String ext = "";
-        int dot = originalName.lastIndexOf('.');
-        if (dot > 0) {
-            base = originalName.substring(0, dot);
-            ext = originalName.substring(dot);
-        }
-        String candidate = originalName;
-        int suffix = 1;
-        while (targetDir.findFile(candidate) != null) {
-            candidate = base + " (" + suffix + ")" + ext;
-            suffix++;
-        }
-        return targetDir.createFile("video/mp4", candidate);
-    }
     // --- Deletion Logic ---
 
     private void enqueueRecordsDeletion(@NonNull List<VideoItem> itemsToDelete) {
@@ -4927,6 +5192,18 @@ public class RecordsFragment extends BaseFragment implements
     private void requestRealtimeRefresh(@NonNull String reason) {
         if (!isAdded()) return;
         loadRecordsList(true);
+    }
+
+    private void triggerRecordsDeltaScanWithDelay(long delayMs) {
+        if (progressHandler == null) {
+            return;
+        }
+        if (deferredRecordsDeltaScanRunnable != null) {
+            progressHandler.removeCallbacks(deferredRecordsDeltaScanRunnable);
+        }
+        if (deferredRecordsDeltaScanRunnable != null) {
+            progressHandler.postDelayed(deferredRecordsDeltaScanRunnable, delayMs);
+        }
     }
 
     private void drainPendingRealtimeRefresh() {

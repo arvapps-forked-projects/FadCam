@@ -49,6 +49,7 @@ import android.util.Size;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.KeyEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -3751,6 +3752,16 @@ public class HomeFragment extends BaseFragment {
 
         View view = inflater.inflate(R.layout.fragment_home, container, false);
         FLog.d(TAG, "[FragmentLifecycle] onCreateView: Layout inflated successfully");
+        
+        // Request focus on first focusable element for D-pad support (TV/Remote)
+        view.post(() -> {
+            View firstFocusable = view.findViewById(R.id.btnHamburgerMenu);
+            if (firstFocusable != null && firstFocusable.isFocusable()) {
+                firstFocusable.requestFocus();
+                FLog.d(TAG, "D-pad support: Focus requested on hamburger menu button");
+            }
+        });
+        
         return view;
     }
 
@@ -9387,10 +9398,19 @@ public class HomeFragment extends BaseFragment {
 
                 android.content.SharedPreferences.Editor editor = prefs.edit();
                 editor.putBoolean(Constants.PREF_BOTH_TORCHES_ENABLED, "both".equals(sel));
-                editor.putString(Constants.PREF_SELECTED_TORCH_SOURCE, "both".equals(sel) ? null : sel);
+                // Map descriptive labels back to actual camera IDs for CameraManager.setTorchMode()
+                String torchIdToSave;
+                if ("back".equals(sel)) {
+                    torchIdToSave = fBackId;    // e.g. "0"
+                } else if ("front".equals(sel)) {
+                    torchIdToSave = fFrontId;   // e.g. "2"
+                } else {
+                    torchIdToSave = null;        // "both" mode — TorchService iterates all
+                }
+                editor.putString(Constants.PREF_SELECTED_TORCH_SOURCE, torchIdToSave);
                 editor.apply();
 
-                FLog.d(TAG, "Saved torch settings - Both: " + "both".equals(sel) + ", Source: " + sel);
+                FLog.d(TAG, "Saved torch settings - Both: " + "both".equals(sel) + ", Source: " + sel + ", CameraId: " + torchIdToSave);
                 Toast.makeText(requireContext(), "Torch: " + sel, Toast.LENGTH_SHORT).show();
             });
 
@@ -12702,5 +12722,67 @@ public class HomeFragment extends BaseFragment {
                 FLog.e(TAG, "Error updating hamburger badge visibility", e);
             }
         }
+    }
+
+    /**
+     * Handle D-pad key events for Android TV navigation.
+     * Delegates to system for focus navigation, handles ENTER/DPAD_CENTER for clicks.
+     */
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        View view = getView();
+        if (view == null) return false;
+        
+        // D-pad up/down: manual focus traversal with intelligent fallback
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            View currentFocus = view.findFocus();
+            if (currentFocus == null) {
+                // No focus - request on first focusable element
+                return view.requestFocus();
+            }
+            // Try to move focus up
+            View next = currentFocus.focusSearch(View.FOCUS_UP);
+            if (next != null && next != currentFocus) {
+                return next.requestFocus();
+            }
+            return false;
+        }
+        
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            View currentFocus = view.findFocus();
+            if (currentFocus == null) {
+                // No focus - request on first focusable element
+                return view.requestFocus();
+            }
+            // Try to move focus down
+            View next = currentFocus.focusSearch(View.FOCUS_DOWN);
+            if (next != null && next != currentFocus) {
+                return next.requestFocus();
+            }
+            return false;
+        }
+        
+        // D-pad left/right: switch tabs (already handled by MainActivity, but allow fallback)
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            return false; // Let MainActivity tab switching handle it
+        }
+        
+        // D-pad center or ENTER: click focused view
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+            View focused = view.findFocus();
+            if (focused != null) {
+                if (focused.isClickable()) {
+                    focused.performClick();
+                    return true;
+                } else if (focused.isFocusable()) {
+                    // If not clickable but focusable (like an item), simulate click effect
+                    focused.performClick();
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Pass other keys to parent
+        return false;
     }
 }
