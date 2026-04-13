@@ -30,6 +30,11 @@ public class SharedPreferencesManager {
     public static final int DEFAULT_BATTERY_WARNING_THRESHOLD = 20;
     // --- END BATTERY WARNING CONSTANTS ---
     
+    // --- BATTERY MAH CONSTANTS ---
+    public static final String PREF_BATTERY_MAH = "battery_mah";
+    public static final int DEFAULT_BATTERY_MAH = 5000;  // Our tested device
+    // --- END BATTERY MAH CONSTANTS ---
+    
     public static final String PREF_OPENED_VIDEO_URIS = "opened_video_uris"; // Defined in Constants now
 
     private static SharedPreferencesManager instance;
@@ -203,6 +208,33 @@ public class SharedPreferencesManager {
             .apply();
     }
     // ----- End Battery Warning Threshold Methods -----
+
+    // ----- Battery Capacity (mAh) Methods -----
+    /**
+     * Get the device battery capacity in mAh.
+     * Default: 5000 mAh (our tested device reference)
+     */
+    public int getBatteryCapacityMah() {
+        return sharedPreferences.getInt(
+            PREF_BATTERY_MAH,
+            DEFAULT_BATTERY_MAH
+        );
+    }
+
+    /**
+     * Set the device battery capacity in mAh.
+     * Validates range: 1000-10000 mAh
+     */
+    public void setBatteryCapacityMah(int mah) {
+        if (mah < 1000 || mah > 10000) {
+            mah = DEFAULT_BATTERY_MAH;
+        }
+        sharedPreferences
+            .edit()
+            .putInt(PREF_BATTERY_MAH, mah)
+            .apply();
+    }
+    // ----- End Battery Capacity (mAh) Methods -----
 
     /** Returns whether playback should start muted by default. Default: false (unmuted). */
     public boolean isPlaybackMuted() {

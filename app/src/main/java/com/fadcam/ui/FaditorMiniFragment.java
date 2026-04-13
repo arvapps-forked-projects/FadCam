@@ -86,13 +86,53 @@ public class FaditorMiniFragment extends BaseFragment {
     private View btnDeleteSelected;
     private View btnCancelSelection;
 
+    // ── Export dock ──────────────────────────────────────────────────
+    private View exportDock;
+    private ImageView exportDockIcon;
+    private com.fadcam.ui.utils.AnimatedTextView exportDockTitle;
+    private com.google.android.material.progressindicator.LinearProgressIndicator exportDockProgress;
+    private TextView exportDockCurrent;
+    private TextView exportDockEta;
+    private TextView exportDockSummary;
+    private com.fadcam.ui.utils.AnimatedTextView exportDockOk;
+    private long exportStartTimeMs = 0;
+    private float lastReportedProgress = 0f;
+    
+    // ── Export progress broadcast receiver ────────────────────────────
+    private android.content.BroadcastReceiver exportProgressReceiver;
+    private boolean isExportReceiverRegistered = false;
+    private boolean isExportActive = false; // Track if export is currently running
+
     /** Background thread for loading thumbnails. */
     private final ExecutorService thumbnailExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        FLog.d("FaditorMiniFragment", "✅ onCreate called!");
         projectStorage = new ProjectStorage(requireContext());
+
+        // Initialize the broadcast receiver early
+        initializeExportProgressReceiver();
+        
+        // Register receiver immediately in onCreate so it persists across fragment lifecycle
+        if (exportProgressReceiver != null && !isExportReceiverRegistered) {
+            try {
+                FLog.d("FaditorMiniFragment", "Registering receiver in onCreate");
+                android.content.IntentFilter filter = new android.content.IntentFilter();
+                filter.addAction(com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_STARTED);
+                filter.addAction(com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_PROGRESS);
+                filter.addAction(com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_COMPLETED);
+                filter.addAction(com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_ERROR);
+                filter.addAction(com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_CANCELLED);
+                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(requireContext())
+                    .registerReceiver(exportProgressReceiver, filter);
+                isExportReceiverRegistered = true;
+                FLog.d("FaditorMiniFragment", "✅ Export receiver registered in onCreate");
+            } catch (Exception e) {
+                FLog.e("FaditorMiniFragment", "Error registering export receiver in onCreate: " + e.getMessage(), e);
+            }
+        }
 
         // Register video picker result handler
         videoPickerLauncher = registerForActivityResult(
@@ -133,6 +173,7 @@ public class FaditorMiniFragment extends BaseFragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
+        FLog.d("FaditorMiniFragment", "✅ onCreateView called!");
         View view = inflater.inflate(R.layout.fragment_faditor_mini, container, false);
 
         // Request focus on first focusable element for D-pad/TV remote support.
@@ -193,18 +234,132 @@ public class FaditorMiniFragment extends BaseFragment {
             });
         }
 
+        // ── Export dock initialization ────────────────────────────────
+        exportDock = view.findViewById(R.id.faditor_export_dock);
+        exportDockIcon = view.findViewById(R.id.faditor_export_dock_icon);
+        exportDockTitle = view.findViewById(R.id.faditor_export_dock_title);
+        exportDockProgress = view.findViewById(R.id.faditor_export_dock_progress);
+        exportDockCurrent = view.findViewById(R.id.faditor_export_dock_current);
+        exportDockEta = view.findViewById(R.id.faditor_export_dock_eta);
+        exportDockSummary = view.findViewById(R.id.faditor_export_dock_summary);
+        exportDockOk = view.findViewById(R.id.faditor_export_dock_ok);
+
+        // OK/Cancel button: Cancel during export, dismiss after completion
+        if (exportDockOk != null) {
+            exportDockOk.setOnClickListener(v -> {
+                if (isExportActive) {
+                    // Send cancel intent to ExportService
+                    Intent cancelIntent = new Intent(requireContext(), 
+                        com.fadcam.ui.faditor.export.ExportService.class);
+                    cancelIntent.setAction(com.fadcam.ui.faditor.export.ExportService.ACTION_CANCEL_EXPORT);
+                    requireContext().startService(cancelIntent);
+                    FLog.d(TAG, "Sent cancel intent to ExportService");
+                } else {
+                    // After completion/error/cancel, dismiss the dock
+                    hideDockWithAnimation();
+                }
+            });
+        }
+
         return view;
+    }
+
+    /**
+     * Initialize the broadcast receiver for export progress updates.
+     * Called from onCreateView to set up the receiver instance.
+     */
+    private void initializeExportProgressReceiver() {
+        if (exportProgressReceiver != null) return; // Already initialized
+        
+        FLog.d("FaditorMiniFragment", "Initializing export progress broadcast receiver...");
+
+        exportProgressReceiver = new android.content.BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context context, android.content.Intent intent) {
+                if (!isAdded()) {
+                    FLog.d("FaditorMiniFragment", "Received broadcast but fragment not added, ignoring");
+                    return; // Fragment detached
+                }
+                
+                String action = intent.getAction();
+                if (action == null) {
+                    FLog.d("FaditorMiniFragment", "Received broadcast with null action");
+                    return;
+                }
+                
+                FLog.d("FaditorMiniFragment", "Export broadcast received: action=" + action);
+
+                if (com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_STARTED.equals(action)) {
+                    String outputPath = intent.getStringExtra(
+                        com.fadcam.ui.faditor.export.ExportService.EXTRA_OUTPUT_PATH);
+                    FLog.d("FaditorMiniFragment", "Export started: " + outputPath);
+                    // Post to main thread
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> 
+                        onExportStarted(outputPath));
+
+                } else if (com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_PROGRESS.equals(action)) {
+                    float progress = intent.getFloatExtra(
+                        com.fadcam.ui.faditor.export.ExportService.EXTRA_PROGRESS, 0f);
+                    FLog.d("FaditorMiniFragment", "Export progress: " + progress);
+                    // Post to main thread
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> 
+                        onExportProgress(progress));
+
+                } else if (com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_COMPLETED.equals(action)) {
+                    String outputPath = intent.getStringExtra(
+                        com.fadcam.ui.faditor.export.ExportService.EXTRA_OUTPUT_PATH);
+                    FLog.d("FaditorMiniFragment", "Export completed: " + outputPath);
+                    // Post to main thread
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> 
+                        onExportCompleted(outputPath));
+
+                } else if (com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_ERROR.equals(action)) {
+                    String errorMsg = intent.getStringExtra(
+                        com.fadcam.ui.faditor.export.ExportService.EXTRA_ERROR_MESSAGE);
+                    FLog.d("FaditorMiniFragment", "Export error: " + errorMsg);
+                    // Post to main thread
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> 
+                        onExportError(errorMsg != null ? errorMsg : "Unknown error"));
+
+                } else if (com.fadcam.ui.faditor.export.ExportService.ACTION_EXPORT_CANCELLED.equals(action)) {
+                    FLog.d("FaditorMiniFragment", "Export cancelled");
+                    // Post to main thread
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> 
+                        onExportCancelled());
+                }
+            }
+        };
+        FLog.d("FaditorMiniFragment", "Broadcast receiver initialized successfully");
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        FLog.d("FaditorMiniFragment", "onResume called");
         refreshRecentProjects();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        FLog.d("FaditorMiniFragment", "onPause called");
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+        
+        // Ensure broadcast receiver is unregistered
+        if (exportProgressReceiver != null && isExportReceiverRegistered) {
+            try {
+                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(requireContext())
+                    .unregisterReceiver(exportProgressReceiver);
+            } catch (Exception e) {
+                FLog.w("FaditorMiniFragment", "Error unregistering export receiver: " + e.getMessage());
+            }
+            isExportReceiverRegistered = false;
+        }
+        
         thumbnailExecutor.shutdownNow();
     }
 
@@ -801,6 +956,312 @@ public class FaditorMiniFragment extends BaseFragment {
         } catch (Exception e) {
             FLog.w(TAG, "Could not extract filename from URI: " + uri, e);
             return null;
+        }
+    }
+
+    // ── Export Dock Management ───────────────────────────────────────
+
+    /**
+     * Show the export dock with a smooth animation.
+     * Mirrors the animation style from Records tab deletion dock.
+     */
+    private void showDockWithAnimation() {
+        if (exportDock == null) return;
+        
+        if (exportDock.getVisibility() == View.VISIBLE) {
+            return; // Already visible
+        }
+
+        exportDock.setVisibility(View.VISIBLE);
+        exportDock.setAlpha(0f);
+        exportDock.setTranslationY(-16f);
+        
+        exportDock.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(300)
+                .setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator())
+                .start();
+        
+        FLog.d(TAG, "Export dock shown with animation");
+    }
+
+    /**
+     * Hide the export dock with a smooth animation.
+     */
+    private void hideDockWithAnimation() {
+        if (exportDock == null || exportDock.getVisibility() != View.VISIBLE) return;
+
+        exportDock.animate()
+                .alpha(0f)
+                .translationY(-16f)
+                .setDuration(300)
+                .setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator())
+                .withEndAction(() -> {
+                    if (exportDock != null) {
+                        exportDock.setVisibility(View.GONE);
+                    }
+                })
+                .start();
+        
+        FLog.d(TAG, "Export dock hidden with animation");
+    }
+
+    /**
+     * Update the export dock with current progress snapshot.
+     * Calculates ETA based on progress rate and elapsed time.
+     */
+    private void updateExportDockWithProgress(float progress) {
+        if (exportDock == null || exportDock.getVisibility() != View.VISIBLE) return;
+
+        // Update progress bar
+        if (exportDockProgress != null) {
+            int progressPercent = Math.round(progress * 100f);
+            exportDockProgress.setProgress(progressPercent);
+        }
+
+        // Calculate and update ETA
+        long elapsedMs = System.currentTimeMillis() - exportStartTimeMs;
+        if (progress > 0 && elapsedMs > 500) {
+            // Estimate total time based on progress rate
+            long totalEstimatedMs = (long) (elapsedMs / progress);
+            long remainingMs = totalEstimatedMs - elapsedMs;
+
+            if (remainingMs > 0) {
+                String etaText = formatEta(remainingMs);
+                if (exportDockEta != null) {
+                    exportDockEta.setText(etaText);
+                }
+            }
+        }
+
+        // Store last progress for completion detection
+        lastReportedProgress = progress;
+    }
+
+    /**
+     * Format remaining milliseconds into human-readable ETA string.
+     */
+    @NonNull
+    private String formatEta(long remainingMs) {
+        long seconds = remainingMs / 1000;
+        if (seconds < 60) {
+            return getString(R.string.export_eta_seconds, seconds);
+        }
+        long minutes = seconds / 60;
+        if (minutes < 60) {
+            return getString(R.string.export_eta_minutes, minutes);
+        }
+        long hours = minutes / 60;
+        return getString(R.string.export_eta_hours, hours);
+    }
+
+    /**
+     * Handle export completion: show checkmark, hide OK button initially, then show after delay.
+     */
+    private void handleExportCompleted(String outputPath) {
+        if (exportDock == null) return;
+
+        FLog.d(TAG, "Export completed: " + outputPath);
+        isExportActive = false;
+
+        // Update icon to checkmark
+        if (exportDockIcon != null) {
+            exportDockIcon.setImageResource(android.R.drawable.ic_input_add);  // Use system icon as fallback
+            // Try to set to check_circle if available
+            try {
+                exportDockIcon.setImageResource(R.drawable.ic_check_circle);
+            } catch (Exception ignore) {}
+        }
+
+        // Update title
+        if (exportDockTitle != null) {
+            exportDockTitle.animateSlot(getString(R.string.faditor_export_completed), 300);
+        }
+
+        // Ensure progress is at 100%
+        if (exportDockProgress != null) {
+            exportDockProgress.setProgress(100);
+        }
+
+        // Show dismiss hint (matching Records tab style)
+        if (exportDockEta != null) {
+            exportDockEta.setText(getString(R.string.records_delete_header_dismiss_hint));
+        }
+
+        // Show file size summary
+        if (exportDockSummary != null && outputPath != null) {
+            long fileSizeBytes = new java.io.File(outputPath).length();
+            String sizeStr = android.text.format.Formatter.formatFileSize(requireContext(), fileSizeBytes);
+            exportDockSummary.setText(getString(R.string.export_file_size, sizeStr));
+        }
+
+        // Show OK button after a brief delay
+        if (exportDockOk != null) {
+            exportDockOk.postDelayed(() -> {
+                if (exportDockOk != null) {
+                    exportDockOk.setVisibility(View.VISIBLE);
+                    exportDockOk.animateSlot(getString(R.string.records_delete_header_action_ok), 300);
+                    exportDockOk.setAlpha(0f);
+                    exportDockOk.animate()
+                            .alpha(1f)
+                            .setDuration(200)
+                            .start();
+                }
+            }, 600);
+        }
+    }
+
+    /**
+     * Handle export error: show error icon and message.
+     */
+    private void handleExportError(String errorMessage) {
+        if (exportDock == null) return;
+
+        FLog.d(TAG, "Export error: " + errorMessage);
+        isExportActive = false;
+
+        // Update icon to error
+        if (exportDockIcon != null) {
+            exportDockIcon.setImageResource(R.drawable.ic_error);
+        }
+
+        // Update title
+        if (exportDockTitle != null) {
+            exportDockTitle.animateSlot(getString(R.string.faditor_export_failed), 300);
+        }
+
+        // Show error message
+        if (exportDockCurrent != null) {
+            exportDockCurrent.setText(errorMessage);
+        }
+
+        // Show ETA as error hint
+        if (exportDockEta != null) {
+            exportDockEta.setText(R.string.export_error_hint);
+        }
+
+        // Show OK button to dismiss
+        if (exportDockOk != null) {
+            exportDockOk.setVisibility(View.VISIBLE);
+            exportDockOk.animateSlot(getString(R.string.records_delete_header_action_ok), 300);
+        }
+    }
+
+    /**
+     * Check if there's an active export and bind to ExportService to receive updates.
+     * Called from onResume() to restore dock state after configuration change.
+     */
+    private void checkAndBindExportService() {
+        try {
+            // Create a temporary intent to check if service is running
+            // For now, just schedule a check after a delay
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                if (!isAdded()) return;
+                
+                // This would be called from ExportService callbacks in a real implementation
+                // For now, the Faditor editor will notify us when it launches the service
+            }, 100);
+        } catch (Exception e) {
+            FLog.e(TAG, "Error checking export service", e);
+        }
+    }
+
+    /**
+     * Global notification receiver for export notifications.
+     * Should be called by the ExportService or from the Faditor editor.
+     */
+    public void onExportStarted(String outputPath) {
+        if (!isAdded()) return;
+
+        FLog.d(TAG, "Export started: " + outputPath);
+        exportStartTimeMs = System.currentTimeMillis();
+        lastReportedProgress = 0f;
+        isExportActive = true;
+
+        // Update dock content
+        if (exportDockTitle != null) {
+            exportDockTitle.setText(getString(R.string.faditor_export_progress));
+        }
+        if (exportDockCurrent != null) {
+            // Extract just the filename from the full path
+            String filename = new java.io.File(outputPath).getName();
+            exportDockCurrent.setText(filename);
+        }
+        if (exportDockProgress != null) {
+            exportDockProgress.setProgress(0);
+        }
+        if (exportDockIcon != null) {
+            // Use a Material icon or drawable for export/download state
+            // For now, use a generic info/download icon; production code can use a dedicated icon
+            exportDockIcon.setImageResource(android.R.drawable.ic_menu_save);
+        }
+        if (exportDockOk != null) {
+            // Show Cancel button during export
+            exportDockOk.setVisibility(View.VISIBLE);
+            exportDockOk.animateSlot(getString(R.string.records_delete_header_action_cancel), 300);
+        }
+
+        showDockWithAnimation();
+    }
+
+    /**
+     * Called when export progress updates (0.0 - 1.0).
+     */
+    public void onExportProgress(float progress) {
+        if (!isAdded() || exportDock == null) return;
+        updateExportDockWithProgress(progress);
+    }
+
+    /**
+     * Called when export completes successfully.
+     */
+    public void onExportCompleted(String outputPath) {
+        if (!isAdded() || exportDock == null) return;
+        handleExportCompleted(outputPath);
+    }
+
+    /**
+     * Called when export fails.
+     */
+    public void onExportError(String errorMessage) {
+        if (!isAdded() || exportDock == null) return;
+        handleExportError(errorMessage);
+    }
+
+    /**
+     * Called when export is cancelled by user.
+     */
+    public void onExportCancelled() {
+        if (!isAdded() || exportDock == null) return;
+        
+        FLog.d(TAG, "Export cancelled");
+        isExportActive = false;
+
+        // Update icon to info/cancelled state
+        if (exportDockIcon != null) {
+            exportDockIcon.setImageResource(android.R.drawable.ic_dialog_info);
+        }
+
+        // Update title
+        if (exportDockTitle != null) {
+            exportDockTitle.animateSlot(getString(R.string.faditor_export_cancelled), 300);
+        }
+
+        // Show progress at current state (don't reset)
+        if (exportDockProgress != null) {
+            // Keep current progress value
+        }
+
+        // Clear ETA
+        if (exportDockEta != null) {
+            exportDockEta.setText(getString(R.string.records_delete_header_dismiss_hint));
+        }
+
+        // Show OK button to dismiss
+        if (exportDockOk != null) {
+            exportDockOk.setVisibility(View.VISIBLE);
+            exportDockOk.animateSlot(getString(R.string.records_delete_header_action_ok), 300);
         }
     }
 }

@@ -2,18 +2,17 @@ package com.fadcam.streaming.model;
 
 /**
  * Stream quality preset configuration.
- * Uses standard camera resolutions with reduced bitrates and FPS caps for streaming.
- * Orientation is NOT stored here - users can select portrait/landscape separately.
- * Resolution comes from normal recording settings.
+ * Each preset enforces bitrate and FPS cap during streaming.
+ * Resolution always comes from the user's Recording Settings.
  */
 public class StreamQuality {
     public enum Preset {
-        // Streaming presets: bitrate + max FPS caps ONLY (resolution from normal recording)
-        // This prevents high fps from using excessive bandwidth for streaming
-        LOW("Low", 15, 1_000_000, "1 Mbps, max 15fps - Good for very poor connections"),
-        MEDIUM("Medium", 24, 2_500_000, "2.5 Mbps, max 24fps - Balanced quality"),
-        HIGH("High", 30, 5_000_000, "5 Mbps, max 30fps - HD streaming (default)"),
-        ULTRA("Ultra", 30, 8_000_000, "8 Mbps, max 30fps - Maximum quality");
+        // Streaming presets: bitrate + max FPS cap only.
+        // Resolution is NOT enforced — it comes from the user's Recording Settings.
+        LOW("Low",    15,  1_000_000, "1 Mbps • max 15fps — Poor / slow connections"),
+        MEDIUM("Medium", 24, 2_500_000, "2.5 Mbps • max 24fps — Balanced quality"),
+        HIGH("High",  30,  5_000_000, "5 Mbps • max 30fps — HD quality (default)"),
+        ULTRA("Ultra", 30, 8_000_000, "8 Mbps • max 30fps — Maximum quality, fast networks");
         
         private final String displayName;
         private final int fps;
@@ -115,7 +114,7 @@ public class StreamQuality {
     
     public String toJson() {
         return String.format(java.util.Locale.US,
-            "{\"preset\": \"%s\", \"bitrate\": \"%s\", \"fpsCap\": %d, \"note\": \"resolution uses normal recording settings\"}",
+            "{\"preset\": \"%s\", \"bitrate\": \"%s\", \"fpsCap\": %d}",
             currentPreset.name().toLowerCase(),
             currentPreset.getBitrateString(),
             currentPreset.getFps()

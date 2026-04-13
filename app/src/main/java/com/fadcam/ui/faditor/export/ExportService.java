@@ -39,6 +39,17 @@ public class ExportService extends Service {
     public static final String ACTION_START_EXPORT = "com.fadcam.EXPORT_START";
     /** Action to cancel an export. */
     public static final String ACTION_CANCEL_EXPORT = "com.fadcam.EXPORT_CANCEL";
+    
+    // ── Broadcast actions for UI updates ──────────────────────────────
+    public static final String ACTION_EXPORT_STARTED = "com.fadcam.EXPORT_STARTED";
+    public static final String ACTION_EXPORT_PROGRESS = "com.fadcam.EXPORT_PROGRESS";
+    public static final String ACTION_EXPORT_COMPLETED = "com.fadcam.EXPORT_COMPLETED";
+    public static final String ACTION_EXPORT_ERROR = "com.fadcam.EXPORT_ERROR";
+    public static final String ACTION_EXPORT_CANCELLED = "com.fadcam.EXPORT_CANCELLED";
+    
+    public static final String EXTRA_OUTPUT_PATH = "output_path";
+    public static final String EXTRA_PROGRESS = "progress";
+    public static final String EXTRA_ERROR_MESSAGE = "error_message";
 
     // ── Static bridge for passing project data ───────────────────────
     @Nullable
@@ -171,6 +182,13 @@ public class ExportService extends Service {
                 if (serviceListener != null) {
                     serviceListener.onExportStarted(outputPath);
                 }
+                // Broadcast to UI (FaditorMiniFragment listens via LocalBroadcastManager)
+                Intent broadcast = new Intent(ACTION_EXPORT_STARTED);
+                broadcast.putExtra(EXTRA_OUTPUT_PATH, outputPath);
+                FLog.d(TAG, "Broadcasting ACTION_EXPORT_STARTED");
+                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(ExportService.this)
+                        .sendBroadcast(broadcast);
+                FLog.d(TAG, "ACTION_EXPORT_STARTED broadcast sent");
             }
 
             @Override
@@ -180,6 +198,12 @@ public class ExportService extends Service {
                 if (serviceListener != null) {
                     serviceListener.onExportProgress(progress);
                 }
+                // Broadcast to UI
+                Intent broadcast = new Intent(ACTION_EXPORT_PROGRESS);
+                broadcast.putExtra(EXTRA_PROGRESS, progress);
+                FLog.d(TAG, "Broadcasting ACTION_EXPORT_PROGRESS: " + percent + "%");
+                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(ExportService.this)
+                        .sendBroadcast(broadcast);
             }
 
             @Override
@@ -191,6 +215,14 @@ public class ExportService extends Service {
                 if (serviceListener != null) {
                     serviceListener.onExportCompleted(outputPath, result);
                 }
+                // Broadcast to UI
+                Intent broadcast = new Intent(ACTION_EXPORT_COMPLETED);
+                broadcast.putExtra(EXTRA_OUTPUT_PATH, outputPath);
+                FLog.d(TAG, "Broadcasting ACTION_EXPORT_COMPLETED");
+                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(ExportService.this)
+                        .sendBroadcast(broadcast);
+                FLog.d(TAG, "ACTION_EXPORT_COMPLETED broadcast sent");
+                
                 stopForeground(STOP_FOREGROUND_DETACH);
                 stopSelf();
             }
@@ -203,6 +235,14 @@ public class ExportService extends Service {
                 if (serviceListener != null) {
                     serviceListener.onExportError(error);
                 }
+                // Broadcast to UI
+                Intent broadcast = new Intent(ACTION_EXPORT_ERROR);
+                broadcast.putExtra(EXTRA_ERROR_MESSAGE, error.getMessage());
+                FLog.d(TAG, "Broadcasting ACTION_EXPORT_ERROR: " + error.getMessage());
+                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(ExportService.this)
+                        .sendBroadcast(broadcast);
+                FLog.d(TAG, "ACTION_EXPORT_ERROR broadcast sent");
+                
                 stopForeground(STOP_FOREGROUND_DETACH);
                 stopSelf();
             }
@@ -219,6 +259,13 @@ public class ExportService extends Service {
             exportManager.cancel();
             isExporting = false;
             FLog.d(TAG, "Export cancelled via service");
+            
+            // Broadcast cancellation to UI
+            Intent broadcast = new Intent(ACTION_EXPORT_CANCELLED);
+            FLog.d(TAG, "Broadcasting ACTION_EXPORT_CANCELLED");
+            androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(this)
+                    .sendBroadcast(broadcast);
+            FLog.d(TAG, "ACTION_EXPORT_CANCELLED broadcast sent");
         }
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();

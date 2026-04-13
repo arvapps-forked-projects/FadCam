@@ -60,7 +60,31 @@ public class HomeSidebarFragment extends DialogFragment {
                 decor.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             }
         }
+        
+        // Use setOnShowListener to clear any Material Components backgrounds after dialog is shown
+        dialog.setOnShowListener(d -> {
+            android.view.View container = dialog.findViewById(android.R.id.content);
+            if (container != null && container instanceof android.view.ViewGroup) {
+                android.view.ViewGroup group = (android.view.ViewGroup) container;
+                // Recursively clear backgrounds from all child views that Material added
+                clearMaterialBackgrounds(group);
+            }
+        });
+        
         return dialog;
+    }
+    
+    private void clearMaterialBackgrounds(android.view.ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            android.view.View child = group.getChildAt(i);
+            // Skip the actual content (ScrollView with our gradient drawable)
+            if (child.getId() != R.id.home_sidebar_root_scroll) {
+                child.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                if (child instanceof android.view.ViewGroup) {
+                    clearMaterialBackgrounds((android.view.ViewGroup) child);
+                }
+            }
+        }
     }
 
     @Nullable
@@ -263,6 +287,11 @@ public class HomeSidebarFragment extends DialogFragment {
         // Use the new TipsCarouselFragment for better tips display
         TipsCarouselFragment tipsCarousel = TipsCarouselFragment.newInstance();
         tipsCarousel.show(getParentFragmentManager(), "tips_carousel");
+    }
+
+    @Override
+    public int getTheme() {
+        return R.style.CustomSideSheetDialogTheme;
     }
 
 }

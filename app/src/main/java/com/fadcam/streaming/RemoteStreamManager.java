@@ -182,6 +182,16 @@ public class RemoteStreamManager {
                     clientMetricsMap.clear();
                 }
                 NetworkMonitor.getInstance().stopMonitoring();
+                // Clear stream preset keys so normal recording settings take effect again
+                if (context != null) {
+                    android.content.SharedPreferences prefs = context.getSharedPreferences("FadCamPrefs", android.content.Context.MODE_PRIVATE);
+                    prefs.edit()
+                        .remove("stream_bitrate")
+                        .remove("stream_fps_cap")
+                        .remove("quality_preset")
+                        .apply();
+                    FLog.i(TAG, "[STREAM PRESET] Cleared all stream preset keys - recording will use normal settings");
+                }
             }
             
             if (!enabled) {
@@ -1457,30 +1467,33 @@ public class RemoteStreamManager {
         double remainingHours = 0;
         String warning = "";
         
-        // Calculate consumption and estimate remaining time if streaming
-        if (streamingEnabled && streamStartBatteryLevel != -1 && serverStartTime > 0) {
-            consumed = (int) (streamStartBatteryLevel - currentLevel);
-            if (consumed >= 0) {
-                // Estimate remaining streaming time
-                long streamingDurationMs = System.currentTimeMillis() - serverStartTime;
-                if (streamingDurationMs > 60000) { // At least 1 minute of streaming
-                    double consumptionRate = consumed / (streamingDurationMs / 3600000.0); // % per hour
-                    if (consumptionRate > 0) {
-                        remainingHours = currentLevel / consumptionRate;
-                        if (remainingHours >= 500) { // Set to -1 if unreasonable
-                            remainingHours = currentLevel; // Fallback: estimate conservatively
-                        }
-                    } else {
-                        remainingHours = currentLevel; // No consumption yet
-                    }
-                } else {
-                    remainingHours = currentLevel; // Less than 1 minute
-                }
+        // Get user's device battery capacity (defaults to 5000mAh)
+        com.fadcam.SharedPreferencesManager prefs = com.fadcam.SharedPreferencesManager.getInstance(context);
+        int userBatteryMah = prefs.getBatteryCapacityMah();
+        
+        // Base consumption rate: 61% drain over 8 hours = 7.625% per hour (5000mAh reference)
+        // Adjusted for user's device: adjustedRate = 7.625 × (5000 / userMah)
+        // On smaller battery: higher % drain per hour (less total capacity)
+        // On larger battery: lower % drain per hour (more total capacity)
+        final double BASE_CONSUMPTION_RATE = 7.625;  // 5000mAh reference device
+        final int REFERENCE_BATTERY_MAH = 5000;
+        double CONSUMPTION_RATE_PER_HOUR = BASE_CONSUMPTION_RATE * (REFERENCE_BATTERY_MAH / (double) userBatteryMah);
+        
+        // Always calculate remaining time based on current battery level
+        if (currentLevel > 0) {
+            remainingHours = currentLevel / CONSUMPTION_RATE_PER_HOUR;
+            // Cap unreasonable values
+            if (remainingHours > 500) {
+                remainingHours = 500; // Max estimate: ~500+ hours
             }
         }
         
+        // Track battery consumed from app start if we need it for other metrics
+        if (appStartBatteryLevel != -1 && currentLevel <= appStartBatteryLevel) {
+            consumed = (int) (appStartBatteryLevel - currentLevel);
+        }
+        
         // Get configured battery warning threshold from SharedPreferencesManager
-        com.fadcam.SharedPreferencesManager prefs = com.fadcam.SharedPreferencesManager.getInstance(context);
         int warningThreshold = prefs.getBatteryWarningThreshold();
         // FLog.d(TAG, "[Battery] Retrieved threshold from prefs: " + warningThreshold);
         
@@ -1494,7 +1507,7 @@ public class RemoteStreamManager {
         String chargingStatus = isCharging ? "Charging" : "Discharging";
         
         String result = String.format(java.util.Locale.US,
-            "{\"percent\": %d, \"status\": \"%s\", \"consumed\": %d, \"remainingHours\": %.1f, \"warning\": %s, \"warningThreshold\": %d}",
+            "{\"percent\": %d, \"status\": \"%s\", \"consumed\": %d, \"remaining_hours\": %.1f, \"warning\": %s, \"warningThreshold\": %d}",
             currentLevel, chargingStatus, consumed, remainingHours, warningJson, warningThreshold
         );
         // FLog.d(TAG, "[Battery] Returning JSON: " + result);
@@ -1656,14 +1669,16 @@ public class RemoteStreamManager {
         // Update quality preset
         streamQuality.setPreset(preset);
         
-        // Store bitrate + FPS cap in SharedPreferences
-        // Resolution comes from normal recording settings
+        // Store bitrate and FPS cap in SharedPreferences (resolution comes from Recording Settings)
         android.content.SharedPreferences prefs = context.getSharedPreferences("FadCamPrefs", android.content.Context.MODE_PRIVATE);
         android.content.SharedPreferences.Editor editor = prefs.edit();
-        editor.putInt("stream_bitrate", preset.getBitrate()); // Bitrate for streaming
-        editor.putInt("stream_fps_cap", preset.getFps());     // Max FPS for streaming (cap user's recording fps if higher)
+        editor.putInt("stream_bitrate", preset.getBitrate());
+        editor.putInt("stream_fps_cap", preset.getFps());
         editor.putString("quality_preset", preset.name());
         editor.apply();
+        FLog.i(TAG, "[STREAM PRESET] Set: " + preset.getDisplayName()
+            + " | " + preset.getBitrateString()
+            + " | max " + preset.getFps() + "fps");
         
         // Log quality change event
         logClientEvent(new ClientEvent(
@@ -1956,6 +1971,27 @@ public class RemoteStreamManager {
         prefs.setBatteryWarningThreshold(percentage);
         
         FLog.d(TAG, "Battery warning threshold set to " + percentage + "%");
+    }
+    
+    public int getBatteryCapacityMah() {
+        com.fadcam.SharedPreferencesManager prefs = com.fadcam.SharedPreferencesManager.getInstance(context);
+        return prefs.getBatteryCapacityMah();
+    }
+    
+    /**
+     * Set the device battery capacity in mAh.
+     * Used to calculate personalized battery estimates.
+     */
+    public void setBatteryCapacityMah(int mah) throws Exception {
+        if (mah < 1000 || mah > 10000) {
+            throw new IllegalArgumentException("Battery capacity must be between 1000 and 10000 mAh");
+        }
+        
+        // Store locally
+        com.fadcam.SharedPreferencesManager prefs = com.fadcam.SharedPreferencesManager.getInstance(context);
+        prefs.setBatteryCapacityMah(mah);
+        
+        FLog.d(TAG, "Battery capacity set to " + mah + " mAh");
     }
     
     // =========================================================================

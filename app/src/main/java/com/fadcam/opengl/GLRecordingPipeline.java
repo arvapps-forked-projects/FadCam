@@ -1121,12 +1121,17 @@ public class GLRecordingPipeline {
         format.setInteger(MediaFormat.KEY_FRAME_RATE, videoFramerate);
         format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, VIDEO_IFRAME_INTERVAL);
 
-        // ESSENTIAL: Bitrate mode for consistent quality and proper duration (API 21+)
+        // ESSENTIAL: Bitrate mode — CBR for streaming (hard bandwidth cap), VBR for local recording (quality)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             try {
-                format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
+                boolean isStreaming = com.fadcam.streaming.RemoteStreamManager.getInstance().isStreamingEnabled();
+                int bitrateMode = isStreaming
+                    ? MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+                    : MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR;
+                format.setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode);
+                FLog.i(TAG, "[ENCODER] CBR=" + isStreaming + " | bitrate=" + (videoBitrate/1_000_000) + "Mbps | fps=" + videoFramerate);
             } catch (Exception e) {
-                FLog.w(TAG, "VBR bitrate mode not supported, using default", e);
+                FLog.w(TAG, "Bitrate mode not supported", e);
             }
         }
 
@@ -1195,12 +1200,16 @@ public class GLRecordingPipeline {
             }
         }
 
-        // Set bitrate mode for consistent quality (API 21+)
+        // Set bitrate mode — CBR for streaming (hard bandwidth cap), VBR for local recording (quality)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             try {
-                format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
+                boolean isStreaming = com.fadcam.streaming.RemoteStreamManager.getInstance().isStreamingEnabled();
+                int bitrateMode = isStreaming
+                    ? MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+                    : MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR;
+                format.setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode);
             } catch (Exception e) {
-                FLog.w(TAG, "VBR mode not supported, using default bitrate mode", e);
+                FLog.w(TAG, "Bitrate mode not supported", e);
             }
         }
 

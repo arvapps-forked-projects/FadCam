@@ -9376,8 +9376,20 @@ public class HomeFragment extends BaseFragment {
             if (bothEnabled) {
                 currentId = "both";
             } else if (currentSource != null) {
-                currentId = currentSource;
+                // Convert saved camera ID back to label ("back"/"front") for picker display
+                if (currentSource.equals(backCameraId)) {
+                    currentId = "back";
+                } else if (currentSource.equals(frontCameraId)) {
+                    currentId = "front";
+                } else {
+                    currentId = null;  // Invalid saved ID, use fallback
+                }
             } else {
+                currentId = null;
+            }
+            
+            // If no valid currentId, default to first available
+            if (currentId == null) {
                 currentId = hasBackTorch ? "back" : (hasFrontTorch ? "front" : null);
             }
 

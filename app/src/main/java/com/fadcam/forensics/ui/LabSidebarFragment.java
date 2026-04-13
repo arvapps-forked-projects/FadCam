@@ -41,7 +41,30 @@ public class LabSidebarFragment extends DialogFragment {
                 decor.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             }
         }
+        
+        // Use setOnShowListener to clear any Material Components backgrounds after dialog is shown
+        dialog.setOnShowListener(d -> {
+            android.view.View container = dialog.findViewById(android.R.id.content);
+            if (container != null && container instanceof ViewGroup) {
+                ViewGroup group = (ViewGroup) container;
+                clearMaterialBackgrounds(group);
+            }
+        });
+        
         return dialog;
+    }
+    
+    private void clearMaterialBackgrounds(ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            // Skip the actual content (ScrollView with our gradient drawable)
+            if (child.getId() != R.id.lab_sidebar_root_scroll) {
+                child.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                if (child instanceof ViewGroup) {
+                    clearMaterialBackgrounds((ViewGroup) child);
+                }
+            }
+        }
     }
 
     @Nullable
@@ -104,5 +127,10 @@ public class LabSidebarFragment extends DialogFragment {
             getParentFragmentManager().setFragmentResult(resultKey, out);
             dismiss();
         });
+    }
+
+    @Override
+    public int getTheme() {
+        return R.style.CustomSideSheetDialogTheme;
     }
 }

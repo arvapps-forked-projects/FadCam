@@ -89,6 +89,20 @@ public class TorchService extends Service {
             } else {
                 // Single torch mode - use selected source, or fallback if not set
                 selectedTorchSource = sharedPreferences.getString(Constants.PREF_SELECTED_TORCH_SOURCE, null);
+                
+                // MIGRATION: Handle old format where labels ("back", "front") were saved instead of camera IDs
+                if ("back".equals(selectedTorchSource) || "front".equals(selectedTorchSource)) {
+                    FLog.d(TAG, "Detected old torch format '" + selectedTorchSource + "', converting to camera ID");
+                    selectedTorchSource = convertLabelToCameraId(selectedTorchSource, "back".equals(selectedTorchSource));
+                    if (selectedTorchSource != null) {
+                        // Save the converted ID for future use
+                        sharedPreferences.edit()
+                                .putString(Constants.PREF_SELECTED_TORCH_SOURCE, selectedTorchSource)
+                                .apply();
+                        FLog.d(TAG, "Migrated torch preference to camera ID: " + selectedTorchSource);
+                    }
+                }
+                
                 FLog.d(TAG, "Single torch mode. Selected source: " + selectedTorchSource);
                 if (selectedTorchSource == null) {
                     // Fallback: pick first back camera with flash, else any camera with flash
@@ -334,6 +348,33 @@ public class TorchService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    /**
+     * Convert old torch label format ("back"/"front") to actual camera ID.
+     * This handles migration from old preferences where labels were saved instead of camera IDs.
+     * @param isBack true for "back" camera, false for "front" camera
+     * @return Camera ID (e.g., "0", "2") or null if not found
+     */
+    private String convertLabelToCameraId(String label, boolean isBack) {
+        try {
+            String[] cameraIds = cameraManager.getCameraIdList();
+            int targetFacing = isBack ? CameraCharacteristics.LENS_FACING_BACK 
+                                      : CameraCharacteristics.LENS_FACING_FRONT;
+            
+            for (String id : cameraIds) {
+                CameraCharacteristics chars = cameraManager.getCameraCharacteristics(id);
+                Integer facing = chars.get(CameraCharacteristics.LENS_FACING);
+                Boolean hasFlash = chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                if (facing != null && facing == targetFacing && hasFlash != null && hasFlash) {
+                    FLog.d(TAG, "Migration: Label '" + label + "' → Camera ID '" + id + "'");
+                    return id;
+                }
+            }
+        } catch (Exception e) {
+            FLog.e(TAG, "Error converting label to camera ID: " + e.getMessage());
+        }
         return null;
     }
 }

@@ -89,7 +89,7 @@ class ServerStatus {
                 percent: data.batteryDetails.percent ?? -1,
                 status: data.batteryDetails.status || 'unknown',
                 consumed: data.batteryDetails.consumed !== undefined && data.batteryDetails.consumed !== null ? data.batteryDetails.consumed + '' : 'N/A',
-                remainingHours: data.batteryDetails.remainingHours ?? -1,
+                remainingHours: data.batteryDetails.remaining_hours ?? -1,
                 warning: data.batteryDetails.warning || false,
                 warningThreshold: data.batteryDetails.warningThreshold || 20
             };

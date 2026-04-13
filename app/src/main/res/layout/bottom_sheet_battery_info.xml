@@ -140,6 +140,15 @@
             android:textStyle="bold"
             android:textColor="?attr/colorHeading"
             android:layout_marginTop="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/battery_estimate_disclaimer"
+            android:textSize="10sp"
+            android:textColor="#8b949e"
+            android:layout_marginTop="8dp"
+            android:lineSpacingMultiplier="1.1" />
     </LinearLayout>
 
     <!-- Charging Status Card -->
@@ -201,9 +210,11 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="8dp"
-                android:hint="Percentage (5-100)"
-                app:hintTextColor="#b0bec5"
-                app:boxStrokeColor="#546e7a"
+                android:hint="Enter percentage"
+                app:hintTextColor="#8b949e"
+                app:boxStrokeColor="#30363d"
+                app:boxStrokeErrorColor="#da3633"
+                app:cursorColor="#58a6ff"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -213,7 +224,7 @@
                     android:inputType="number"
                     android:text="20"
                     android:textColor="#e6edf3"
-                    android:textColorHint="#90a4ae"
+                    android:textColorHint="#8b949e"
                     android:minEms="3" />
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -223,6 +234,8 @@
                 android:layout_height="wrap_content"
                 android:text="Set"
                 android:textSize="12sp"
+                android:textColor="#000000"
+                android:backgroundTint="#58a6ff"
                 style="@style/Widget.MaterialComponents.Button" />
         </LinearLayout>
 
@@ -243,6 +256,124 @@
             android:textColor="#8b949e"
             android:layout_marginTop="8dp"
             android:lineSpacingMultiplier="1.1" />
+    </LinearLayout>
+
+    <!-- Battery Capacity (mAh) Card -->
+    <LinearLayout
+        android:id="@+id/batteryCapacityCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/settings_group_card_bg"
+        android:padding="16dp"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Device Battery Capacity"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorHeading"
+            android:layout_marginBottom="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:hint="Enter mAh (1000-10000)"
+                app:hintTextColor="#8b949e"
+                app:boxStrokeColor="#30363d"
+                app:boxStrokeErrorColor="#da3633"
+                app:cursorColor="#58a6ff"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/batteryCapacityInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:text="5000"
+                    android:textColor="#e6edf3"
+                    android:textColorHint="#8b949e"
+                    android:minEms="4" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <Button
+                android:id="@+id/setBatteryCapacityBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Save"
+                android:textSize="12sp"
+                android:textColor="#000000"
+                android:backgroundTint="#58a6ff"
+                style="@style/Widget.MaterialComponents.Button" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/batteryCapacityStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Current capacity: 5000 mAh"
+            android:textSize="11sp"
+            android:textColor="@android:color/darker_gray"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Check your device manual or settings for exact capacity. This adjusts your battery estimate calculations."
+            android:textSize="10sp"
+            android:textColor="#8b949e"
+            android:layout_marginTop="8dp"
+            android:lineSpacingMultiplier="1.1" />
+
+        <!-- Dynamic Examples Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="12dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:background="#1a1b1e"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Estimates for your device:"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="#b0bec5"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:id="@+id/batteryEstimateExample1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="• Per-hour consumption: ~7.6%"
+                android:textSize="10sp"
+                android:textColor="#e6edf3"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/batteryEstimateExample2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="• At 100% battery: ~13.1 hours"
+                android:textSize="10sp"
+                android:textColor="#e6edf3" />
+        </LinearLayout>
     </LinearLayout>
 
     </LinearLayout>

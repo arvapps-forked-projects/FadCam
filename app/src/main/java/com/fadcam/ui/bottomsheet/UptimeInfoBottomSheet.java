@@ -61,4 +61,34 @@ public class UptimeInfoBottomSheet extends BottomSheetDialogFragment {
         startTime.setText(startTimeStr);
         startTimestamp.setText("Unix: " + timestamp);
     }
+
+    @Override
+    public int getTheme() {
+        return R.style.CustomBottomSheetDialogTheme;
+    }
+
+    @Override
+    public android.app.Dialog onCreateDialog(Bundle savedInstanceState) {
+        android.app.Dialog dialog = super.onCreateDialog(savedInstanceState);
+        dialog.setOnShowListener(d -> {
+            View bottomSheet = ((com.google.android.material.bottomsheet.BottomSheetDialog) dialog)
+                .findViewById(com.google.android.material.R.id.design_bottom_sheet);
+            if (bottomSheet != null) {
+                bottomSheet.setBackgroundResource(R.drawable.picker_bottom_sheet_dark_gradient_bg);
+            }
+        });
+        if (dialog.getWindow() != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            dialog.getWindow().setNavigationBarColor(android.graphics.Color.BLACK);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                dialog.getWindow().setNavigationBarContrastEnforced(false);
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                int flags = dialog.getWindow().getDecorView().getSystemUiVisibility();
+                dialog.getWindow().getDecorView().setSystemUiVisibility(
+                    flags & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                );
+            }
+        }
+        return dialog;
+    }
 }

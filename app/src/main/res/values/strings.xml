@@ -1052,7 +1052,6 @@
     <string name="faditor_exporting_percent">Exporting… %1$d%%</string>
     <string name="faditor_export_success">Video exported successfully</string>
     <string name="faditor_export_error">Export failed: %1$s</string>
-    <string name="faditor_export_cancelled">Export cancelled</string>
     <string name="faditor_export_in_progress">Export already in progress</string>
     <string name="faditor_remuxing">Optimizing for preview…</string>
     <string name="faditor_remuxing_percent">Optimizing… %1$ds processed</string>
@@ -1126,6 +1125,19 @@
     <string name="faditor_export_notif_channel_desc">Notifications for ongoing video exports</string>
     <string name="faditor_export_notif_title">Exporting video…</string>
     <string name="faditor_export_notif_error_title">Export Failed</string>
+
+    <!-- Export dock (Faditor Mini tab) -->
+    <string name="faditor_export_progress">Exporting…</string>
+    <string name="faditor_export_completed">Export Complete</string>
+    <string name="faditor_export_cancelled">Export Cancelled</string>
+    <string name="faditor_export_failed">Export Failed</string>
+    <string name="export_eta_seconds">ETA %d s</string>
+    <string name="export_eta_minutes">ETA %d m</string>
+    <string name="export_eta_hours">ETA %d h</string>
+    <string name="export_complete">Complete</string>
+    <string name="export_file_size">%s</string>
+    <string name="export_error_hint">Tap to dismiss</string>
+    <string name="export_status">Export Status</string>
 
     <!-- Export info on export screen -->
     <string name="faditor_export_info">%1$s • %2$d clip(s)%3$s • H.264 + AAC</string>
@@ -1968,7 +1980,7 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="stream_active">Active</string>
     <string name="stream_inactive">Server inactive :(</string>
     <string name="stream_idle">Idle - Start recording to stream</string>
-    <string name="stream_start_server">Start Server</string>
+    <string name="stream_start_server">Stream Server</string>
     <string name="stream_url_label">Stream URL</string>
     <string name="stream_copy_url">Copy URL</string>
     <string name="stream_url_copied">Stream URL copied to clipboard</string>
@@ -2020,6 +2032,8 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="stream_network_info">Same WiFi network required for streaming</string>
     
     <!-- Remote Security -->
+    <string name="battery_estimate_title">Estimated Streaming Time Remaining</string>
+    <string name="battery_estimate_disclaimer" formatted="false">Based on real-world test: 8 hours continuous streaming with 61% battery drain on a 5000mAh device. Update your device capacity below for personalized estimates.</string>
     <string name="remote_security_title">Remote Security</string>
     <string name="remote_security_enable">Enable Authentication</string>
     <string name="remote_security_enable_desc">Require password to access remote web interface</string>
@@ -2084,7 +2098,7 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="e2e_encryption_change_title">Change E2E Encryption Password</string>
     
     <!-- Streaming Mode Selector -->
-    <string name="streaming_mode_title">Streaming Mode</string>
+    <string name="streaming_mode_title">Streaming Destination</string>
     <string name="streaming_mode_local">Local Network</string>
     <string name="streaming_mode_local_desc">Stream to devices on the same WiFi</string>
     <string name="streaming_mode_cloud">FadSec Cloud</string>

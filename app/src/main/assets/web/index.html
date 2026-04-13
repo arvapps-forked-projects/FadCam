@@ -82,7 +82,7 @@
 
     <!-- Profile Dropdown (positioned at root for proper z-index stacking) -->
     <div class="profile-dropdown" id="profileDropdown">
-        <div class="profile-item" onclick="showSecuritySettingsModal()">
+        <div class="profile-item" id="profileSecurityItem" onclick="showSecuritySettingsModal()">
             <i class="fas fa-shield-alt"></i> Security
         </div>
         <div class="profile-item" id="profileLogoutItem" onclick="logoutNow()">
@@ -1839,15 +1839,11 @@
                     </div>
                 </div>
                 <div class="modal-section">
-                    <div class="modal-section-title">Usage</div>
+                    <div class="modal-section-title">Usage & Estimate</div>
                     <div class="modal-rows-group">
                         <div class="modal-row-container">
-                            <div class="modal-row-label">Consumed</div>
-                            <div class="modal-row-value">${currentStatus.battery.consumed}</div>
-                        </div>
-                        <div class="modal-row-container">
                             <div class="modal-row-label">Remaining Time</div>
-                            <div class="modal-row-value">${currentStatus.battery.remainingHours > 0 ? currentStatus.battery.remainingHours.toFixed(1) + 'h' : 'N/A'}</div>
+                            <div class="modal-row-value" style="color: ${currentStatus.battery.remainingHours > 0 && currentStatus.battery.remainingHours < 2 ? '#f85149' : '#58a6ff'};">${currentStatus.battery.remainingHours > 0 ? currentStatus.battery.remainingHours.toFixed(1) + 'h' : 'N/A'}</div>
                         </div>
                     </div>
                 </div>
@@ -1863,7 +1859,7 @@
                 
                 <div class="modal-info-box">
                     <div class="modal-info-text">
-                        ℹ️ When battery drops to or below this percentage, a warning will be displayed. Valid range: 5-100%
+                        ℹ️ Remaining time is estimated based on real-world streaming consumption rates and your device's battery capacity. Battery life varies depending on device usage, network conditions, and recording quality. When battery drops to or below the warning percentage, an alert will be displayed.
                     </div>
                 </div>
             `;
@@ -2017,12 +2013,16 @@
                             <div class="modal-row-label">FPS</div>
                             <div class="modal-row-value">${currentStatus.fps}</div>
                         </div>
+                        <div class="modal-row-container">
+                            <div class="modal-row-label">Stream Delay</div>
+                            <div class="modal-row-value">~20s</div>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="modal-info-box">
                     <div class="modal-info-text">
-                        ℹ️ Speed tests use small file downloads and may show lower values than your actual bandwidth. Network health is automatically measured every 2 minutes.
+                        ℹ️ Speed tests use small file downloads and may show lower values than your actual bandwidth. Network health is automatically measured every 2 minutes. Stream delay is typical due to buffering and network latency.
                     </div>
                 </div>
             `;
@@ -2297,7 +2297,7 @@
             content += `</div>
                 <div style="background: rgba(100, 150, 255, 0.1); border-left: 3px solid #4a90e2; border-radius: 6px; padding: 12px; margin-top: 16px;">
                     <p style="color: #7aa3f0; font-size: 11px; margin: 0; line-height: 1.5;">
-                        <i class="fas fa-info-circle" style="margin-right: 6px;"></i><strong>Note:</strong> After changing the quality, you must stop recording and start again for the change to take effect.
+                        <i class="fas fa-info-circle" style="margin-right: 6px;"></i><strong>Note:</strong> Bitrate and FPS are locked per preset during streaming. Resolution is always set from Recording Settings. Restart recording to apply changes.
                     </p>
                 </div>`;
             document.getElementById('streamQualityContent').innerHTML = content;
@@ -5682,6 +5682,13 @@
                                     FadCamRemote.isCloudMode();
                     const logoutIcon  = document.getElementById('profileLogoutIcon');
                     const logoutLabel = document.getElementById('profileLogoutLabel');
+                    const securityItem = document.getElementById('profileSecurityItem');
+                    
+                    // Hide Security Settings button in cloud mode (local-only feature)
+                    if (securityItem) {
+                        securityItem.style.display = isCloud ? 'none' : 'flex';
+                    }
+                    
                     if (isCloud) {
                         if (logoutIcon)  logoutIcon.className  = 'fas fa-lock';
                         if (logoutLabel) logoutLabel.textContent = 'Lock Stream';

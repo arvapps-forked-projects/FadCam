@@ -93,6 +93,8 @@ public class RemoteFragment extends BaseFragment {
     private LinearLayout remoteAuthAutoLockRow;
     private TextView remoteAuthAutoLockValue;
     private LinearLayout remoteAuthLogoutAllRow;
+    private TextView remoteSecurityHeading;
+    private LinearLayout remoteSecurityContainer;
     
     // Cloud Account UI
     private View cloudAccountButton;
@@ -248,6 +250,8 @@ public class RemoteFragment extends BaseFragment {
         remoteAuthAutoLockRow = view.findViewById(R.id.remote_auth_auto_lock_row);
         remoteAuthAutoLockValue = view.findViewById(R.id.remote_auth_auto_lock_value);
         remoteAuthLogoutAllRow = view.findViewById(R.id.remote_auth_logout_all_row);
+        remoteSecurityHeading = view.findViewById(R.id.remote_security_heading);
+        remoteSecurityContainer = view.findViewById(R.id.remote_security_container);
         
         // Initialize Cloud Account button
         cloudAccountButton = view.findViewById(R.id.cloud_account_button);
@@ -1706,7 +1710,7 @@ public class RemoteFragment extends BaseFragment {
     }
     
     /**
-     * Update the streaming mode value display
+     * Update the streaming mode value display and hide/show Remote Security based on mode
      */
     private void updateStreamingModeDisplay() {
         if (streamingModeValue == null) return;
@@ -1717,9 +1721,25 @@ public class RemoteFragment extends BaseFragment {
         if (currentMode == MODE_CLOUD) {
             streamingModeValue.setText(R.string.streaming_mode_cloud);
             streamingModeValue.setTextColor(0xFF4CAF50); // Green for cloud
+            
+            // Hide Remote Security section when using FadSec Cloud (no local auth needed)
+            if (remoteSecurityHeading != null) {
+                remoteSecurityHeading.setVisibility(View.GONE);
+            }
+            if (remoteSecurityContainer != null) {
+                remoteSecurityContainer.setVisibility(View.GONE);
+            }
         } else {
             streamingModeValue.setText(R.string.streaming_mode_local);
             streamingModeValue.setTextColor(0xFF888888); // Gray for local
+            
+            // Show Remote Security section when using Local Network
+            if (remoteSecurityHeading != null) {
+                remoteSecurityHeading.setVisibility(View.VISIBLE);
+            }
+            if (remoteSecurityContainer != null) {
+                remoteSecurityContainer.setVisibility(View.VISIBLE);
+            }
         }
     }
     
