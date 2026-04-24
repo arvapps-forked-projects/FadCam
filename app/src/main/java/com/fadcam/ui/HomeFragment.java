@@ -5268,6 +5268,27 @@ public class HomeFragment extends BaseFragment {
 
     // --- Start Recording ---
     // Inside HomeFragment.java
+    private void updateGpsWarningBanner() {
+        View view = getView();
+        if (view == null) return;
+        View banner = view.findViewById(R.id.banner_gps_warning);
+        if (banner == null) return;
+
+        boolean needsLocation = sharedPreferencesManager.isSpeedEnabled()
+                || sharedPreferencesManager.isAltitudeEnabled()
+                || sharedPreferencesManager.isCompassEnabled()
+                || sharedPreferencesManager.isWeatherEnabled();
+        if (!needsLocation) {
+            banner.setVisibility(View.GONE);
+            return;
+        }
+
+        android.location.LocationManager lm = (android.location.LocationManager)
+                requireContext().getSystemService(Context.LOCATION_SERVICE);
+        boolean gpsOn = lm != null && lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
+        banner.setVisibility(gpsOn ? View.GONE : View.VISIBLE);
+    }
+
     private void startRecording() {
         if (getContext() == null) {
             FLog.e(TAG, "Context is null, cannot start recording.");
@@ -5325,6 +5346,9 @@ public class HomeFragment extends BaseFragment {
             // UI should update based on the broadcast from the service
             return; // Don't try to start again if it might be running
         }
+
+        // Show GPS warning banner if location-dependent watermark features are enabled but GPS is off
+        updateGpsWarningBanner();
 
         Intent serviceIntent = new Intent(getContext(), RecordingService.class);
         serviceIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
@@ -5524,6 +5548,9 @@ public class HomeFragment extends BaseFragment {
             // UI should update based on the broadcast from the service
             return; // Don't try to start again if it might be running
         }
+
+        // Show GPS warning banner if location-dependent watermark features are enabled but GPS is off
+        updateGpsWarningBanner();
 
         Intent serviceIntent = new Intent(getContext(), RecordingService.class);
         serviceIntent.setAction(Constants.INTENT_ACTION_START_RECORDING);
@@ -9852,6 +9879,15 @@ public class HomeFragment extends BaseFragment {
         buttonCamSwitch = view.findViewById(R.id.buttonCamSwitch);
         buttonMirrorSwitch = view.findViewById(R.id.buttonMirrorSwitch);
         cardPreview = view.findViewById(R.id.cardPreview); // Assuming R.id.cardPreview exists
+
+        // GPS warning banner
+        View bannerGpsWarning = view.findViewById(R.id.banner_gps_warning);
+        View btnDismissGpsBanner = view.findViewById(R.id.btn_dismiss_gps_banner);
+        if (btnDismissGpsBanner != null && bannerGpsWarning != null) {
+            btnDismissGpsBanner.setOnClickListener(v -> bannerGpsWarning.setVisibility(View.GONE));
+        }
+        updateGpsWarningBanner();
+
         btnFullscreenPreview = view.findViewById(R.id.btnFullscreenPreview);
         btnCaptureShotPreview = view.findViewById(R.id.btnCaptureShotPreview);
         containerPreviewZoomHud = view.findViewById(R.id.containerPreviewZoomHud);

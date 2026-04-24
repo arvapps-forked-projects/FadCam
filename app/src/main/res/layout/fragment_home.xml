@@ -440,7 +440,57 @@
             android:tint="#555555" />
     </FrameLayout>
 
-    <androidx.cardview.widget.CardView android:id="@+id/cardPreview" android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginStart="6dp" android:layout_marginEnd="6dp" app:cardBackgroundColor="@android:color/transparent" app:cardCornerRadius="8dp" app:cardElevation="0dp" app:layout_constraintBottom_toTopOf="@id/layoutControls" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toBottomOf="@id/cardRailTogglePortrait" app:strokeColor="#4CAF50" app:strokeWidth="15dp">
+
+    <!-- GPS Warning Banner (shown when location-dependent watermark features need GPS) -->
+    <LinearLayout
+        android:id="@+id/banner_gps_warning"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/gps_warning_banner_bg"
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/cardRailTogglePortrait"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/ic_error"
+            android:tint="#EF5350" />
+
+        <TextView
+            android:id="@+id/text_gps_banner_message"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/watermark_gps_disabled_banner_message"
+            android:textColor="#EF9A9A"
+            android:textSize="12sp" />
+
+        <ImageView
+            android:id="@+id/btn_dismiss_gps_banner"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:padding="4dp"
+            android:layout_marginStart="4dp"
+            android:src="@drawable/ic_cross"
+            android:tint="#EF9A9A"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="@string/universal_cancel" />
+    </LinearLayout>
+
+    <androidx.cardview.widget.CardView android:id="@+id/cardPreview" android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginStart="6dp" android:layout_marginEnd="6dp" app:cardBackgroundColor="@android:color/transparent" app:cardCornerRadius="8dp" app:cardElevation="0dp" app:layout_constraintBottom_toTopOf="@id/layoutControls" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toBottomOf="@id/banner_gps_warning" app:strokeColor="#4CAF50" app:strokeWidth="15dp">
 
         <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent" android:background="@android:color/transparent">
 
@@ -627,30 +677,88 @@
                     app:strokeWidth="1dp" />
             </LinearLayout>
 
-            <!-- Fullscreen preview button (bottom-right corner overlay) -->
-            <ImageView android:id="@+id/btnFullscreenPreview" android:layout_width="36dp" android:layout_height="36dp" android:layout_gravity="bottom|end" android:layout_margin="8dp" android:background="@drawable/fullscreen_icon_bg" android:clickable="true" android:focusable="true" android:src="@drawable/fullscreen_rounded" android:tint="@android:color/white" android:scaleType="centerInside" android:padding="10dp" android:contentDescription="Fullscreen" android:visibility="gone"
-                android:nextFocusUp="@+id/cardRailTogglePortrait"
-                android:nextFocusDown="@+id/buttonTorchSwitch" />
-
-            <!-- Quick shot button (next to fullscreen) -->
-            <ImageView
-                android:id="@+id/btnCaptureShotPreview"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+            <!-- Bottom-right controls container -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_gravity="bottom|end"
-                android:layout_marginEnd="52dp"
-                android:layout_marginBottom="8dp"
-                android:background="@drawable/fullscreen_icon_bg"
-                android:clickable="true"
-                android:contentDescription="@string/shortcut_take_photo"
-                android:focusable="true"
-                android:src="@drawable/camera_rounded"
-                android:tint="@android:color/white"
-                android:scaleType="centerInside"
-                android:padding="10dp"
-                android:visibility="gone"
-                android:nextFocusUp="@+id/cardRailTogglePortrait"
-                android:nextFocusDown="@+id/buttonTorchSwitch" />
+                android:layout_margin="8dp"
+                android:orientation="horizontal"
+                android:clipChildren="false"
+                android:clipToPadding="false">
+
+                <!-- Quick shot button with label -->
+                <LinearLayout
+                    android:id="@+id/btnCaptureShotPreview"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:visibility="gone"
+                    android:background="?attr/selectableItemBackgroundBorderless">
+
+                    <ImageView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="@drawable/fullscreen_icon_bg"
+                        android:src="@drawable/camera_rounded"
+                        android:tint="@android:color/white"
+                        android:scaleType="centerInside"
+                        android:padding="7dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="FadShot"
+                        android:textColor="@android:color/white"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="2dp"
+                        android:shadowColor="#BB000000"
+                        android:shadowDx="1"
+                        android:shadowDy="1"
+                        android:shadowRadius="1"/>
+                </LinearLayout>
+
+                <!-- Fullscreen preview button with label -->
+                <LinearLayout
+                    android:id="@+id/btnFullscreenPreview"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:visibility="gone"
+                    android:background="?attr/selectableItemBackgroundBorderless">
+
+                    <ImageView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="@drawable/fullscreen_icon_bg"
+                        android:src="@drawable/fullscreen_rounded"
+                        android:tint="@android:color/white"
+                        android:scaleType="centerInside"
+                        android:padding="7dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Full"
+                        android:textColor="@android:color/white"
+                        android:textSize="9sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="2dp"
+                        android:shadowColor="#BB000000"
+                        android:shadowDx="1"
+                        android:shadowDy="1"
+                        android:shadowRadius="1"/>
+                </LinearLayout>
+
+            </LinearLayout>
 
         </FrameLayout>
     </androidx.cardview.widget.CardView>

@@ -263,7 +263,8 @@ public class GLWatermarkRenderer {
     }
 
     private int dynamicBitmapWidth = 0;
-    private int dynamicBitmapHeight = 48; // Fixed small height for dashcam style
+    private int dynamicBitmapHeight = 48;
+    private int watermarkLineCount = 1; // Fixed small height for dashcam style
     private int lastWatermarkVpW = -1;
     private int lastWatermarkVpH = -1;
     private int lastWatermarkBitmapW = -1;
@@ -1145,6 +1146,7 @@ public class GLWatermarkRenderer {
         float effectiveLineHeight = lineHeight;
 
         String[] lines = text.split("\n");
+        watermarkLineCount = lines.length;
         float maxLineWidth = 0f;
         for (String line : lines) {
             if (line == null) continue;
@@ -1334,7 +1336,8 @@ public class GLWatermarkRenderer {
         float ndcWidth = targetFractionOfWidth * 2.0f;
         // Correct for active viewport aspect ratio so watermark text shape remains consistent.
         float ndcHeight = (ndcWidth * ((float) vpW / (float) vpH)) / bitmapAspect;
-        ndcHeight = Math.min(ndcHeight, 0.32f);
+        float maxNdcHeight = Math.min(0.55f, 0.08f + watermarkLineCount * 0.06f);
+        ndcHeight = Math.min(ndcHeight, maxNdcHeight);
 
         if (watermarkRectBuffer != null
                 && lastWatermarkVpW == vpW

@@ -129,6 +129,7 @@ public class CloudStreamUploader {
      * Enable or disable cloud streaming upload
      */
     public void setEnabled(boolean enabled) {
+        FLog.i(TAG, "☁️ setEnabled(" + enabled + ") called");
         this.isEnabled = enabled;
         if (enabled) {
             // Reset state for new stream session
@@ -409,6 +410,9 @@ public class CloudStreamUploader {
                 if (responseCode >= 200 && responseCode < 300) {
                     successfulUploads++;
                     totalBytesUploaded += data.length;
+                    
+                    // ❌ REMOVED: Client-side usage reporting (now server-side via relay)
+                    
                     consecutive401Count = 0;
                     if (callback != null) callback.onSuccess();
                 } else if (responseCode == 401) {

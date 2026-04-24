@@ -97,6 +97,10 @@ public class FragmentedMp4MuxerWrapper {
      */
     public FragmentedMp4MuxerWrapper(@NonNull FileDescriptor fd) throws IOException {
         this.fileOutputStream = new FileOutputStream(fd);
+        // Verify the fd is valid immediately after wrapping it. If this logs a warning, the
+        // ParcelFileDescriptor was already invalid when the new muxer was constructed, which
+        // means the old PFD was closed too late (or the SAF provider returned a bad fd).
+        FLog.d(TAG, "FragmentedMp4MuxerWrapper(fd): fd.valid()=" + fd.valid());
         
         // Create callback consumer for live streaming integration
         Consumer<ProcessedSegment> segmentConsumer = segment -> {
@@ -335,6 +339,9 @@ public class FragmentedMp4MuxerWrapper {
                 // Media3's FragmentedMp4Muxer.close() automatically creates the final fragment
                 // and finalizes all track durations. No need to manually write EOS samples.
                 muxer.close();
+                // CRITICAL: Mark as not started so release() does not attempt a second muxer.close(),
+                // which would corrupt the file with a duplicate/empty final fragment.
+                started = false;
                 FLog.d(TAG, "Muxer stopped successfully");
             } catch (MuxerException e) {
                 FLog.e(TAG, "Error stopping muxer", e);
@@ -630,6 +637,24 @@ public class FragmentedMp4MuxerWrapper {
                 return;
             }
             try {
+            // Defensive check: catch an invalid FileDescriptor early with a clear log message
+            // rather than letting it surface as a cryptic EBADF inside fileOutputStream.write().
+            // An invalid fd here means the ParcelFileDescriptor was closed prematurely —
+            // most likely the deferred-close path ran too early on this device.
+            if (fileOutputStream != null) {
+                try {
+                    java.io.FileDescriptor fd = fileOutputStream.getFD();
+                    if (fd == null || !fd.valid()) {
+                        FLog.e(TAG, "handleProcessedSegment: FileDescriptor is INVALID — skipping write. " +
+                                "This indicates the ParcelFileDescriptor was closed before the muxer finished. " +
+                                "segment.isInit=" + segment.isInitSegment);
+                        return;
+                    }
+                } catch (IOException e) {
+                    FLog.e(TAG, "handleProcessedSegment: Could not retrieve FileDescriptor — skipping write", e);
+                    return;
+                }
+            }
             // Extract bytes from Media3's payload buffer without mutating it.
             // Some Media3 versions leave the buffer in write-mode (position at end, limit=capacity),
             // while others provide it already ready for reading (position=0, limit=dataSize).

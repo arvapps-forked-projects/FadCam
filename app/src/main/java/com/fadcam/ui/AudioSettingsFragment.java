@@ -200,7 +200,6 @@ public class AudioSettingsFragment extends Fragment {
         // Always add Phone Mic as first option
         availableMicLabels.add(0, getString(R.string.audio_input_source_phone));
         availableInputMics.add(0, null); // Represents phone mic
-        selectedMic = null; // selection derived from preference later if needed
     }
 
     private String getAudioDeviceTypeString(int type){
@@ -238,13 +237,23 @@ public class AudioSettingsFragment extends Fragment {
             if(index>=0){
                 if(sel.equals(getString(R.string.audio_input_source_phone))){
                     prefs.setAudioInputSource(SharedPreferencesManager.AUDIO_INPUT_SOURCE_PHONE);
+                    prefs.setAudioInputDeviceType(-1);
+                    prefs.setAudioInputDeviceName(null);
                     selectedMic = null;
                 } else if(sel.equals(getString(R.string.audio_input_source_headphones_no_mic))){
                     prefs.setAudioInputSource(SharedPreferencesManager.AUDIO_INPUT_SOURCE_PHONE);
+                    prefs.setAudioInputDeviceType(-1);
+                    prefs.setAudioInputDeviceName(null);
                     selectedMic = null;
                 } else {
                     prefs.setAudioInputSource(SharedPreferencesManager.AUDIO_INPUT_SOURCE_WIRED);
-                    selectedMic = availableInputMics.get(index);
+                    AudioDeviceInfo dev = availableInputMics.get(index);
+                    selectedMic = dev;
+                    if (dev != null) {
+                        prefs.setAudioInputDeviceType(dev.getType());
+                        CharSequence productName = dev.getProductName();
+                        prefs.setAudioInputDeviceName(productName != null ? productName.toString() : null);
+                    }
                 }
                 updateAudioInputSourceStatusUI();
                 refreshAllValues();
@@ -261,12 +270,14 @@ public class AudioSettingsFragment extends Fragment {
         String pref = prefs.getAudioInputSource();
         String status;
         if(SharedPreferencesManager.AUDIO_INPUT_SOURCE_WIRED.equals(pref)){
-            if(selectedMic!=null){
-                status = getString(R.string.setting_audio_input_source_status_wired) + ": " + selectedMic.getProductName();
+            String typeLabel = getDeviceTypeLabel(prefs.getAudioInputDeviceType());
+            String deviceName = prefs.getAudioInputDeviceName();
+            if(deviceName != null && !deviceName.isEmpty()){
+                status = typeLabel + ": " + deviceName;
             } else {
-                status = getString(R.string.setting_audio_input_source_status_wired);
+                status = typeLabel;
             }
-        } else { // phone mic
+        } else {
             if(headphonesNoMicDetected){
                 status = getString(R.string.setting_audio_input_source_status_default)+" (No-mic headphones)";
             } else {
@@ -274,7 +285,17 @@ public class AudioSettingsFragment extends Fragment {
             }
         }
         valueInputSource.setText(status);
-        FLog.i(TAG, "Audio input source status updated. Selected: " + selectedMic);
+        FLog.i(TAG, "Audio input source status updated. Pref: " + pref + ", type: " + prefs.getAudioInputDeviceType() + ", name: " + prefs.getAudioInputDeviceName());
+    }
+
+    private String getDeviceTypeLabel(int type) {
+        if (type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET) return getString(R.string.audio_device_type_wired_headset);
+        if (type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE) return getString(R.string.audio_device_type_usb);
+        if (type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET) return getString(R.string.audio_device_type_usb_headset);
+        if (type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO) return getString(R.string.audio_device_type_bt_sco);
+        if (type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) return getString(R.string.audio_device_type_bt_a2dp);
+        if (type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET) return getString(R.string.audio_device_type_ble_headset);
+        return getString(R.string.audio_device_type_external);
     }
 
     private void showAudioAdvancedBottomSheet(){

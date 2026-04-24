@@ -1108,6 +1108,86 @@ public class SharedPreferencesManager {
             .apply();
     }
 
+    public boolean isSpeedEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_SPEED, false);
+    }
+
+    public void setSpeedEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_SPEED, enabled).apply();
+    }
+
+    public boolean isAltitudeEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_ALTITUDE, false);
+    }
+
+    public void setAltitudeEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_ALTITUDE, enabled).apply();
+    }
+
+    public boolean isCompassEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_COMPASS, false);
+    }
+
+    public void setCompassEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_COMPASS, enabled).apply();
+    }
+
+    public boolean isNoiseEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_NOISE, false);
+    }
+
+    public void setNoiseEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_NOISE, enabled).apply();
+    }
+
+    public boolean isWeatherEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_WEATHER, false);
+    }
+
+    public void setWeatherEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_WEATHER, enabled).apply();
+    }
+
+    public boolean isNetworkWarningShown() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_NETWORK_WARNING_SHOWN, false);
+    }
+
+    public void setNetworkWarningShown(boolean shown) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_NETWORK_WARNING_SHOWN, shown).apply();
+    }
+
+    public boolean isTimezoneEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_TIMEZONE, false);
+    }
+
+    public void setTimezoneEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_TIMEZONE, enabled).apply();
+    }
+
+    public String getTimezoneFormat() {
+        return sharedPreferences.getString(Constants.PREF_WATERMARK_TIMEZONE_FORMAT, "gmt_only");
+    }
+
+    public void setTimezoneFormat(String format) {
+        sharedPreferences.edit().putString(Constants.PREF_WATERMARK_TIMEZONE_FORMAT, format).apply();
+    }
+
+    public int getAudioInputDeviceType() {
+        return sharedPreferences.getInt(Constants.PREF_AUDIO_INPUT_DEVICE_TYPE, -1);
+    }
+
+    public void setAudioInputDeviceType(int type) {
+        sharedPreferences.edit().putInt(Constants.PREF_AUDIO_INPUT_DEVICE_TYPE, type).apply();
+    }
+
+    public String getAudioInputDeviceName() {
+        return sharedPreferences.getString(Constants.PREF_AUDIO_INPUT_DEVICE_NAME, null);
+    }
+
+    public void setAudioInputDeviceName(String name) {
+        sharedPreferences.edit().putString(Constants.PREF_AUDIO_INPUT_DEVICE_NAME, name).apply();
+    }
+
     // Method to retrieve the preview state
     public Boolean isPreviewEnabled() {
         // Default to true if the preference doesn't exist yet

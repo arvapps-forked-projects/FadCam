@@ -2268,4 +2268,42 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="screen_rec_orientation_portrait">Portrait</string>
     <string name="screen_rec_orientation_landscape">Landscape</string>
 
+
+    <!-- Extended Watermark Features -->
+    <string name="watermark_speed_title">Speed (km/h)</string>
+    <string name="watermark_speed_off">Off</string>
+    <string name="watermark_speed_on">On — Speed from GPS satellite data</string>
+    <string name="watermark_altitude_title">Altitude (m)</string>
+    <string name="watermark_altitude_off">Off</string>
+    <string name="watermark_altitude_on">On — Altitude from GPS satellites</string>
+    <string name="watermark_compass_title">Compass Direction</string>
+    <string name="watermark_compass_off">Off</string>
+    <string name="watermark_compass_on_sensor">On — Direction from device compass sensor</string>
+    <string name="watermark_compass_no_sensor">No compass sensor — Direction from GPS movement only (works while moving)</string>
+    <string name="watermark_noise_title">Noise Level (dB)</string>
+    <string name="watermark_noise_off">Off</string>
+    <string name="watermark_noise_on">On — Ambient sound level from microphone</string>
+    <string name="watermark_weather_title">Weather</string>
+    <string name="watermark_weather_off">Off</string>
+    <string name="watermark_weather_on">On — Weather from Open-Meteo API (requires internet)</string>
+    <string name="watermark_network_warning_title">Network Warning</string>
+    <string name="watermark_network_warning_message">This feature requires network requests which could potentially be traced. Disable if you need full anonymity. Continue?</string>
+    <string name="watermark_network_warning_enable">Enable</string>
+    <string name="watermark_audio_permission_required">Microphone permission required for noise monitoring</string>
+    <string name="watermark_gps_disabled_warning">⚠ GPS is off — enable device location for this feature to work</string>
+    <string name="watermark_gps_disabled_home_toast">Location-dependent watermark features enabled but GPS is off. Enable device location for them to work.</string>
+    <string name="watermark_gps_disabled_banner_message">Location-dependent watermark features will not appear until device location is enabled</string>
+    <string name="watermark_timezone_title">Timezone</string>
+    <string name="watermark_timezone_off">Off</string>
+    <string name="watermark_timezone_on_gmt">On — GMT offset in watermark</string>
+    <string name="watermark_timezone_format_title">Timezone Format</string>
+    <string name="watermark_timezone_format_gmt_only">GMT Offset Only</string>
+    <string name="watermark_timezone_format_gmt_name">GMT Offset + Name</string>
+    <string name="audio_device_type_wired_headset">Wired Headset</string>
+    <string name="audio_device_type_usb">USB</string>
+    <string name="audio_device_type_usb_headset">USB Headset</string>
+    <string name="audio_device_type_bt_sco">Bluetooth (SCO)</string>
+    <string name="audio_device_type_bt_a2dp">Bluetooth (A2DP)</string>
+    <string name="audio_device_type_ble_headset">BLE Headset</string>
+    <string name="audio_device_type_external">External Microphone</string>
 </resources>

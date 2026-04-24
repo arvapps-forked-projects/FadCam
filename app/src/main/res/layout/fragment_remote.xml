@@ -203,7 +203,150 @@
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="?attr/colorHeading"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="12dp" />
+
+            <!-- Usage Reporting Status Card (appears when there are errors/warnings) -->
+            <LinearLayout
+                android:id="@+id/usage_reporting_warning_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/settings_group_card_bg"
+                android:paddingStart="14dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone">
+
+                <!-- Status line with icon -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="8dp">
+
+                    <ImageView
+                        android:id="@+id/usage_warning_icon"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_error"
+                        android:tint="#FFAA44"
+                        android:layout_marginEnd="12dp"
+                        android:contentDescription="@null" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/usage_warning_title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Cloud Usage Reporting"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="?attr/colorHeading" />
+
+                        <com.fadcam.ui.utils.AnimatedTextView
+                            android:id="@+id/usage_warning_message"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Retrying connection..."
+                            android:textSize="11sp"
+                            android:textColor="@android:color/darker_gray"
+                            android:layout_marginTop="2dp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Detailed metrics -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="32dp"
+                    android:paddingEnd="0dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginEnd="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Bytes Reported"
+                            android:textSize="9sp"
+                            android:textColor="@android:color/darker_gray"
+                            android:textStyle="bold" />
+
+                        <com.fadcam.ui.utils.AnimatedTextView
+                            android:id="@+id/usage_warning_bytes"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0 B"
+                            android:textSize="10sp"
+                            android:textColor="?attr/colorHeading"
+                            android:layout_marginTop="1dp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginEnd="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Failures"
+                            android:textSize="9sp"
+                            android:textColor="@android:color/darker_gray"
+                            android:textStyle="bold" />
+
+                        <com.fadcam.ui.utils.AnimatedTextView
+                            android:id="@+id/usage_warning_failures"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0/50"
+                            android:textSize="10sp"
+                            android:textColor="?attr/colorHeading"
+                            android:layout_marginTop="1dp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Action"
+                            android:textSize="9sp"
+                            android:textColor="@android:color/darker_gray"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/usage_warning_test_link"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Retry"
+                            android:textSize="10sp"
+                            android:textColor="#0066CC"
+                            android:layout_marginTop="1dp"
+                            android:clickable="true"
+                            android:focusable="true" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
 
             <!-- Start Server Toggle Row -->
             <LinearLayout

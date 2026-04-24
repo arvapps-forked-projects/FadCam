@@ -22,6 +22,7 @@ public class LocationHelper {
     private final AtomicBoolean isInitializing = new AtomicBoolean(false);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private long lastLocationUpdateTime = 0;
+    private Location rawLocation;
 
     public LocationHelper(Context context) {
         FLog.d(TAG, "LOCATION_HELPER: Initializing LocationHelper");
@@ -43,6 +44,7 @@ public class LocationHelper {
                 @Override
                 public void onLocationChanged(Location location, IMyLocationProvider source) {
                     if (location != null) {
+                        rawLocation = location;
                         lastLocationUpdateTime = System.currentTimeMillis();
                         currentLocation = new GeoPoint(location.getLatitude(), location.getLongitude());
                         FLog.d(TAG, "✅ LOCATION_HELPER: GPS updated to " + 
@@ -104,6 +106,10 @@ public class LocationHelper {
         return currentLocation;
     }
 
+    public Location getRawLocation() {
+        return rawLocation;
+    }
+
     public String getLocationData() {
         FLog.d(TAG, "LOCATION_HELPER: getLocationData called");
         if (currentLocation != null) {
@@ -111,7 +117,7 @@ public class LocationHelper {
                 String.format(java.util.Locale.US, "%.2f", currentLocation.getLatitude()) + ", ~" +
                 String.format(java.util.Locale.US, "%.2f", currentLocation.getLongitude()) + ")");
             // Return full precision for the actual watermark text
-            return "\nLat= " + currentLocation.getLatitude() + ", Lon= " + currentLocation.getLongitude();
+            return "\nLat: " + currentLocation.getLatitude() + ", Long: " + currentLocation.getLongitude();
         }
         FLog.d(TAG, "LOCATION_HELPER: Location data not found");
         return "\nLocation not available";

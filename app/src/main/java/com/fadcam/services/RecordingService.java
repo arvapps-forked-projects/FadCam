@@ -133,7 +133,10 @@ public class RecordingService extends Service {
     private LocationHelper locationHelper;
     private LocationGeocoder locationGeocoder;
     private GeotagHelper geotagHelper;
-    
+    private com.fadcam.sensors.SensorDataProvider sensorDataProvider;
+    private com.fadcam.audio.NoiseMonitor noiseMonitor;
+    private com.fadcam.network.WeatherService weatherService;
+
     // Location watermark update tracking - separate from main watermark update
     private long lastLocationWatermarkUpdateMs = 0;
     private String cachedLocationWatermarkText = "";
@@ -266,6 +269,32 @@ public class RecordingService extends Service {
             }
         } else {
             // location embedding disabled
+        }
+
+        // Initialize sensor data provider for compass, speed, altitude
+        if (sharedPreferencesManager != null && (sharedPreferencesManager.isSpeedEnabled()
+                || sharedPreferencesManager.isAltitudeEnabled()
+                || sharedPreferencesManager.isCompassEnabled())) {
+            sensorDataProvider = com.fadcam.sensors.SensorDataProvider.getInstance(getApplicationContext());
+            org.osmdroid.util.GeoPoint currentLoc = locationHelper != null ? locationHelper.getCurrentLocation() : null;
+            android.location.Location androidLoc = null;
+            if (currentLoc != null) {
+                androidLoc = new android.location.Location("manual");
+                androidLoc.setLatitude(currentLoc.getLatitude());
+                androidLoc.setLongitude(currentLoc.getLongitude());
+            }
+            sensorDataProvider.start(androidLoc);
+        }
+
+        // Initialize noise monitor if enabled
+        if (sharedPreferencesManager != null && sharedPreferencesManager.isNoiseEnabled()) {
+            noiseMonitor = com.fadcam.audio.NoiseMonitor.getInstance();
+            noiseMonitor.start(this);
+        }
+
+        // Initialize WeatherService if weather feature is enabled
+        if (sharedPreferencesManager != null && sharedPreferencesManager.isWeatherEnabled()) {
+            weatherService = com.fadcam.network.WeatherService.getInstance(getApplicationContext());
         }
 
         createNotificationChannel(); // Setup notifications early
@@ -1764,6 +1793,7 @@ public class RecordingService extends Service {
         try {
             com.fadcam.streaming.RemoteStreamManager.getInstance().stopRecording();
             FLog.i(TAG, "🛑 RemoteStreamManager notified: recording stopped");
+            
         } catch (Exception e) {
             FLog.e(TAG, "Failed to notify RemoteStreamManager about recording stop", e);
         }
@@ -1888,6 +1918,18 @@ public class RecordingService extends Service {
                     }
                 }
 
+                // Stop and reset NoiseMonitor singleton
+                if (noiseMonitor != null) {
+                    com.fadcam.audio.NoiseMonitor.resetInstance();
+                    noiseMonitor = null;
+                }
+
+                // Reset sensor data provider singleton so next recording starts fresh
+                com.fadcam.sensors.SensorDataProvider.resetInstance();
+                sensorDataProvider = null;
+                weatherService = null;
+                FLog.d(TAG, "All extended sensor providers cleaned up");
+
                 // Final cleanup on the main thread
                 mainHandler.post(() -> {
                     // Release wake lock if held
@@ -1981,6 +2023,7 @@ public class RecordingService extends Service {
         sharedPreferencesManager.setRecordingInProgress(false);
         // Notify RemoteStreamManager so status JSON reflects paused state
         com.fadcam.streaming.RemoteStreamManager.getInstance().pauseRecording();
+        
         setupRecordingResumeNotification();
         showRecordingInPausedToast();
         broadcastOnRecordingPaused();
@@ -2000,6 +2043,7 @@ public class RecordingService extends Service {
         sharedPreferencesManager.setRecordingInProgress(true);
         // Notify RemoteStreamManager so status JSON reflects resumed (recording) state
         com.fadcam.streaming.RemoteStreamManager.getInstance().resumeRecording();
+        
         setupRecordingInProgressNotification();
         showRecordingResumedToast();
         broadcastOnRecordingResumed();
@@ -2928,22 +2972,25 @@ public class RecordingService extends Service {
         String finalText;
         switch (watermarkOption) {
             case "timestamp_fadcam":
-                finalText = "Captured by <FADCAM_ICON> - " + getCurrentTimestamp() + locationText + customTextLine;
+                finalText = "Captured by <FADCAM_ICON> - " + getCurrentTimestamp() + getTimezoneSuffix() + locationText + customTextLine;
                 break;
             case "badge_fadcam":
                 finalText = "Captured by <FADCAM_ICON>" + customTextLine;
                 break;
             case "timestamp":
-                finalText = getCurrentTimestamp() + locationText + customTextLine;
+                finalText = getCurrentTimestamp() + getTimezoneSuffix() + locationText + customTextLine;
                 break;
             case "no_watermark":
                 finalText = "";
                 break;
             default:
-                finalText = "Captured by FadCam - " + getCurrentTimestamp() + locationText + customTextLine;
+                finalText = "Captured by FadCam - " + getCurrentTimestamp() + getTimezoneSuffix() + locationText + customTextLine;
         }
         if (!finalText.isEmpty()) {
+            finalText += getExtendedSensorData();
             FLog.d(TAG, "🎬 Watermark text generated: [" + finalText.replace("\n", " | ") + "]");
+        } else {
+            finalText += getExtendedSensorData();
         }
         return finalText;
     }
@@ -2964,23 +3011,24 @@ public class RecordingService extends Service {
                 String finalText;
                 switch (watermarkOption) {
                     case "timestamp_fadcam":
-                        finalText = "Captured by <FADCAM_ICON> - " + getCurrentTimestamp() + locationText + customTextLine;
+                        finalText = "Captured by <FADCAM_ICON> - " + getCurrentTimestamp() + getTimezoneSuffix() + locationText + customTextLine;
                         break;
                     case "badge_fadcam":
                         finalText = "Captured by <FADCAM_ICON>" + customTextLine;
                         break;
                     case "timestamp":
-                        finalText = getCurrentTimestamp() + locationText + customTextLine;
+                        finalText = getCurrentTimestamp() + getTimezoneSuffix() + locationText + customTextLine;
                         break;
                     case "no_watermark":
                         finalText = "";
                         break;
                     default:
-                        finalText = "Captured by FadCam - " + getCurrentTimestamp() + locationText + customTextLine;
+                        finalText = "Captured by FadCam - " + getCurrentTimestamp() + getTimezoneSuffix() + locationText + customTextLine;
                 }
                 if (!finalText.isEmpty()) {
                     // Watermark text built; logging omitted (fires every second during recording)
                 }
+                finalText += getExtendedSensorData();
                 return finalText;
             }
         };
@@ -4370,6 +4418,26 @@ public class RecordingService extends Service {
         return convertArabicNumeralsToEnglish(sdf.format(new Date()));
     }
 
+    private String getTimezoneSuffix() {
+        if (!sharedPreferencesManager.isTimezoneEnabled()) return "";
+        java.util.TimeZone tz = java.util.TimeZone.getDefault();
+        int offsetMs = tz.getOffset(System.currentTimeMillis());
+        int totalMinutes = offsetMs / 60000;
+        int hours = totalMinutes / 60;
+        int minutes = Math.abs(totalMinutes % 60);
+        String sign = offsetMs >= 0 ? "+" : "";
+        String gmt;
+        if (minutes == 0) {
+            gmt = "GMT" + sign + hours;
+        } else {
+            gmt = "GMT" + sign + hours + ":" + String.format(Locale.US, "%02d", minutes);
+        }
+        if ("gmt_name".equals(sharedPreferencesManager.getTimezoneFormat())) {
+            gmt += " (" + tz.getID() + ")";
+        }
+        return " " + gmt;
+    }
+
     private String convertArabicNumeralsToEnglish(String text) {
         if (text == null)
             return null;
@@ -4403,10 +4471,10 @@ public class RecordingService extends Service {
             
             String locData = locationHelper.getLocationData();
             // Avoid logging precise coordinates; getLocationData() already logs a redacted version
-            FLog.d(TAG, "📍 Raw location from helper: " + (locData != null && locData.contains("Lat=") ? "[coords present]" : "[no coords]"));
+            FLog.d(TAG, "📍 Raw location from helper: " + (locData != null && locData.contains("Lat:") ? "[coords present]" : "[no coords]"));
             
             // Avoid adding "Location not available" to watermark, just add lat/lon if present
-            if (locData == null || !locData.contains("Lat=")) {
+            if (locData == null || !locData.contains("Lat:")) {
                 FLog.w(TAG, "❌ Location data invalid or missing GPS coordinates");
                 cachedLocationWatermarkText = "";
             } else {
@@ -4430,7 +4498,7 @@ public class RecordingService extends Service {
                             // Try to get cached result if available
                             LocationGeocoder.GeocodeResult result = locationGeocoder.getCurrentResult();
                             if (!result.isEmpty()) {
-                                cachedLocationWatermarkText = "\nLat= " + geoPoint.getLatitude() + ", Lon= " + geoPoint.getLongitude()
+                                cachedLocationWatermarkText = "\nLat: " + geoPoint.getLatitude() + ", Long: " + geoPoint.getLongitude()
                                      + "\n" + result.formatted;
                                 FLog.d(TAG, "📍 address format applied");
                             } else {
@@ -4459,6 +4527,69 @@ public class RecordingService extends Service {
         }
         
         return cachedLocationWatermarkText;
+    }
+
+    private String getExtendedSensorData() {
+        if (sharedPreferencesManager == null) {
+            return "";
+        }
+
+        if (locationHelper != null && sensorDataProvider != null) {
+            android.location.Location rawLoc = locationHelper.getRawLocation();
+            if (rawLoc != null) {
+                sensorDataProvider.updateLocation(rawLoc);
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        if (sharedPreferencesManager.isSpeedEnabled() && sensorDataProvider != null) {
+            float speed = sensorDataProvider.getSpeedKmh();
+            FLog.d(TAG, "Extended: speed=" + speed + " km/h");
+            sb.append("\nSpeed: ").append(String.format("%.0f", speed)).append("km/h");
+        }
+
+        if (sharedPreferencesManager.isAltitudeEnabled() && sensorDataProvider != null) {
+            double alt = sensorDataProvider.getAltitude();
+            FLog.d(TAG, "Extended: altitude=" + alt + " m");
+            sb.append("\nAlt: ").append(String.format("%.0f", alt)).append("m");
+        }
+
+        if (sharedPreferencesManager.isCompassEnabled() && sensorDataProvider != null) {
+            String compass = sensorDataProvider.getCompassDirection();
+            FLog.d(TAG, "Extended: compass=" + compass);
+            sb.append("\nCompass: ").append(compass);
+        }
+
+        if (sharedPreferencesManager.isNoiseEnabled() && noiseMonitor != null && noiseMonitor.isRunning()) {
+            double db = noiseMonitor.getCurrentDb();
+            FLog.d(TAG, "Extended: noise=" + db + " dB");
+            sb.append("\nNoise: ").append(noiseMonitor.getReadableDb());
+        }
+
+        if (sharedPreferencesManager.isWeatherEnabled() && weatherService != null && locationHelper != null) {
+            org.osmdroid.util.GeoPoint geoPoint = locationHelper.getCurrentLocation();
+            if (geoPoint != null) {
+                weatherService.fetchWeather(geoPoint, (weather, wind) -> {
+                    FLog.d(TAG, "Weather callback: " + weather + ", " + wind);
+                });
+                String weather = weatherService.getCurrentWeather();
+                String wind = weatherService.getCurrentWind();
+                if (weather != null && !weather.isEmpty()) {
+                    sb.append("\n").append(weather);
+                }
+                if (wind != null && !wind.isEmpty()) {
+                    sb.append("\nWind: ").append(wind);
+                }
+                FLog.d(TAG, "Extended: weather=" + weather + ", wind=" + wind);
+            }
+        }
+
+        String result = sb.toString();
+        if (!result.isEmpty()) {
+            FLog.d(TAG, "Extended sensor data: " + result.replace("\n", " | "));
+        }
+        return result;
     }
 
     private String escapeFFmpegString(String text) {
@@ -5983,30 +6114,39 @@ public class RecordingService extends Service {
                     FLog.i(TAG, "📺 STREAM_ONLY (SAF rollover): Tracking temp URI: " + safUri);
                 }
                 
-                // ⚠️ CRITICAL FIX v2: Defer closing old PFD until muxer is completely done
-                // Timeline:
-                // 1. onSegmentRollover(N) called - GL pipeline switches to new segment
-                // 2. Old muxer (segment N-1) still needs its PFD for async finalization
-                // 3. onSegmentRollover(N+1) called - NOW it's safe to close segment N-1's PFD
-                //    because GLRecordingPipeline has already completed rollover for segment N
-                
-                // Close the PREVIOUS segment's PFD (segment N-1)
-                // Safe because GL pipeline finished handling it during the last transition
-                if (previousSegmentParcelFileDescriptor != null) {
-                    try {
-                        previousSegmentParcelFileDescriptor.close();
-                        FLog.d(TAG, "Closed previous-previous segment's ParcelFileDescriptor (deferred close)");
-                    } catch (Exception e) {
-                        FLog.w(TAG, "Error closing deferred PFD", e);
-                    }
-                    previousSegmentParcelFileDescriptor = null;
+                // SAMSUNG SAF FIX: The GL pipeline now fully stops and releases the old muxer
+                // BEFORE invoking this callback (see GLRecordingPipeline.rolloverSegment()).
+                // That means muxer.close() has already returned synchronously — all
+                // handleProcessedSegment() writes are done and the old fd is no longer in use.
+                //
+                // We can therefore close the old PFD immediately, right here, BEFORE opening
+                // the new one.  This eliminates the concurrent-open window that causes Samsung's
+                // SAF ExternalStorageProvider to invalidate the new PFD on first write (EBADF).
+                //
+                // On the FIRST rollover the initial segment's PFD lives in safRecordingPfd
+                // (not in currentSegmentParcelFileDescriptor), so we must check both.
+                ParcelFileDescriptor oldPfd;
+                if (currentSegmentParcelFileDescriptor != null) {
+                    oldPfd = currentSegmentParcelFileDescriptor;
+                    currentSegmentParcelFileDescriptor = null;
+                } else {
+                    // First rollover: initial segment PFD was stored in safRecordingPfd
+                    oldPfd = safRecordingPfd;
+                    safRecordingPfd = null;
                 }
+                if (oldPfd != null) {
+                    try {
+                        oldPfd.close();
+                        FLog.d(TAG, "Closed old segment PFD before opening new one (next segment=" + nextSegmentNumber + ")");
+                    } catch (Exception e) {
+                        FLog.w(TAG, "Error closing old segment PFD", e);
+                    }
+                }
+                // previousSegmentParcelFileDescriptor is no longer used by this deferred-close
+                // path (old muxer is done before we get here), but null it out for safety.
+                previousSegmentParcelFileDescriptor = null;
                 
-                // Move current PFD to previous before opening new one
-                previousSegmentParcelFileDescriptor = currentSegmentParcelFileDescriptor;
-                currentSegmentParcelFileDescriptor = null;
-                
-                // Now open the new PFD for the new segment
+                // Open the new PFD now that the old one is fully closed (no concurrent-open conflict)
                 try {
                     ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(safUri, "w");
                     if (pfd == null) {
@@ -6307,6 +6447,7 @@ public class RecordingService extends Service {
                     // SAF mode: no File object available, use flag-based notification
                     com.fadcam.streaming.RemoteStreamManager.getInstance().startRecordingSaf();
                 }
+                
             } catch (Exception e) {
                 FLog.e(TAG, "Failed to notify RemoteStreamManager about recording start", e);
             }

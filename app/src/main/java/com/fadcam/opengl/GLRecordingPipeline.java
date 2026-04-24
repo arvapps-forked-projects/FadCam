@@ -186,6 +186,9 @@ public class GLRecordingPipeline {
     private MediaFormat cachedAudioFormat;
     // Audio settings (always set from preferences or app defaults)
     private int audioSource;
+    private android.media.AudioDeviceInfo preferredAudioDevice;
+    private boolean isBtSco;
+    private android.media.AudioManager savedAudioManager;
     private int audioSampleRate;
     private int audioBitrate;
     private int audioChannelCount;
@@ -1745,12 +1748,41 @@ public class GLRecordingPipeline {
             }
             rolloverInProgress = true;
 
-            // First, request the next segment file/descriptor from callback
-            // This is done first to ensure we have a valid output before stopping the
-            // current muxer
             segmentNumber++;
             FLog.d(TAG, "Increment segment number to: " + segmentNumber);
 
+            // Stop and release the current muxer BEFORE invoking the segment callback.
+            //
+            // SAMSUNG SAF FIX: On Samsung Galaxy devices, the SAF ExternalStorageProvider
+            // invalidates a newly-opened ParcelFileDescriptor ("w") when any other fd for
+            // the same storage volume is concurrently open. The old segment's PFD cannot be
+            // closed until the old muxer has fully flushed its final fragment (muxer.close()
+            // is synchronous — all handleProcessedSegment() writes complete before it returns).
+            //
+            // By fully stopping and releasing the old muxer HERE, the callback can safely
+            // close the old PFD and then open the new PFD with no concurrent-open conflict,
+            // guaranteeing the new fd is valid for the very first write.
+            if (mediaMuxer != null) {
+                try {
+                    if (muxerStarted) {
+                        FLog.d(TAG, "Stopping current muxer before segment callback");
+                        mediaMuxer.stop();
+                    }
+                    FLog.d(TAG, "Releasing current muxer before segment callback");
+                    mediaMuxer.release();
+                } catch (Exception e) {
+                    FLog.e(TAG, "Error releasing muxer during rollover", e);
+                }
+                mediaMuxer = null;
+                muxerStarted = false;
+            }
+
+            // Reset track indices
+            audioTrackIndex = -1;
+
+            // Now invoke the callback. The old muxer is fully stopped, so the callback
+            // may safely close the old PFD and open a fresh one without any concurrent-open
+            // conflict on Samsung (or any other SAF provider).
             if (segmentCallback != null) {
                 FLog.d(TAG, "Calling segment callback for next segment");
                 segmentCallback.onSegmentRollover(segmentNumber);
@@ -1764,25 +1796,6 @@ public class GLRecordingPipeline {
                 FLog.e(TAG, "Segment callback did not set new output path or descriptor");
                 throw new IllegalStateException("No output path or descriptor set after callback");
             }
-
-            // Now we can safely stop and release the current muxer
-            if (mediaMuxer != null) {
-                try {
-                    if (muxerStarted) {
-                        FLog.d(TAG, "Stopping current muxer");
-                        mediaMuxer.stop();
-                    }
-                    FLog.d(TAG, "Releasing current muxer");
-                    mediaMuxer.release();
-                } catch (Exception e) {
-                    FLog.e(TAG, "Error releasing muxer during rollover", e);
-                }
-                mediaMuxer = null;
-                muxerStarted = false;
-            }
-
-            // Reset track indices
-            audioTrackIndex = -1;
 
             try {
                 // Create new muxer for the next segment
@@ -2034,6 +2047,16 @@ public class GLRecordingPipeline {
                     FLog.i(TAG, "AudioManager mode restored to: " + originalAudioMode);
                 }
                 audioManager.setSpeakerphoneOn(originalSpeakerphoneOn);
+                // Stop BT SCO if it was started
+                if (isBtSco) {
+                    try {
+                        audioManager.stopBluetoothSco();
+                        audioManager.setBluetoothScoOn(false);
+                        FLog.i(TAG, "BT SCO stopped and released");
+                    } catch (Exception e) {
+                        FLog.w(TAG, "Error stopping BT SCO", e);
+                    }
+                }
                 FLog.i(TAG, "Speakerphone restored to: " + originalSpeakerphoneOn);
                 
                 // Release audio focus
@@ -2584,14 +2607,69 @@ public class GLRecordingPipeline {
         this.audioRecordingEnabled = prefs.isRecordAudioEnabled();
         this.audioBitrate = prefs.getAudioBitrate();
         this.audioSampleRate = prefs.getAudioSamplingRate();
-        // Always use stereo (2 channels) for best quality
         this.audioChannelCount = 2;
-        // Audio source selection logic (default to MIC)
-        String audioInputSource = null;
-        // Use CAMCORDER for high-quality audio recording
-        // This provides better audio quality than VOICE_COMMUNICATION
-        // Background recording is enabled via foreground service with MICROPHONE type
-        this.audioSource = android.media.MediaRecorder.AudioSource.CAMCORDER;
+
+        String audioInputSource = prefs.getAudioInputSource();
+        this.preferredAudioDevice = null;
+        this.isBtSco = false;
+        this.savedAudioManager = null;
+
+        if (com.fadcam.SharedPreferencesManager.AUDIO_INPUT_SOURCE_WIRED.equals(audioInputSource)) {
+            int savedDeviceType = prefs.getAudioInputDeviceType();
+            android.media.AudioManager am = (android.media.AudioManager)
+                    context.getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                android.media.AudioDeviceInfo[] devices = am.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS);
+                if (devices != null) {
+                    for (android.media.AudioDeviceInfo device : devices) {
+                        if (device == null) continue;
+                        int type = device.getType();
+                        if (isExternalInputDevice(type)) {
+                            if (savedDeviceType == -1 || type == savedDeviceType) {
+                                this.preferredAudioDevice = device;
+                                this.isBtSco = (type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                                        || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                                        || type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET);
+                                FLog.i(TAG, "External audio device matched: " + device.getProductName()
+                                        + " (type=" + type + ", btSco=" + this.isBtSco + ")");
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Fallback: if saved type not found, pick first available external device
+                if (this.preferredAudioDevice == null && devices != null) {
+                    for (android.media.AudioDeviceInfo device : devices) {
+                        if (device != null && isExternalInputDevice(device.getType())) {
+                            this.preferredAudioDevice = device;
+                            this.isBtSco = (device.getType() == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                                    || device.getType() == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                                    || device.getType() == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET);
+                            FLog.i(TAG, "External audio device (fallback): " + device.getProductName()
+                                    + " (type=" + device.getType() + ")");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (this.preferredAudioDevice != null) {
+            this.audioSource = android.media.MediaRecorder.AudioSource.MIC;
+            FLog.i(TAG, "Audio source: MIC (external device route)");
+        } else {
+            this.audioSource = android.media.MediaRecorder.AudioSource.CAMCORDER;
+            FLog.i(TAG, "Audio source: CAMCORDER (default device mic)");
+        }
+    }
+
+    private boolean isExternalInputDevice(int type) {
+        return type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
+                || type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE
+                || type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET
+                || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                || type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET;
     }
 
     /**
@@ -2672,6 +2750,11 @@ public class GLRecordingPipeline {
                     .setBufferSizeInBytes(bufferSize)
                     .build();
 
+            if (preferredAudioDevice != null) {
+                boolean routed = audioRecord.setPreferredDevice(preferredAudioDevice);
+                FLog.i(TAG, "setPreferredDevice -> " + preferredAudioDevice.getProductName() + ": " + (routed ? "SUCCESS" : "FAILED"));
+            }
+
             if (audioRecord.getState() != android.media.AudioRecord.STATE_INITIALIZED) {
                 throw new RuntimeException("AudioRecord initialization failed");
             }
@@ -2689,19 +2772,25 @@ public class GLRecordingPipeline {
                 FLog.w(TAG, "NoiseSuppressor requested but not available on this device");
             }
 
-            // CRITICAL: Set AudioManager mode to MODE_NORMAL for camcorder recording
-            // This allows normal audio routing and prevents earpiece-only behavior
+            // CRITICAL: Set AudioManager mode for recording
             audioManager = (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            savedAudioManager = audioManager;
             if (audioManager != null) {
-                // Save original mode and speakerphone state to restore later
                 originalAudioMode = audioManager.getMode();
                 originalSpeakerphoneOn = audioManager.isSpeakerphoneOn();
-                
-                // Set MODE_NORMAL for camcorder recording - allows normal speaker output
-                audioManager.setMode(android.media.AudioManager.MODE_NORMAL);
-                // Explicitly enable speakerphone for normal audio routing
-                audioManager.setSpeakerphoneOn(true);
-                FLog.i(TAG, "AudioManager mode set to MODE_NORMAL for camcorder recording (was: " + originalAudioMode + "), speakerphone enabled (was: " + originalSpeakerphoneOn + ")");
+
+                if (isBtSco) {
+                    // BT SCO requires special setup: start SCO connection and set mode
+                    audioManager.startBluetoothSco();
+                    audioManager.setBluetoothScoOn(true);
+                    audioManager.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+                    audioManager.setSpeakerphoneOn(false);
+                    FLog.i(TAG, "AudioManager: BT SCO started, mode=MODE_IN_COMMUNICATION");
+                } else {
+                    audioManager.setMode(android.media.AudioManager.MODE_NORMAL);
+                    audioManager.setSpeakerphoneOn(true);
+                    FLog.i(TAG, "AudioManager mode set to MODE_NORMAL for camcorder recording (was: " + originalAudioMode + "), speakerphone enabled");
+                }
                 
                 // Request audio focus with USAGE_MEDIA for camcorder recording
                 audioFocusListener = focusChange -> {

@@ -43,10 +43,16 @@ public class CloudStatusManager {
         void onAuthError(String reason);
     }
     
+    // ❌ REMOVED: UsageReportingErrorListener (moved to relay server)
+    
     // Push interval: 2 seconds for status, 1.5 seconds for commands (Realtime disabled), 30 seconds for viewers
     private static final long STATUS_PUSH_INTERVAL_MS = 2000;
     private static final long COMMAND_POLL_INTERVAL_MS = 1500; // Reduced from 3000 since Realtime is disabled
     private static final long VIEWERS_POLL_INTERVAL_MS = 30000; // Poll cloud viewers every 30s
+    private static final long USAGE_REPORT_INTERVAL_MS = 5000;  // Report usage every 5 seconds (dev mode)
+    
+    // Usage tracking
+    // ❌ REMOVED: Usage reporting fields (moved to relay server)
     
     // Failure tracking for robust recovery (Step 6.11)
     private static final int MAX_CONSECUTIVE_FAILURES = 10;
@@ -63,8 +69,9 @@ public class CloudStatusManager {
     private final Handler handler;
     private final ExecutorService executor;
     
-    // Error listener for UI feedback
+    // Error listeners for UI feedback
     private AuthErrorListener authErrorListener;
+    // ❌ REMOVED: usageReportingErrorListener
     private boolean authErrorShown = false;  // Track if error already shown to prevent toast spam
     
     // Stream token fetch cooldown to prevent hammering after repeated failures
@@ -76,6 +83,7 @@ public class CloudStatusManager {
     private Runnable statusRunnable;
     private Runnable commandRunnable;
     private Runnable viewersRunnable;
+    // ❌ REMOVED: usageRunnable (moved to relay server)
     private int statusPushCount = 0;
     
     private CloudStatusManager(Context context) {
@@ -83,6 +91,21 @@ public class CloudStatusManager {
         this.authManager = CloudAuthManager.getInstance(context);
         this.handler = new Handler(Looper.getMainLooper());
         this.executor = Executors.newSingleThreadExecutor();
+    }
+    
+    /**
+     * Format bytes to human-readable format (B, KB, MB, GB)
+     */
+    private static String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.2f KB", bytes / 1024.0);
+        } else if (bytes < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
+        } else {
+            return String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+        }
     }
     
     /**
@@ -104,6 +127,12 @@ public class CloudStatusManager {
     }
     
     /**
+     * Set listener for usage reporting errors
+     * Called by RemoteFragment to display usage reporting status to user
+     */
+    // ❌ REMOVED: setUsageReportingErrorListener
+    
+    /**
      * Notify listener of authentication error (called on main thread)
      * Only notifies once to avoid toast spam - subsequent errors are logged but not shown
      */
@@ -115,6 +144,8 @@ public class CloudStatusManager {
             FLog.d(TAG, "☁️ Auth error already shown, suppressing additional notification: " + reason);
         }
     }
+    
+    // ❌ REMOVED: notifyUsageReportingStatus
     
     /**
      * Check if cloud mode is enabled in preferences
@@ -248,6 +279,9 @@ public class CloudStatusManager {
     }
     
 
+    // ❌ REMOVED: startUsageReporting(), stopUsageReporting(), retryUsageReporting()
+    // (Usage tracking now handled server-side via relay)
+    
     /**
      * Stop status push and command polling.
      * Called by RemoteStreamService when server stops.
@@ -483,8 +517,8 @@ public class CloudStatusManager {
                     // Success - track recovery
                     onPushSuccess();
                 } else if (responseCode == 401) {
-                    // Unauthorized - authentication/credentials issue
-                    // Try to get more details from response
+                    // Unauthorized - may be JWT issue, but device auth fallback should have handled it
+                    // If we're still getting 401, it might be a stream token issue or device linking problem
                     String errorDetail = "";
                     try {
                         java.io.InputStream errorStream = conn.getErrorStream();
@@ -503,14 +537,16 @@ public class CloudStatusManager {
                         // Ignore
                     }
                     
-                    FLog.e(TAG, "☁️ 📤 AUTH ERROR (401): Device not properly authenticated" + errorDetail);
-                    FLog.d(TAG, "☁️ 📤 DEBUG: Checking token validity...");
-                    FLog.d(TAG, "☁️ 📤 Token present: " + (token != null && !token.isEmpty()) +
+                    // Log details for debugging but don't show scary error to user
+                    FLog.e(TAG, "☁️ 📤 Stream push got HTTP 401" + errorDetail);
+                    FLog.d(TAG, "☁️ 📤 DEBUG: Stream token: " + (token != null && !token.isEmpty()) +
                             " | User UUID: " + (userUuid != null) +
                             " | Device ID: " + (deviceId != null));
                     
                     onPushFailure("HTTP " + responseCode);
-                    notifyAuthError("Cloud authentication failed (401). Device may not be properly linked. Try re-linking from Cloud Account.");
+                    // Don't show scary "device not linked" error to user
+                    // The system will automatically retry with device auth fallback
+                    // notifyAuthError(...) is intentionally omitted here
                 } else {
                     onPushFailure("HTTP " + responseCode);
                 }
@@ -1197,4 +1233,15 @@ public class CloudStatusManager {
         SharedPreferences prefs = context.getSharedPreferences("FadCamPrefs", Context.MODE_PRIVATE);
         return prefs.getInt("stream_server_port", 8080);
     }
+
+    // ❌ REMOVED: ~370 lines of usage reporting code
+    // - reportStreamingUsage()  
+    // - reportUsage()
+    // - doReportUsage()
+    // - doReportUsageWithRetry()
+    // - scheduleUsageReportRetry()
+    // - logJwtDetails()
+    // - isValidUUID()
+    // - maskUuid()
+    // (All usage tracking now handled server-side via relay)
 }

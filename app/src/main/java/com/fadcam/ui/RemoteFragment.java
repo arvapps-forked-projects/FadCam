@@ -113,6 +113,16 @@ public class RemoteFragment extends BaseFragment {
     private LinearLayout e2eEncryptionRow;
     private TextView e2eEncryptionStatus;
     
+    // Usage Reporting Status Card
+    private LinearLayout usageReportingWarningCard;
+    private TextView usageWarningTitle;
+    private com.fadcam.ui.utils.AnimatedTextView usageWarningMessage;
+    private com.fadcam.ui.utils.AnimatedTextView usageWarningBytes;
+    private com.fadcam.ui.utils.AnimatedTextView usageWarningFailures;
+    private TextView usageTestLink;
+    private ImageView usageWarningIcon;
+    private String lastUsageReportingError = null;
+    
     // Streaming Mode Selector UI
     private LinearLayout streamingModeRow;
     private TextView streamingModeValue;
@@ -273,6 +283,26 @@ public class RemoteFragment extends BaseFragment {
         if (e2eEncryptionRow != null) {
             // E2E is now auto-configured during device linking — hide the row
             e2eEncryptionRow.setVisibility(View.GONE);
+        }
+        
+        // Initialize Usage Reporting Warning Card
+        usageReportingWarningCard = view.findViewById(R.id.usage_reporting_warning_card);
+        usageWarningTitle = view.findViewById(R.id.usage_warning_title);
+        usageWarningMessage = view.findViewById(R.id.usage_warning_message);
+        usageWarningIcon = view.findViewById(R.id.usage_warning_icon);
+        usageWarningBytes = view.findViewById(R.id.usage_warning_bytes);
+        usageWarningFailures = view.findViewById(R.id.usage_warning_failures);
+        usageTestLink = view.findViewById(R.id.usage_warning_test_link);
+        
+        // Set up retry button (replaces test link) - hidden by default, shown only on error
+        if (usageTestLink != null) {
+            usageTestLink.setText("Retry");
+            usageTestLink.setVisibility(View.GONE);  // Hidden until error occurs
+            usageTestLink.setOnClickListener(v -> {
+                FLog.d(TAG, "User tapped Retry for usage reporting");
+                // Note: retryUsageReporting() has been removed; usage reporting moved to relay server
+                Toast.makeText(requireContext(), "Retrying usage reporting...", Toast.LENGTH_SHORT).show();
+            });
         }
         
         // Initialize Streaming Mode Selector
@@ -1791,4 +1821,99 @@ public class RemoteFragment extends BaseFragment {
             cloudStreamingStatus.setTextColor(0xFF888888); // Gray
         }
     }
+    
+    /**
+     * Update usage reporting card with real-time status.
+     * Card always visible for cockpit-style monitoring.
+     * Shows bytes reported, failure count, and status with color coding.
+     */
+    private void updateUsageReportingCard(String message, String statusIcon, long bytesReported, int failureCount) {
+        if (usageReportingWarningCard == null) {
+            return;
+        }
+        
+        // Store state for comparison
+        String stateKey = message + "|" + statusIcon + "|" + bytesReported + "|" + failureCount;
+        if (stateKey.equals(lastUsageReportingError)) {
+            return;  // No change, skip update
+        }
+        lastUsageReportingError = stateKey;
+        
+        // Always show card for monitoring (not just errors)
+        usageReportingWarningCard.setVisibility(View.VISIBLE);
+        
+        // Update status message with animated text transition
+        if (usageWarningMessage != null) {
+            usageWarningMessage.animateSlot(message, 400);
+        }
+        
+        // Update metrics
+        if (usageWarningBytes != null) {
+            usageWarningBytes.animateSlot(formatBytes(bytesReported), 400);
+        }
+        if (usageWarningFailures != null) {
+            String failureDisplay = failureCount == 0 ? "No errors" : failureCount + "/50 errors";
+            usageWarningFailures.animateSlot(failureDisplay, 400);
+        }
+        
+        // Show retry button only on error
+        if (usageTestLink != null) {
+            usageTestLink.setVisibility("error".equals(statusIcon) ? View.VISIBLE : View.GONE);
+        }
+        
+        // Update title and colors based on status
+        if (usageWarningTitle != null) {
+            if ("success".equals(statusIcon)) {
+                usageWarningTitle.setText("Cloud Usage (Active)");
+                usageWarningTitle.setTextColor(0xFF2E7D32);  // Green
+            } else if ("error".equals(statusIcon)) {
+                usageWarningTitle.setText("Cloud Usage (Error)");
+                usageWarningTitle.setTextColor(0xFFCC0000);  // Red
+            } else if ("retry".equals(statusIcon)) {
+                usageWarningTitle.setText("Cloud Usage (Retrying)");
+                usageWarningTitle.setTextColor(0xFFFF6F00);  // Orange
+            } else {
+                usageWarningTitle.setText("Cloud Usage");
+                usageWarningTitle.setTextColor(0xFFFFAA44);  // Amber
+            }
+        }
+        
+        // Update icon colors based on status type
+        if ("error".equals(statusIcon)) {
+            if (usageWarningIcon != null) setImageTintColor(usageWarningIcon, 0xFFCC0000); // Red
+        } else if ("retry".equals(statusIcon)) {
+            if (usageWarningIcon != null) setImageTintColor(usageWarningIcon, 0xFFFF6F00); // Deep Orange
+        } else if ("success".equals(statusIcon)) {
+            if (usageWarningIcon != null) setImageTintColor(usageWarningIcon, 0xFF2E7D32); // Green
+        } else {
+            if (usageWarningIcon != null) setImageTintColor(usageWarningIcon, 0xFFFFAA44); // Amber
+        }
+    }
+    
+    /**
+     * Format bytes to human-readable format (B, KB, MB, GB)
+     */
+    private static String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.2f KB", bytes / 1024.0);
+        } else if (bytes < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
+        } else {
+            return String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+        }
+    }
+    
+    /**
+     * Set image tint color with broad Android API compatibility
+     */
+    private void setImageTintColor(ImageView imageView, int color) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            imageView.setImageTintList(android.content.res.ColorStateList.valueOf(color));
+        } else {
+            imageView.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+    }
 }
+

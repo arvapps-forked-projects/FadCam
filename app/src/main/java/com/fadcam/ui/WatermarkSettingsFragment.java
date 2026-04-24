@@ -108,6 +108,108 @@ public class WatermarkSettingsFragment extends Fragment {
         if (back != null) {
             back.setOnClickListener(v -> OverlayNavUtil.dismiss(requireActivity()));
         }
+
+        // Timezone toggle
+        com.fadcam.ui.AvatarToggleView switchTimezone = view.findViewById(R.id.switch_timezone);
+        if (switchTimezone != null) {
+            switchTimezone.setChecked(prefs.isTimezoneEnabled());
+            switchTimezone.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                prefs.setTimezoneEnabled(isChecked);
+                refreshExtendedRowValues();
+                updateTimezoneFormatRowState();
+            });
+        }
+        View rowTimezone = view.findViewById(R.id.row_timezone);
+        if (rowTimezone != null) rowTimezone.setOnClickListener(v -> {
+            if (switchTimezone != null) switchTimezone.performClick();
+        });
+
+        // Timezone format picker
+        View rowTimezoneFormat = view.findViewById(R.id.row_timezone_format);
+        if (rowTimezoneFormat != null) rowTimezoneFormat.setOnClickListener(v -> showTimezoneFormatBottomSheet());
+        updateTimezoneFormatRowState();
+
+        // Extended watermark feature toggles
+        com.fadcam.ui.AvatarToggleView switchSpeed = view.findViewById(R.id.switch_speed);
+        if (switchSpeed != null) {
+            switchSpeed.setChecked(prefs.isSpeedEnabled());
+            switchSpeed.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                prefs.setSpeedEnabled(isChecked);
+                refreshExtendedRowValues();
+            });
+        }
+        com.fadcam.ui.AvatarToggleView switchAltitude = view.findViewById(R.id.switch_altitude);
+        if (switchAltitude != null) {
+            switchAltitude.setChecked(prefs.isAltitudeEnabled());
+            switchAltitude.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                prefs.setAltitudeEnabled(isChecked);
+                refreshExtendedRowValues();
+            });
+        }
+        com.fadcam.ui.AvatarToggleView switchCompass = view.findViewById(R.id.switch_compass);
+        if (switchCompass != null) {
+            switchCompass.setChecked(prefs.isCompassEnabled());
+            switchCompass.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                prefs.setCompassEnabled(isChecked);
+                refreshExtendedRowValues();
+            });
+        }
+        com.fadcam.ui.AvatarToggleView switchNoise = view.findViewById(R.id.switch_noise);
+        if (switchNoise != null) {
+            switchNoise.setChecked(prefs.isNoiseEnabled());
+            switchNoise.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (isChecked) {
+                    ensureAudioPermissionThen(() -> {
+                        prefs.setNoiseEnabled(true);
+                        refreshExtendedRowValues();
+                    });
+                } else {
+                    prefs.setNoiseEnabled(false);
+                    refreshExtendedRowValues();
+                }
+            });
+        }
+        com.fadcam.ui.AvatarToggleView switchWeather = view.findViewById(R.id.switch_weather);
+        if (switchWeather != null) {
+            switchWeather.setChecked(prefs.isWeatherEnabled());
+            switchWeather.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (isChecked && !prefs.isNetworkWarningShown()) {
+                    showNetworkWarningDialog(() -> {
+                        prefs.setWeatherEnabled(true);
+                        prefs.setNetworkWarningShown(true);
+                        refreshExtendedRowValues();
+                    });
+                } else {
+                    prefs.setWeatherEnabled(isChecked);
+                    refreshExtendedRowValues();
+                }
+            });
+        }
+
+        // Make whole row clickable for toggle rows
+        View rowSpeed = view.findViewById(R.id.row_speed);
+        if (rowSpeed != null) rowSpeed.setOnClickListener(v -> {
+            if (switchSpeed != null) switchSpeed.performClick();
+        });
+        View rowAltitude = view.findViewById(R.id.row_altitude);
+        if (rowAltitude != null) rowAltitude.setOnClickListener(v -> {
+            if (switchAltitude != null) switchAltitude.performClick();
+        });
+        View rowCompass = view.findViewById(R.id.row_compass);
+        if (rowCompass != null) rowCompass.setOnClickListener(v -> {
+            if (switchCompass != null) switchCompass.performClick();
+        });
+        View rowNoise = view.findViewById(R.id.row_noise);
+        if (rowNoise != null) rowNoise.setOnClickListener(v -> {
+            if (switchNoise != null) switchNoise.performClick();
+        });
+        View rowWeather = view.findViewById(R.id.row_weather);
+        if (rowWeather != null) rowWeather.setOnClickListener(v -> {
+            if (switchWeather != null) switchWeather.performClick();
+        });
+
+        refreshExtendedRowValues();
+
         permissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
             if (granted) {
                 onPermissionGrantedPostRequest();
@@ -220,6 +322,22 @@ public class WatermarkSettingsFragment extends Fragment {
             onGranted.run();
         } else {
             showPermissionDialog(onGranted);
+        }
+    }
+
+    private void ensureAudioPermissionThen(Runnable onGranted) {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        // App already requires RECORD_AUDIO for video recording, so check if granted
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            onGranted.run();
+        } else {
+            // Just show toast - app can't work without mic anyway
+            Toast.makeText(ctx, R.string.watermark_audio_permission_required, Toast.LENGTH_SHORT).show();
+            View switchNoise = getView().findViewById(R.id.switch_noise);
+            if (switchNoise instanceof com.fadcam.ui.AvatarToggleView) {
+                ((com.fadcam.ui.AvatarToggleView) switchNoise).setChecked(false);
+            }
         }
     }
 
@@ -345,6 +463,14 @@ public class WatermarkSettingsFragment extends Fragment {
             fadrecBase = formatted;
         }
 
+        // Append timezone after timestamp
+        if (prefs.isTimezoneEnabled()) {
+            java.util.TimeZone tz = java.util.TimeZone.getDefault();
+            String tzLabel = buildTimezoneLabel(tz, prefs.getTimezoneFormat());
+            if (fadcamBase != null) fadcamBase += " " + tzLabel;
+            if (fadrecBase != null) fadrecBase += " " + tzLabel;
+        }
+
         TextView helper = getView() != null ? getView().findViewById(R.id.text_preview_helper) : null;
 
         if (fadcamBase == null) {
@@ -363,8 +489,8 @@ public class WatermarkSettingsFragment extends Fragment {
         if (prefs.isLocalisationEnabled()) {
             String format = prefs.getWatermarkLocationFormat();
             String locationLines = "address".equals(format)
-                    ? "\nLat= 48.XXX, Lon= 2.XXX\nMain Street, Sample City, Region, Country"
-                    : "\nLat= 48.XXX, Lon= 2.XXX";
+                    ? "\nLat: 48.XXX, Long: 2.XXX\nMain Street, Sample City, Region, Country"
+                    : "\nLat: 48.XXX, Long: 2.XXX";
             fadcamBase += locationLines;
             fadrecBase += locationLines;
         }
@@ -375,6 +501,16 @@ public class WatermarkSettingsFragment extends Fragment {
             fadcamBase += "\n" + customText;
             fadrecBase += "\n" + customText;
         }
+
+        // Append extended sensor data preview
+        String extendedPreview = "";
+        if (prefs.isSpeedEnabled()) extendedPreview += "\nSpeed: 80km/h";
+        if (prefs.isAltitudeEnabled()) extendedPreview += "\nAlt: 59m";
+        if (prefs.isCompassEnabled()) extendedPreview += "\nCompass: 220° SW";
+        if (prefs.isNoiseEnabled()) extendedPreview += "\nNoise: 45dB";
+        if (prefs.isWeatherEnabled()) extendedPreview += "\n25°C Clear\nWind: 15 km/h";
+        fadcamBase += extendedPreview;
+        fadrecBase += extendedPreview;
 
         if (previewAdapter != null) {
             previewAdapter.setContent(fadcamBase, fadrecBase,
@@ -476,6 +612,227 @@ public class WatermarkSettingsFragment extends Fragment {
         long intervalMs = prefs.getWatermarkUpdateInterval();
         double seconds = intervalMs / 1000.0;
         valueLocationInterval.setText(String.format("%.1f seconds", seconds));
+    }
+
+    private String buildTimezoneLabel(java.util.TimeZone tz, String format) {
+        int offsetMs = tz.getOffset(System.currentTimeMillis());
+        int totalMinutes = offsetMs / 60000;
+        int hours = totalMinutes / 60;
+        int minutes = Math.abs(totalMinutes % 60);
+        String sign = offsetMs >= 0 ? "+" : "";
+        String gmt;
+        if (minutes == 0) {
+            gmt = "GMT" + sign + hours;
+        } else {
+            gmt = "GMT" + sign + hours + ":" + String.format(java.util.Locale.US, "%02d", minutes);
+        }
+        if ("gmt_name".equals(format)) {
+            return gmt + " (" + tz.getID() + ")";
+        }
+        return gmt;
+    }
+
+    private void updateTimezoneFormatRowState() {
+        View view = getView();
+        if (view == null) return;
+        View rowFormat = view.findViewById(R.id.row_timezone_format);
+        if (rowFormat != null) {
+            boolean enabled = prefs.isTimezoneEnabled();
+            rowFormat.setEnabled(enabled);
+            rowFormat.setAlpha(enabled ? 1f : 0.4f);
+        }
+        refreshTimezoneFormatValue();
+    }
+
+    private void refreshTimezoneFormatValue() {
+        View view = getView();
+        if (view == null) return;
+        TextView valueFormat = view.findViewById(R.id.value_timezone_format);
+        if (valueFormat != null) {
+            String format = prefs.getTimezoneFormat();
+            if ("gmt_name".equals(format)) {
+                valueFormat.setText(getString(R.string.watermark_timezone_format_gmt_name));
+            } else {
+                valueFormat.setText(getString(R.string.watermark_timezone_format_gmt_only));
+            }
+        }
+    }
+
+    private void showTimezoneFormatBottomSheet() {
+        final String resultKey = "picker_result_timezone_format";
+        getParentFragmentManager().setFragmentResultListener(resultKey, this, (k, b) -> {
+            if (b.containsKey(com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID)) {
+                String id = b.getString(com.fadcam.ui.picker.PickerBottomSheetFragment.BUNDLE_SELECTED_ID);
+                if (id != null) {
+                    prefs.setTimezoneFormat(id);
+                    refreshTimezoneFormatValue();
+                    updatePreview();
+                    refreshExtendedRowValues();
+                }
+            }
+        });
+        java.util.ArrayList<com.fadcam.ui.picker.OptionItem> items = new java.util.ArrayList<>();
+        items.add(new com.fadcam.ui.picker.OptionItem("gmt_only", getString(R.string.watermark_timezone_format_gmt_only), (String) null));
+        items.add(new com.fadcam.ui.picker.OptionItem("gmt_name", getString(R.string.watermark_timezone_format_gmt_name), (String) null));
+        String current = prefs.getTimezoneFormat();
+        com.fadcam.ui.picker.PickerBottomSheetFragment sheet = com.fadcam.ui.picker.PickerBottomSheetFragment.newInstance(
+            getString(R.string.watermark_timezone_format_title), items, current, resultKey, null);
+        sheet.show(getParentFragmentManager(), "timezone_format_sheet");
+    }
+
+    private void refreshExtendedRowValues() {
+        View view = getView();
+        if (view == null) return;
+
+        android.hardware.SensorManager sm = (android.hardware.SensorManager)
+                requireContext().getSystemService(Context.SENSOR_SERVICE);
+        boolean hasMagnetometer = sm != null && sm.getDefaultSensor(android.hardware.Sensor.TYPE_MAGNETIC_FIELD) != null;
+        boolean hasRotVec = sm != null && sm.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR) != null;
+
+        android.location.LocationManager lm = (android.location.LocationManager)
+                requireContext().getSystemService(Context.LOCATION_SERVICE);
+        boolean gpsEnabled = lm != null && lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
+
+        int greenColor = getResources().getColor(android.R.color.holo_green_dark, null);
+        int orangeColor = getResources().getColor(android.R.color.holo_orange_dark, null);
+        int grayColor = getResources().getColor(android.R.color.darker_gray, null);
+        int redColor = getResources().getColor(android.R.color.holo_red_dark, null);
+
+        // Timezone subtitle
+        TextView valueTimezone = view.findViewById(R.id.value_timezone);
+        AvatarToggleView switchTimezone = view.findViewById(R.id.switch_timezone);
+        if (valueTimezone != null) {
+            if (prefs.isTimezoneEnabled()) {
+                java.util.TimeZone tz = java.util.TimeZone.getDefault();
+                String tzLabel = buildTimezoneLabel(tz, prefs.getTimezoneFormat());
+                valueTimezone.setText(getString(R.string.watermark_timezone_on_gmt) + " — " + tzLabel);
+                valueTimezone.setTextColor(greenColor);
+            } else {
+                valueTimezone.setText(getString(R.string.watermark_timezone_off));
+                valueTimezone.setTextColor(grayColor);
+            }
+        }
+        if (switchTimezone != null && switchTimezone.isChecked() != prefs.isTimezoneEnabled()) {
+            switchTimezone.setChecked(prefs.isTimezoneEnabled());
+        }
+
+        TextView valueSpeed = view.findViewById(R.id.value_speed);
+        if (valueSpeed != null) {
+            if (prefs.isSpeedEnabled()) {
+                if (!gpsEnabled) {
+                    valueSpeed.setText(getString(R.string.watermark_gps_disabled_warning));
+                    valueSpeed.setTextColor(redColor);
+                } else {
+                    valueSpeed.setText(getString(R.string.watermark_speed_on));
+                    valueSpeed.setTextColor(greenColor);
+                }
+            } else {
+                valueSpeed.setText(getString(R.string.watermark_speed_off));
+                valueSpeed.setTextColor(grayColor);
+            }
+        }
+        AvatarToggleView switchSpeed = view.findViewById(R.id.switch_speed);
+        if (switchSpeed != null && switchSpeed.isChecked() != prefs.isSpeedEnabled()) {
+            switchSpeed.setChecked(prefs.isSpeedEnabled());
+        }
+
+        TextView valueAltitude = view.findViewById(R.id.value_altitude);
+        if (valueAltitude != null) {
+            if (prefs.isAltitudeEnabled()) {
+                if (!gpsEnabled) {
+                    valueAltitude.setText(getString(R.string.watermark_gps_disabled_warning));
+                    valueAltitude.setTextColor(redColor);
+                } else {
+                    valueAltitude.setText(getString(R.string.watermark_altitude_on));
+                    valueAltitude.setTextColor(greenColor);
+                }
+            } else {
+                valueAltitude.setText(getString(R.string.watermark_altitude_off));
+                valueAltitude.setTextColor(grayColor);
+            }
+        }
+        AvatarToggleView switchAltitude = view.findViewById(R.id.switch_altitude);
+        if (switchAltitude != null && switchAltitude.isChecked() != prefs.isAltitudeEnabled()) {
+            switchAltitude.setChecked(prefs.isAltitudeEnabled());
+        }
+
+        TextView valueCompass = view.findViewById(R.id.value_compass);
+        if (valueCompass != null) {
+            if (prefs.isCompassEnabled()) {
+                if (!gpsEnabled && !hasRotVec && !hasMagnetometer) {
+                    valueCompass.setText(getString(R.string.watermark_gps_disabled_warning));
+                    valueCompass.setTextColor(redColor);
+                } else if (hasRotVec || hasMagnetometer) {
+                    valueCompass.setText(getString(R.string.watermark_compass_on_sensor));
+                    valueCompass.setTextColor(greenColor);
+                } else {
+                    valueCompass.setText(getString(R.string.watermark_compass_no_sensor));
+                    valueCompass.setTextColor(orangeColor);
+                }
+            } else {
+                valueCompass.setText(getString(R.string.watermark_compass_off));
+                valueCompass.setTextColor(grayColor);
+            }
+        }
+        AvatarToggleView switchCompass = view.findViewById(R.id.switch_compass);
+        if (switchCompass != null && switchCompass.isChecked() != prefs.isCompassEnabled()) {
+            switchCompass.setChecked(prefs.isCompassEnabled());
+        }
+
+        TextView valueNoise = view.findViewById(R.id.value_noise);
+        if (valueNoise != null) {
+            if (prefs.isNoiseEnabled()) {
+                valueNoise.setText(getString(R.string.watermark_noise_on));
+                valueNoise.setTextColor(greenColor);
+            } else {
+                valueNoise.setText(getString(R.string.watermark_noise_off));
+                valueNoise.setTextColor(grayColor);
+            }
+        }
+        AvatarToggleView switchNoise = view.findViewById(R.id.switch_noise);
+        if (switchNoise != null && switchNoise.isChecked() != prefs.isNoiseEnabled()) {
+            switchNoise.setChecked(prefs.isNoiseEnabled());
+        }
+
+        TextView valueWeather = view.findViewById(R.id.value_weather);
+        if (valueWeather != null) {
+            if (prefs.isWeatherEnabled()) {
+                if (!gpsEnabled) {
+                    valueWeather.setText(getString(R.string.watermark_gps_disabled_warning));
+                    valueWeather.setTextColor(redColor);
+                } else {
+                    valueWeather.setText(getString(R.string.watermark_weather_on));
+                    valueWeather.setTextColor(greenColor);
+                }
+            } else {
+                valueWeather.setText(getString(R.string.watermark_weather_off));
+                valueWeather.setTextColor(grayColor);
+            }
+        }
+        AvatarToggleView switchWeather = view.findViewById(R.id.switch_weather);
+        if (switchWeather != null && switchWeather.isChecked() != prefs.isWeatherEnabled()) {
+            switchWeather.setChecked(prefs.isWeatherEnabled());
+        }
+
+        updatePreview();
+    }
+
+    private void showNetworkWarningDialog(Runnable onConfirm) {
+        new AlertDialog.Builder(requireContext(), com.google.android.material.R.style.MaterialAlertDialog_Material3)
+                .setTitle(R.string.watermark_network_warning_title)
+                .setMessage(R.string.watermark_network_warning_message)
+                .setPositiveButton(R.string.watermark_network_warning_enable, (d, w) -> {
+                    onConfirm.run();
+                })
+                .setNegativeButton("Cancel", (d, w) -> {
+                    // Reset the switch
+                    View switchWeather = getView().findViewById(R.id.switch_weather);
+                    if (switchWeather instanceof com.fadcam.ui.AvatarToggleView) {
+                        ((com.fadcam.ui.AvatarToggleView) switchWeather).setChecked(false);
+                    }
+                    prefs.setWeatherEnabled(false);
+                })
+                .show();
     }
 
     private void showLocationFormatBottomSheet(){

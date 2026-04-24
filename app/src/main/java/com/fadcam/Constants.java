@@ -63,6 +63,19 @@ public abstract class Constants {
     public static final String PREF_WATERMARK_CUSTOM_TEXT = "watermark_custom_text";
     public static final String PREF_WATERMARK_UPDATE_INTERVAL = "watermark_update_interval"; // milliseconds
     public static final String PREF_WATERMARK_LOCATION_FORMAT = "watermark_location_format"; // coordinates|city_country|address
+
+    // Extended watermark features
+    public static final String PREF_WATERMARK_SPEED = "watermark_speed_enabled";
+    public static final String PREF_WATERMARK_ALTITUDE = "watermark_altitude_enabled";
+    public static final String PREF_WATERMARK_COMPASS = "watermark_compass_enabled";
+    public static final String PREF_WATERMARK_NOISE = "watermark_noise_enabled";
+    public static final String PREF_WATERMARK_WEATHER = "watermark_weather_enabled";
+    public static final String PREF_WATERMARK_NETWORK_WARNING_SHOWN = "watermark_network_warning_shown";
+    public static final String PREF_WATERMARK_TIMEZONE = "watermark_timezone_enabled";
+    public static final String PREF_WATERMARK_TIMEZONE_FORMAT = "watermark_timezone_format";
+    public static final String PREF_AUDIO_INPUT_DEVICE_TYPE = "audio_input_device_type";
+    public static final String PREF_AUDIO_INPUT_DEVICE_NAME = "audio_input_device_name";
+
     public static final String PREF_VIDEO_CODEC = "video_codec";
     public static final String PREF_APP_THEME = "app_theme";
     

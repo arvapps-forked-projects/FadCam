@@ -76,6 +76,7 @@ public class ScreenRecordingPipeline {
     private final int videoBitrate;
     private final boolean enableAudio;
     private final String audioSource;
+    private boolean isBtSco = false;
     private final String outputFilePath;
     private final FileDescriptor outputFd;
 
@@ -648,15 +649,79 @@ public class ScreenRecordingPipeline {
                 
                 FLog.d(TAG, "AudioRecord initialized with AudioPlaybackCapture (internal audio)");
             } else {
-                // Microphone audio (default)
-                audioRecord = new AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    sampleRate,
-                    channelConfig,
-                    audioFormat,
-                    bufferSize
-                );
-                FLog.d(TAG, "AudioRecord initialized with microphone source");
+                com.fadcam.SharedPreferencesManager prefs = com.fadcam.SharedPreferencesManager.getInstance(context);
+                android.media.AudioDeviceInfo preferredDevice = null;
+                isBtSco = false;
+
+                if (com.fadcam.SharedPreferencesManager.AUDIO_INPUT_SOURCE_WIRED.equals(prefs.getAudioInputSource())) {
+                    int savedDeviceType = prefs.getAudioInputDeviceType();
+                    android.media.AudioManager am = (android.media.AudioManager)
+                            context.getSystemService(Context.AUDIO_SERVICE);
+                    if (am != null) {
+                        android.media.AudioDeviceInfo[] devices = am.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS);
+                        if (devices != null) {
+                            for (android.media.AudioDeviceInfo device : devices) {
+                                if (device == null) continue;
+                                int type = device.getType();
+                                if (type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
+                                        || type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE
+                                        || type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET
+                                        || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                                        || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                                        || type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                                    if (savedDeviceType == -1 || type == savedDeviceType) {
+                                        preferredDevice = device;
+                                        isBtSco = (type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                                                || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                                                || type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET);
+                                        break;
+                                    }
+                                }
+                            }
+                            if (preferredDevice == null) {
+                                for (android.media.AudioDeviceInfo device : devices) {
+                                    if (device != null) {
+                                        int type = device.getType();
+                                        if (type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
+                                                || type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE
+                                                || type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET
+                                                || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                                                || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                                                || type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                                            preferredDevice = device;
+                                            isBtSco = (type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                                                    || type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                                                    || type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (isBtSco) {
+                            am.startBluetoothSco();
+                            am.setBluetoothScoOn(true);
+                            FLog.i(TAG, "FadRec: BT SCO started for external mic");
+                        }
+                    }
+                }
+
+                audioRecord = new android.media.AudioRecord.Builder()
+                    .setAudioSource(MediaRecorder.AudioSource.MIC)
+                    .setAudioFormat(new AudioFormat.Builder()
+                        .setEncoding(audioFormat)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(channelConfig)
+                        .build())
+                    .setBufferSizeInBytes(bufferSize)
+                    .build();
+
+                if (preferredDevice != null) {
+                    boolean routed = audioRecord.setPreferredDevice(preferredDevice);
+                    FLog.i(TAG, "FadRec: setPreferredDevice -> " + preferredDevice.getProductName() + ": " + (routed ? "SUCCESS" : "FAILED"));
+                } else {
+                    FLog.i(TAG, "FadRec: Using default device mic (no external selected)");
+                }
             }
             
             if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
@@ -1217,6 +1282,21 @@ public class ScreenRecordingPipeline {
         // Release resources
         release();
         
+        // Stop BT SCO if it was started
+        if (isBtSco) {
+            try {
+                android.media.AudioManager am = (android.media.AudioManager)
+                        context.getSystemService(Context.AUDIO_SERVICE);
+                if (am != null) {
+                    am.stopBluetoothSco();
+                    am.setBluetoothScoOn(false);
+                    FLog.i(TAG, "FadRec: BT SCO stopped");
+                }
+            } catch (Exception e) {
+                FLog.w(TAG, "FadRec: Error stopping BT SCO", e);
+            }
+        }
+
         FLog.d(TAG, "Screen recording stopped");
     }
     

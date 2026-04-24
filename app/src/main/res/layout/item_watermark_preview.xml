@@ -13,6 +13,6 @@
         android:textSize="14sp"
         android:textStyle="bold"
         android:lineSpacingMultiplier="1.3"
-        android:maxLines="5" />
+        android:maxLines="15" />
 
 </FrameLayout>

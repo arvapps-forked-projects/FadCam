@@ -18,6 +18,7 @@ import android.webkit.WebSettings;
 import android.webkit.JavascriptInterface;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
 
 import com.fadcam.R;
 import com.fadcam.SharedPreferencesManager;
@@ -47,7 +48,8 @@ public class WhatsNewActivity extends AppCompatActivity {
         setContentView(R.layout.activity_whats_new);
 
         // Set edge-to-edge display and status bar color
-        getWindow().setDecorFitsSystemWindows(false);
+        // Use AndroidX wrapper for Android 10+ compatibility
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         getWindow().setStatusBarColor(0xFF000000); // Full black
         getWindow().setNavigationBarColor(0xFF000000); // Full black
 

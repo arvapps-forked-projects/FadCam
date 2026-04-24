@@ -39,9 +39,9 @@ public class CloudAuthManager {
     // E2E verify tag — HMAC-SHA256(master_key, "fadcam-e2e-v1"), fetched from public.users
     private static final String KEY_E2E_VERIFY_TAG = "e2e_verify_tag";
     
-    // Supabase API for token refresh (using new publishable key)
-    private static final String SUPABASE_URL = "https://vfhehknmxxedvesdvpew.supabase.co";
-    private static final String SUPABASE_PUBLISHABLE_KEY = "sb_publishable_PwOotJZQHwS9xnCFwUjHsQ_uXLNqkk9";
+    // Supabase configuration
+    static final String SUPABASE_URL = "https://vfhehknmxxedvesdvpew.supabase.co";
+    static final String SUPABASE_PUBLISHABLE_KEY = "sb_publishable_PwOotJZQHwS9xnCFwUjHsQ_uXLNqkk9";
     
     // Cloud service URLs
     public static final String AUTH_BASE_URL = "https://id.fadseclab.com";
@@ -95,6 +95,45 @@ public class CloudAuthManager {
     public String getShortDeviceId() {
         String fullId = getDeviceId();
         return fullId.length() > 8 ? fullId.substring(0, 8).toUpperCase() : fullId.toUpperCase();
+    }
+    
+    /**
+     * Check if device auth fallback is available.
+     * Device auth requires both device ID and user ID.
+     * This is used as a tier-3 fallback when JWT and refresh tokens fail.
+     * 
+     * @return true if device_id and user_id are available for fallback auth
+     */
+    public boolean supportsDeviceAuth() {
+        String deviceId = getDeviceId();
+        String userId = getUserId();
+        return deviceId != null && !deviceId.isEmpty() && 
+               userId != null && !userId.isEmpty();
+    }
+    
+    /**
+     * Build device auth headers for fallback authentication.
+     * Used as tier-3 fallback when JWT and refresh tokens are unavailable/invalid.
+     * 
+     * Device auth is validated by the Edge Function which checks:
+     * - device_id matches a device in devices table
+     * - user_id matches the recorded owner
+     * - device is not marked as unlinked
+     * 
+     * @return Map of header name -> value, or empty map if device auth not available
+     */
+    @NonNull
+    public java.util.Map<String, String> getDeviceAuthHeaders() {
+        java.util.Map<String, String> headers = new java.util.HashMap<>();
+        
+        if (!supportsDeviceAuth()) {
+            return headers;
+        }
+        
+        headers.put("X-Device-ID", getDeviceId());
+        headers.put("X-User-ID", getUserId());
+        
+        return headers;
     }
     
     /**
