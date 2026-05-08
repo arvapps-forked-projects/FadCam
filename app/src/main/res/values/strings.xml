@@ -420,6 +420,7 @@
     <string name="records_filter_faditor_converted">Converted</string>
     <string name="records_filter_faditor_merge">Merge</string>
     <string name="records_filter_shot_all">All</string>
+    <string name="records_filter_miniapps_all">All</string>
     <string name="records_filter_shot_back">Back</string>
     <string name="records_filter_shot_selfie">Selfie</string>
     <string name="records_filter_shot_fadrec">FadRec</string>
@@ -2306,4 +2307,116 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="audio_device_type_bt_a2dp">Bluetooth (A2DP)</string>
     <string name="audio_device_type_ble_headset">BLE Headset</string>
     <string name="audio_device_type_external">External Microphone</string>
+
+    <!-- Mini Apps Section -->
+    <string name="mini_apps_title">Mini Apps</string>
+    <string name="mini_apps_subtitle">Quick utilities and tools</string>
+    <string name="mini_app_coming_soon">Soon</string>
+    <string name="mini_app_coming_soon_desc">This feature will be available in the future</string>
+
+    <!-- Torch Tool -->
+    <string name="mini_app_torch_title">Torch</string>
+    <string name="mini_app_torch_desc">LED flashlight with patterns</string>
+    <string name="mini_app_torch_feature_led">Uses device LED torch</string>
+    <string name="mini_app_torch_feature_screen">Screen brightness as light source</string>
+    <string name="mini_app_torch_feature_patterns">SOS and strobe patterns</string>
+    <string name="mini_app_torch_led_title">LED Torch</string>
+    <string name="mini_app_torch_led_desc">Control your device\'s LED flashlight</string>
+    <string name="mini_app_torch_screen_title">Screen Light</string>
+    <string name="mini_app_torch_screen_desc">Use full screen brightness as a light source</string>
+    <string name="mini_app_torch_patterns_title">Flash Patterns</string>
+    <string name="torch_brightness">Brightness</string>
+    <string name="torch_color">Color</string>
+    <string name="torch_patterns">Patterns</string>
+    <string name="torch_pattern_steady">Steady</string>
+    <string name="torch_pattern_strobe">Strobe</string>
+    <string name="torch_pattern_sos">SOS</string>
+    <string name="torch_pattern_morse">Morse Code</string>
+    <string name="torch_status_on">ON</string>
+    <string name="torch_status_off">Off</string>
+    <string name="torch_tap_to_enable">Tap to turn on</string>
+    <string name="torch_screen_light_label">Screen Light</string>
+    <string name="torch_screen_light_desc">Fullscreen white overlay</string>
+
+    <!-- Compass Tool -->
+    <string name="mini_app_compass_title">Compass</string>
+    <string name="mini_app_compass_desc">Digital compass with bearing display and navigation features</string>
+    <string name="mini_app_compass_feature_bearing">Real-time bearing (0-360°)</string>
+    <string name="mini_app_compass_feature_cardinal">Cardinal directions (N, S, E, W)</string>
+    <string name="mini_app_compass_feature_mag_true">Magnetic vs True North</string>
+
+    <!-- Sound Meter Tool -->
+    <string name="mini_app_sound_meter_title">Sound Meter</string>
+    <string name="mini_app_sound_meter_desc">Ambient noise level detector in decibels (dB)</string>
+    <string name="mini_app_sound_meter_feature_realtime">Real-time dB measurement</string>
+    <string name="mini_app_sound_meter_feature_peak">Peak noise detection</string>
+    <string name="mini_app_sound_meter_feature_avg">Average noise levels</string>
+
+    <!-- Device Sensor Dashboard Tool -->
+    <string name="mini_app_sensor_dashboard_title">Sensor Dashboard</string>
+    <string name="mini_app_sensor_dashboard_desc">View accelerometer, gyroscope, and sensor data</string>
+    <string name="mini_app_sensor_dashboard_feature_accel">Accelerometer (X, Y, Z)</string>
+    <string name="mini_app_sensor_dashboard_feature_gyro">Gyroscope (X, Y, Z)</string>
+    <string name="mini_app_sensor_dashboard_feature_mag">Magnetometer readings</string>
+
+    <!-- Generic Buttons -->
+    <string name="button_close">Close</string>
+    <string name="button_info">Info</string>
+    <string name="button_copy">Copy</string>
+    <string name="button_scan_again">Scan Again</string>
+    <string name="button_torch">Torch</string>
+    <string name="button_gallery">Browse Gallery</string>
+    <string name="button_share">Share</string>
+    <string name="qr_result_scanned_label">Scanned</string>
+    <string name="qr_info_banner_text">Scanned codes are saved to Records tab automatically</string>
+
+    <!-- Pattern Descriptions -->
+    <string name="pattern_steady_desc">Continuous steady light for normal flashlight use</string>
+    <string name="pattern_strobe_desc">Rapid on-off flashing pattern for emergency signaling</string>
+    <string name="pattern_sos_desc">SOS Morse code pattern: 3 short + 3 long + 3 short flashes</string>
+    <string name="pattern_morse_desc">Morse code pattern for advanced signaling</string>
+
+    <!-- Torch Auto-off Timer -->
+    <string name="torch_timer_label">Auto-off Timer</string>
+    <string name="torch_timer_desc">Torch turns off automatically after the set time</string>
+    <string name="torch_timer_off">Off</string>
+    <string name="torch_timer_picker_helper">Timer only starts when the torch is on</string>
+    <string name="torch_timer_cancel">Cancel Timer</string>
+    <string name="torch_timer_30s">30 seconds</string>
+    <string name="torch_timer_1m">1 minute</string>
+    <string name="torch_timer_2m">2 minutes</string>
+    <string name="torch_timer_5m">5 minutes</string>
+    <string name="torch_timer_10m">10 minutes</string>
+    <string name="torch_timer_15m">15 minutes</string>
+    <string name="torch_timer_30m">30 minutes</string>
+    <string name="torch_timer_1h">1 hour</string>
+
+    <!-- Torch Custom Timer -->
+    <string name="torch_timer_custom_title">Set Custom Timer</string>
+    <string name="torch_timer_custom_unit_helper">Choose the time unit</string>
+    <string name="torch_timer_custom_hint">Enter duration</string>
+    <string name="torch_timer_custom_minutes_example">e.g., 5 for 5 minutes</string>
+    <string name="torch_timer_custom_hours_example">e.g., 2 for 2 hours</string>
+    <string name="torch_timer_custom_apply">Apply</string>
+    <string name="torch_timer_custom_error_positive">Duration must be greater than 0</string>
+    <string name="torch_timer_custom_error_invalid">Invalid number</string>
+
+    <string name="watermark_utm_title">UTM Coordinates</string>
+    <string name="watermark_utm_off">Off</string>
+    <string name="watermark_utm_on">On — Universal Transverse Mercator grid coordinates</string>
+    <string name="watermark_utm_helper">UTM divides Earth into 60 zones and converts lat/lon to easting &amp; northing in meters. Used by military, surveyors, and topographic maps for precise grid positioning.\n\nHow to read: &quot;Zone 42N — 372,684m E, 3,512,334m N&quot; = Zone 42 in Northern hemisphere, 372,684 meters Easting (east-west), 3,512,334 meters Northing (north-south).</string>
+    <string name="mini_app_speedometer_title">Speedometer</string>
+    <string name="mini_app_speedometer_desc">Real-time car speedometer with GPS speed tracking</string>
+    <string name="mini_app_clinometer_title">Clinometer</string>
+    <string name="mini_app_clinometer_desc">Measure angles and slopes using gyroscope</string>
+    <string name="mini_app_qr_scanner_title">QR Scanner</string>
+    <string name="mini_app_qr_scanner_desc">Scan QR codes and barcodes instantly</string>
+    <string name="mini_app_pedometer_title">Pedometer</string>
+    <string name="mini_app_pedometer_desc">Step counter using built-in step sensor</string>
+    <string name="mini_app_metal_detector_title">Metal Detector</string>
+    <string name="mini_app_metal_detector_desc">Detect metal objects using magnetometer</string>
+    <string name="mini_app_parking_marker_title">Parking Marker</string>
+    <string name="mini_app_parking_marker_desc">Save your parking spot and navigate back with GPS arrow</string>
+    <string name="mini_app_qr_generator_title">QR Generator</string>
+    <string name="mini_app_qr_generator_desc">Create QR codes from text, URLs, and contacts</string>
 </resources>

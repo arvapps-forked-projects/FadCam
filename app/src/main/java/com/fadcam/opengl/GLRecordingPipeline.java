@@ -265,10 +265,13 @@ public class GLRecordingPipeline {
                 // Capture raw camera frame from GL path (without GL watermark),
                 // then let PhotoStorageHelper apply the exact normal FadShot watermark style.
                 glRenderer.setSuppressWatermarkForSnapshot(true);
-                for (int i = 0; i < 3; i++) {
+                // Render and discard enough frames to flush any previously-watermarked
+                // frames from the encoder pipeline. 6 frames ensures the encoder's
+                // input-to-output latency is fully drained.
+                for (int i = 0; i < 6; i++) {
                     glRenderer.renderToEncoderAllowStaleFrame();
                     bitmap = glRenderer.captureEncoderFrameBitmap();
-                    if (!isClearlyBlankFrame(bitmap)) {
+                    if (!isClearlyBlankFrame(bitmap) && i >= 2) {
                         break;
                     }
                     if (bitmap != null) {

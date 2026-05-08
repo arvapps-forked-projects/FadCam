@@ -73,6 +73,7 @@ public abstract class Constants {
     public static final String PREF_WATERMARK_NETWORK_WARNING_SHOWN = "watermark_network_warning_shown";
     public static final String PREF_WATERMARK_TIMEZONE = "watermark_timezone_enabled";
     public static final String PREF_WATERMARK_TIMEZONE_FORMAT = "watermark_timezone_format";
+    public static final String PREF_WATERMARK_UTM = "watermark_utm_enabled";
     public static final String PREF_AUDIO_INPUT_DEVICE_TYPE = "audio_input_device_type";
     public static final String PREF_AUDIO_INPUT_DEVICE_NAME = "audio_input_device_name";
 
@@ -441,6 +442,10 @@ public abstract class Constants {
     public static final String RECORDING_SUBDIR_SHOT_BACK = "Back";
     public static final String RECORDING_SUBDIR_SHOT_SELFIE = "Selfie";
     public static final String RECORDING_SUBDIR_SHOT_FADREC = "FadRec";
+
+    public static final String RECORDING_SUBDIR_MINIAPPS = "MiniApps";
+    public static final String RECORDING_SUBDIR_MINIAPPS_QR = "QRScanner";
+    public static final String RECORDING_SUBDIR_MINIAPPS_QRGEN = "QRGenerator";
     public static final String RECORDING_FILE_EXTENSION = "mp4";
     public static final String RECORDING_IMAGE_EXTENSION = "jpg";
     public static final String RECORDING_FILE_PREFIX_FADSHOT = "FadShot_";
@@ -543,6 +548,7 @@ public abstract class Constants {
     public static final String TRASH_METADATA_FILENAME = "trash_metadata.json";
     public static final String TRASH_SUBDIR_VIDEO_RECORDINGS = "VideoRecordings";
     public static final String TRASH_SUBDIR_FORENSICS_EVIDENCE = "ForensicsEvidence";
+    public static final String TRASH_SUBDIR_MINIAPPS = "MiniApps";
 
     // Request codes
     public static final int REQUEST_CODE_OPEN_DOCUMENT_TREE_FOR_SAF = 1001; // Added request code

@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Typeface;
 
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
@@ -1360,7 +1361,11 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     showRenameDialog(videoItem);
                     break;
                 case "action_info":
-                    showVideoInfoDialog(videoItem);
+                    if (videoItem.category == VideoItem.Category.MINIAPPS) {
+                        showMiniAppsInfoDialog(videoItem);
+                    } else {
+                        showVideoInfoDialog(videoItem);
+                    }
                     break;
                 case "action_delete":
                     if (actionListener != null)
@@ -1559,7 +1564,11 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 showRenameDialog(videoItem);
                 return true;
             } else if (id == R.id.action_info) {
-                showVideoInfoDialog(videoItem);
+                if (videoItem.category == VideoItem.Category.MINIAPPS) {
+                    showMiniAppsInfoDialog(videoItem);
+                } else {
+                    showVideoInfoDialog(videoItem);
+                }
                 return true;
             } else if (id == R.id.action_delete) {
                 if (actionListener != null)
@@ -1968,6 +1977,17 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 notifyDataSetChanged();
             }
         }
+    }
+
+    private void showMiniAppsInfoDialog(VideoItem videoItem) {
+        if (context == null || videoItem == null || videoItem.uri == null) return;
+        try {
+            if (context instanceof FragmentActivity) {
+                ScanInfoBottomSheet sheet = ScanInfoBottomSheet.newInstance(
+                        videoItem.uri.toString(), videoItem.displayName);
+                sheet.show(((FragmentActivity) context).getSupportFragmentManager(), "scan_info");
+            }
+        } catch (Exception e) { FLog.w(TAG, "Info sheet error", e); }
     }
 
     /**
@@ -2878,7 +2898,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 showMetaDivider = true;
                 showTimeAgo = true;
                 showContentContainer = true;
-                titleMaxLines = 2;
+                titleMaxLines = 10;
                 break;
             case 3:
                 titleSp = 12f;
@@ -2887,7 +2907,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 showMetaDivider = true;
                 showTimeAgo = true;
                 showContentContainer = true;
-                titleMaxLines = 1;
+                titleMaxLines = 10;
                 break;
             case 4:
                 titleSp = 10f;
@@ -2896,7 +2916,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 showMetaDivider = false;
                 showTimeAgo = false;
                 showContentContainer = true;
-                titleMaxLines = 1;
+                titleMaxLines = 10;
                 break;
             case 5:
                 titleSp = 9f;
@@ -2905,7 +2925,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 showMetaDivider = false;
                 showTimeAgo = false;
                 showContentContainer = true;
-                titleMaxLines = 1;
+                titleMaxLines = 10;
                 break;
             default: // 2 columns — default
                 titleSp = 14f;
@@ -2914,7 +2934,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 showMetaDivider = true;
                 showTimeAgo = true;
                 showContentContainer = true;
-                titleMaxLines = 2;
+                titleMaxLines = 10;
                 break;
         }
 

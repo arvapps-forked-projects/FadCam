@@ -113,7 +113,7 @@ public class FastFileScanner {
         // Parallel scan of all category directories
         CopyOnWriteArrayList<VideoIndexEntity> results = new CopyOnWriteArrayList<>();
         ExecutorService scanner = Executors.newFixedThreadPool(SCAN_PARALLELISM);
-        CountDownLatch latch = new CountDownLatch(7); // 6 categories + legacy root
+        CountDownLatch latch = new CountDownLatch(7); // 6 category submits + 1 extra countDown
 
         // Camera
         scanner.submit(() -> {
@@ -163,6 +163,8 @@ public class FastFileScanner {
             try {
                 scanInternalDirectory(results, new File(baseDir, Constants.RECORDING_SUBDIR_SHOT),
                         VideoItem.Category.SHOT);
+                scanInternalDirectory(results, new File(baseDir, Constants.RECORDING_SUBDIR_MINIAPPS),
+                        VideoItem.Category.MINIAPPS);
             } finally {
                 latch.countDown();
             }
@@ -235,9 +237,13 @@ public class FastFileScanner {
         if (files == null) return;
 
         for (File file : files) {
-            if (file == null || !file.isFile()) continue;
-            VideoIndexEntity entity = buildEntityFromFile(file, category, shotSubtype, cameraSubtype, faditorSubtype);
-            if (entity != null) out.add(entity);
+            if (file == null) continue;
+            if (file.isDirectory()) {
+                scanInternalSubdirectory(out, file, category);
+            } else if (file.isFile()) {
+                VideoIndexEntity entity = buildEntityFromFile(file, category, shotSubtype, cameraSubtype, faditorSubtype);
+                if (entity != null) out.add(entity);
+            }
         }
     }
 
@@ -358,6 +364,7 @@ public class FastFileScanner {
             scanSafCategory(results, recordingRoot, Constants.RECORDING_SUBDIR_FADITOR, VideoItem.Category.FADITOR);
             scanSafCategory(results, recordingRoot, Constants.RECORDING_SUBDIR_STREAM, VideoItem.Category.STREAM);
             scanSafCategory(results, recordingRoot, Constants.RECORDING_SUBDIR_SHOT, VideoItem.Category.SHOT);
+            scanSafCategory(results, recordingRoot, Constants.RECORDING_SUBDIR_MINIAPPS, VideoItem.Category.MINIAPPS);
 
             // Root-level legacy files
             scanSafDirectoryFiles(results, recordingRoot.getUri(), VideoItem.Category.UNKNOWN,

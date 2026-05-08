@@ -1929,22 +1929,17 @@ public class GLWatermarkRenderer {
                 return;
             }
 
-            // Non-null surface arriving while a valid EGL surface already exists.
-            // When Surfaces are transmitted through Binder/Parcel (e.g. via startService Intent),
-            // each unparcel produces a *new Java object* wrapping the same native window.
-            // Reference equality (==) would see this as a "new" surface every time and
-            // destroy/recreate the EGL surface on every animation frame, causing a blank
-            // preview on Android 14+ where EGL surface recreation is slower / more strict.
-            // Solution: keep the existing EGL surface alive — it is already bound to the
-            // same underlying native window.  renderToPreview() will continue using it.
+            // Different Surface object arriving (not same-reference). This means
+            // the underlying native window has changed — most commonly during a
+            // fullscreen transition where we switch from HomeFragment's TextureView
+            // to FullscreenPreviewActivity's TextureView.
+            // Destroy the old EGL surface so renderToPreview() creates a new one
+            // against the new native window on the next frame.
             if (previewEglSurface != EGL14.EGL_NO_SURFACE) {
-                currentPreviewSurface = previewSurface;
-                previewCreateRetryDeadlineNs = 0L;
-                return;
+                releasePreviewEGL();
             }
 
-            // No EGL surface yet — just store the surface; renderToPreview() will create
-            // the EGL surface on the next frame.
+            // Store the new surface; renderToPreview() will create the EGL surface.
             currentPreviewSurface = previewSurface;
             previewCreateRetryDeadlineNs = 0L;
         }

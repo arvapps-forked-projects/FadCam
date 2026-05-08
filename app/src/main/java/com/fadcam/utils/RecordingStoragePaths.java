@@ -23,6 +23,8 @@ public final class RecordingStoragePaths {
         FADITOR,
         STREAM,
         SHOT,
+        MINIAPPS,
+        MINIAPPS_QR,
         UNKNOWN
     }
 
@@ -61,6 +63,10 @@ public final class RecordingStoragePaths {
                 return Constants.RECORDING_SUBDIR_STREAM;
             case SHOT:
                 return Constants.RECORDING_SUBDIR_SHOT;
+            case MINIAPPS:
+                return Constants.RECORDING_SUBDIR_MINIAPPS;
+            case MINIAPPS_QR:
+                return Constants.RECORDING_SUBDIR_MINIAPPS_QR;
             case UNKNOWN:
             default:
                 return "";
@@ -76,6 +82,8 @@ public final class RecordingStoragePaths {
         if (Constants.RECORDING_SUBDIR_FADITOR.equals(folderName)) return Category.FADITOR;
         if (Constants.RECORDING_SUBDIR_STREAM.equals(folderName)) return Category.STREAM;
         if (Constants.RECORDING_SUBDIR_SHOT.equals(folderName)) return Category.SHOT;
+        if (Constants.RECORDING_SUBDIR_MINIAPPS.equals(folderName)) return Category.MINIAPPS;
+        if (Constants.RECORDING_SUBDIR_MINIAPPS_QR.equals(folderName)) return Category.MINIAPPS_QR;
         return Category.UNKNOWN;
     }
 

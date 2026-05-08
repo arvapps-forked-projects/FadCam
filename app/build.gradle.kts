@@ -241,6 +241,8 @@ dependencies {
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.core)
     implementation(libs.camerax.extensions)
+    implementation(libs.camerax.view)
+    implementation(libs.zxing.android.embedded)
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.video)
     implementation(libs.constraintlayout)

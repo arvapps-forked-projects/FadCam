@@ -103,6 +103,7 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
 
     // ── Views ────────────────────────────────────────────────────────────────
     private FrameLayout rootLayout;
+    private int stableStatusBarHeight = 0;
     private TextureView textureView;
     private View topBar;
     private View bottomBar;
@@ -163,7 +164,6 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
     private boolean longPressTriggered = false;
     private final Handler longPressHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingLongPressRunnable;
-    private boolean autoPreviewStartRequested = false;
     private float previewUiScale = 1.0f;
     private float previewUiPanX = 0f;
     private float previewUiPanY = 0f;
@@ -179,6 +179,7 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
     // Avatar animation state
     private boolean fullscreenAvatarLastEnabled = false;
     private boolean fullscreenAvatarWakingUp = false;        // Guard against updatePreviewHintVisibility resetting during wake
+    private boolean isPreviewOpenAnimating = false;           // Guard against started broadcast overwriting wake anim
     private boolean isPreviewCloseAnimating = false;          // Guard iris-close transition from firing twice
     private boolean fullscreenPreviewSurfaceWasShowing = false; // Track prev preview state to detect transitions
     private boolean pendingIrisOpen = false;                    // Set when waiting for first camera frame before iris-open
@@ -232,7 +233,17 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                 try {
                     RecordingState state = (RecordingState) intent.getSerializableExtra(
                             Constants.INTENT_EXTRA_RECORDING_STATE);
-                    isPreviewOnlyActive = intent.getBooleanExtra(Constants.EXTRA_PREVIEW_ONLY_ACTIVE, false);
+                    boolean newPreviewActive = intent.getBooleanExtra(Constants.EXTRA_PREVIEW_ONLY_ACTIVE, false);
+                    boolean wasAlreadyActive = isPreviewOnlyActive;
+                    isPreviewOnlyActive = newPreviewActive;
+                    if (newPreviewActive && !wasAlreadyActive && textureView != null) {
+                        FLog.d("FullscreenPreview", "State callback: preview active — showing TextureView");
+                        textureView.setAlpha(1f);
+                        if (flFullscreenPreviewAvatar != null) {
+                            flFullscreenPreviewAvatar.setVisibility(View.INVISIBLE);
+                        }
+                        updatePreviewHintVisibility();
+                    }
                     if (state == RecordingState.PAUSED) {
                         isRecordingPaused = true;
                         isRecordingActive = true;
@@ -247,20 +258,29 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                     }
                 } catch (Exception ignored) { }
             } else if (Constants.BROADCAST_ON_PREVIEW_ONLY_STARTED.equals(action)) {
+                boolean wasAlreadyActive = isPreviewOnlyActive;
                 isPreviewOnlyActive = true;
-                autoPreviewStartRequested = false;
                 if (previewSurface != null && previewSurface.isValid() && textureView != null) {
                     sendSurfaceToService(previewSurface, textureView.getWidth(), textureView.getHeight());
                     scheduleSurfaceResendBurst();
                 }
+                // If joining an existing preview (was not active before this broadcast),
+                // show the preview immediately — no avatar animation needed.
+                // Skip if the long-press handler is already running the wake animation.
+                if (!wasAlreadyActive && !isPreviewOpenAnimating && textureView != null) {
+                    FLog.d("FullscreenPreview", "Joining existing preview — showing TextureView immediately");
+                    textureView.setAlpha(1f);
+                    if (flFullscreenPreviewAvatar != null) {
+                        flFullscreenPreviewAvatar.setVisibility(View.INVISIBLE);
+                    }
+                    updatePreviewHintVisibility();
+                }
             } else if (Constants.BROADCAST_ON_PREVIEW_ONLY_STOPPED.equals(action)) {
                 isPreviewOnlyActive = false;
-                autoPreviewStartRequested = false;
             }
             updatePauseResumeButton();
             updateMirrorButtonVisibilityAndState();
             updatePreviewHintVisibility();
-            maybeStartPreviewOnlyAutomatically();
         }
     };
 
@@ -318,12 +338,12 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
         syncZoomUiStateFromPrefs(false);
         updatePreviewHintVisibility();
         requestRecordingStateSync();
+        syncPreviewWithPreference();
         if (previewSurface != null && textureView != null && textureView.isAvailable()) {
             sendSurfaceToService(previewSurface,
                     textureView.getWidth(), textureView.getHeight());
             scheduleSurfaceResendBurst();
         }
-        maybeStartPreviewOnlyAutomatically();
     }
 
     @Override
@@ -443,7 +463,7 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                 previewSurface = new Surface(st);
                 sendSurfaceToService(previewSurface, w, h);
                 scheduleSurfaceResendBurst();
-                maybeStartPreviewOnlyAutomatically();
+                syncPreviewWithPreference();
             }
 
             @Override
@@ -481,6 +501,7 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                                     new android.view.animation.DecelerateInterpolator(1.5f));
                             reveal.addListener(new android.animation.AnimatorListenerAdapter() {
                                 @Override public void onAnimationStart(android.animation.Animator a) {
+                                    isPreviewOpenAnimating = false;
                                     if (textureView != null) textureView.setAlpha(1f);
                                 }
                             });
@@ -497,7 +518,6 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                 previewSurface = new Surface(st);
                 sendSurfaceToService(previewSurface, textureView.getWidth(), textureView.getHeight());
                 scheduleSurfaceResendBurst();
-                maybeStartPreviewOnlyAutomatically();
             }
         }
     }
@@ -520,8 +540,9 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
             }
         });
 
-        // Attach to rootLayout (always VISIBLE) so touch works when textureView is invisible (idle state)
-        rootLayout.setOnTouchListener((v, event) -> {
+        // Attach to rootLayout AND textureView so touch works when TextureView
+        // has a valid Surface bound (which may intercept touches from rootLayout)
+        View.OnTouchListener touchListener = (v, event) -> {
             final int action = event.getActionMasked();
             final float touchSlop = android.view.ViewConfiguration.get(this).getScaledTouchSlop();
             final boolean zoomGestureLock = previewUiScale > 1.001f;
@@ -621,7 +642,11 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
             }
             scheduleAutoHide();
             return true;
-        });
+        };
+        rootLayout.setOnTouchListener(touchListener);
+        if (textureView != null) {
+            textureView.setOnTouchListener(touchListener);
+        }
     }
 
     private void handlePreviewLongPress() {
@@ -632,24 +657,77 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
         if (textureView != null) {
             textureView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
         }
+
         if (isRecordingActive || isRecordingPaused) {
             isPreviewAttachedInRecording = !isPreviewAttachedInRecording;
-            if (isPreviewAttachedInRecording && previewSurface != null && previewSurface.isValid()) {
-                sendSurfaceToService(previewSurface,
-                        textureView != null ? textureView.getWidth() : -1,
-                        textureView != null ? textureView.getHeight() : -1);
+            if (isPreviewAttachedInRecording) {
+                // Toggle ON: wake avatar animation → shrink → iris-open camera reveal
+                if (flFullscreenPreviewAvatar != null) {
+                    flFullscreenPreviewAvatar.setVisibility(View.VISIBLE);
+                    flFullscreenPreviewAvatar.setAlpha(1f);
+                    flFullscreenPreviewAvatar.setScaleX(1f);
+                    flFullscreenPreviewAvatar.setScaleY(1f);
+                    fullscreenAvatarWakingUp = true;
+                    isPreviewOpenAnimating = true;
+                    applyFullscreenAvatarState(true, true);
+                    if (textureView != null) textureView.setAlpha(0f);
+
+                    fullscreenBlinkHandler.postDelayed(() -> {
+                        if (flFullscreenPreviewAvatar != null) {
+                            flFullscreenPreviewAvatar.animate().cancel();
+                            flFullscreenPreviewAvatar.animate()
+                                .alpha(0f).scaleX(0.72f).scaleY(0.72f)
+                                .setDuration(280)
+                                .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                                .withEndAction(() -> {
+                                    if (flFullscreenPreviewAvatar != null) {
+                                        flFullscreenPreviewAvatar.setVisibility(View.INVISIBLE);
+                                        flFullscreenPreviewAvatar.setAlpha(1f);
+                                        flFullscreenPreviewAvatar.setScaleX(1f);
+                                        flFullscreenPreviewAvatar.setScaleY(1f);
+                                    }
+                                    fullscreenAvatarWakingUp = false;
+                                }).start();
+                        } else {
+                            fullscreenAvatarWakingUp = false;
+                        }
+                        if (textureView != null) {
+                            pendingIrisOpen = true;
+                            fullscreenBlinkHandler.postDelayed(() -> {
+                                if (pendingIrisOpen) {
+                                    pendingIrisOpen = false;
+                                    isPreviewOpenAnimating = false;
+                                    if (textureView != null) textureView.setAlpha(1f);
+                                }
+                            }, 2500L);
+                        } else {
+                            isPreviewOpenAnimating = false;
+                        }
+                    }, 480L);
+                } else {
+                    if (textureView != null) textureView.setAlpha(1f);
+                    updatePreviewHintVisibility();
+                }
             } else {
-                sendSurfaceToService(null, -1, -1);
+                // Toggle OFF: let updatePreviewHintVisibility handle the iris-close
+                updatePreviewHintVisibility();
             }
         } else {
             Intent intent = new Intent(this, RecordingService.class);
             if (isPreviewOnlyActive) {
+                // STOP PREVIEW
+                prefs.setPreviewEnabled(false);
                 intent.setAction(Constants.INTENT_ACTION_STOP_PREVIEW_ONLY);
+                ServiceStartPolicy.startRecordingAction(this, intent);
+                // Hint visibility will be updated by BROADCAST_ON_PREVIEW_ONLY_STOPPED
             } else {
+                // START PREVIEW
+                prefs.setPreviewEnabled(true);
                 if (prefs.getCameraSelection() != CameraType.BACK && prefs.getCameraSelection() != CameraType.FRONT) {
                     Toast.makeText(this, R.string.preview_dual_not_supported, Toast.LENGTH_SHORT).show();
                     return;
                 }
+                
                 intent.setAction(Constants.INTENT_ACTION_START_PREVIEW_ONLY);
                 if ((previewSurface == null || !previewSurface.isValid()) && textureView != null && textureView.isAvailable()) {
                     SurfaceTexture st = textureView.getSurfaceTexture();
@@ -662,6 +740,7 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                     intent.putExtra("SURFACE_WIDTH", textureView != null ? textureView.getWidth() : -1);
                     intent.putExtra("SURFACE_HEIGHT", textureView != null ? textureView.getHeight() : -1);
                 }
+
                 // Step 1: Wake avatar with animation (eyes open, sun spins in)
                 if (flFullscreenPreviewAvatar != null) {
                     flFullscreenPreviewAvatar.setVisibility(View.VISIBLE);
@@ -669,7 +748,12 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                     flFullscreenPreviewAvatar.setScaleX(1f);
                     flFullscreenPreviewAvatar.setScaleY(1f);
                     fullscreenAvatarWakingUp = true;
+                    isPreviewOpenAnimating = true; // Guard against broadcast interference
                     applyFullscreenAvatarState(true, true);
+
+                    // TextureView must be transparent while avatar is waking up
+                    if (textureView != null) textureView.setAlpha(0f);
+
                     // Step 2: After wake anim (~480ms): shrink avatar out + iris-open camera
                     fullscreenBlinkHandler.postDelayed(() -> {
                         if (flFullscreenPreviewAvatar != null) {
@@ -690,25 +774,27 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
                         } else {
                             fullscreenAvatarWakingUp = false;
                         }
+                        
                         // Iris-open: signal that we want it on the next camera frame
-                        // (avoids black-on-black invisible animation before first frame arrives)
                         if (textureView != null) {
                             pendingIrisOpen = true;
-                            textureView.setAlpha(0f);   // ensure transparent until iris begins (SurfaceTexture always exists)
-                            // Fallback: if no frame arrives within 1.5s, fade camera in directly
+                            // Fallback: if no camera frame arrives within 2.5s, reveal anyway
                             fullscreenBlinkHandler.postDelayed(() -> {
                                 if (pendingIrisOpen) {
                                     pendingIrisOpen = false;
+                                    isPreviewOpenAnimating = false;
                                     if (textureView != null) textureView.setAlpha(1f);
                                 }
-                            }, 1500L);
+                            }, 2500L);
+                        } else {
+                            isPreviewOpenAnimating = false;
                         }
                     }, 480L);
                 }
+                
+                ServiceStartPolicy.startRecordingAction(this, intent);
             }
-            ServiceStartPolicy.startRecordingAction(this, intent);
         }
-        updatePreviewHintVisibility();
         scheduleAutoHide();
     }
 
@@ -756,9 +842,15 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
         if (rootLayout == null) return;
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout, (v, insets) -> {
             androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            // Capture stable status bar height on first non-zero value.
+            // When immersive mode hides the status bar, bars.top may become 0 —
+            // always use the stable value so the layout doesn't jump.
+            if (bars.top > 0) stableStatusBarHeight = bars.top;
+            int topInset = stableStatusBarHeight > 0 ? stableStatusBarHeight : bars.top;
+            
             if (topBar != null && topBar.getLayoutParams() instanceof FrameLayout.LayoutParams) {
                 FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) topBar.getLayoutParams();
-                lp.topMargin = bars.top + dp(12);
+                lp.topMargin = topInset + dp(12);
                 topBar.setLayoutParams(lp);
             }
             if (bottomBar != null) {
@@ -1050,8 +1142,6 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
             pinchZoomRatio = prefs.getSpecificZoomRatio(targetType);
             updateZoomHudUi(pinchZoomRatio);
             updateMirrorButtonVisibilityAndState();
-            autoPreviewStartRequested = false;
-            maybeStartPreviewOnlyAutomatically();
             Toast.makeText(this,
                     "Switched to " + (targetType == CameraType.FRONT ? "front" : "rear") + " camera",
                     Toast.LENGTH_SHORT).show();
@@ -1470,8 +1560,11 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
         if (textFullscreenPreviewHint == null) return;
         boolean showPreviewSurface = isPreviewOnlyActive
                 || ((isRecordingActive || isRecordingPaused) && isPreviewAttachedInRecording);
-        boolean showIdlePlaceholder = !showPreviewSurface;
-
+        
+        // Root Fix: The hint should be hidden if the preview is active OR if it's currently waking up.
+        // Also hide it if recording is active (even if preview is detached, hint is irrelevant).
+        boolean showIdlePlaceholder = !showPreviewSurface && !fullscreenAvatarWakingUp;
+        
         // Detect transition: preview was showing and now it stopped
         boolean transition = fullscreenPreviewSurfaceWasShowing && !showPreviewSurface;
         fullscreenPreviewSurfaceWasShowing = showPreviewSurface;
@@ -1479,6 +1572,14 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
         if (viewFullscreenIdleMask != null) {
             viewFullscreenIdleMask.setVisibility(View.GONE); // Mask not needed — avatar handles bg
         }
+
+        // Guard: ALL visibility updates must be ignored during active transitions.
+        if (isPreviewOpenAnimating) {
+            setFullscreenHintVisibilityAnimated(false); // Hide hint immediately when opening
+            return;
+        }
+        if (isPreviewCloseAnimating) return;
+
         setFullscreenHintVisibilityAnimated(showIdlePlaceholder);
 
         if (showIdlePlaceholder) {
@@ -1596,29 +1697,6 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
         }
     }
 
-    private void maybeStartPreviewOnlyAutomatically() {
-        if (autoPreviewStartRequested || previewSurface == null || !previewSurface.isValid()) return;
-        if (isRecordingActive || isRecordingPaused || isPreviewOnlyActive) return;
-        CameraType cam = prefs.getCameraSelection();
-        if (cam == null || cam.isDual()) return;
-        if (!prefs.isPreviewEnabled()) return;
-
-        autoPreviewStartRequested = true;
-        Intent intent = new Intent(this, RecordingService.class);
-        intent.setAction(Constants.INTENT_ACTION_START_PREVIEW_ONLY);
-        intent.putExtra("SURFACE", previewSurface);
-        intent.putExtra("SURFACE_WIDTH", textureView != null ? textureView.getWidth() : -1);
-        intent.putExtra("SURFACE_HEIGHT", textureView != null ? textureView.getHeight() : -1);
-        ServiceStartPolicy.startRecordingAction(this, intent);
-        if (textureView != null) {
-            textureView.postDelayed(() -> {
-                if (!isPreviewOnlyActive && !isRecordingActive && !isRecordingPaused) {
-                    autoPreviewStartRequested = false;
-                }
-            }, 1200L);
-        }
-    }
-
     private void scheduleSurfaceResendBurst() {
         if (previewSurface == null || !previewSurface.isValid() || textureView == null) {
             return;
@@ -1628,6 +1706,44 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
         textureView.post(() -> sendSurfaceToService(previewSurface, w, h));
         textureView.postDelayed(() -> sendSurfaceToService(previewSurface, w, h), 100L);
         textureView.postDelayed(() -> sendSurfaceToService(previewSurface, w, h), 300L);
+    }
+
+    /**
+     * Syncs the preview state with the global preference.
+     * If Home enabled the preview, we should show it here too.
+     */
+    private void syncPreviewWithPreference() {
+        if (isRecordingActive || isRecordingPaused || isPreviewOnlyActive) return;
+        
+        // If preference says preview should be on, but it's not active in service, start it.
+        // We don't trigger the wake animation here to avoid flickering on entry.
+        if (prefs.isPreviewEnabled()) {
+            CameraType cam = prefs.getCameraSelection();
+            if (cam == null || cam.isDual()) return;
+
+            Intent intent = new Intent(this, RecordingService.class);
+            intent.setAction(Constants.INTENT_ACTION_START_PREVIEW_ONLY);
+            
+            // Ensure surface is ready
+            if ((previewSurface == null || !previewSurface.isValid()) && textureView != null && textureView.isAvailable()) {
+                SurfaceTexture st = textureView.getSurfaceTexture();
+                if (st != null) {
+                    previewSurface = new Surface(st);
+                }
+            }
+            
+            if (previewSurface != null && previewSurface.isValid()) {
+                intent.putExtra("SURFACE", previewSurface);
+                intent.putExtra("SURFACE_WIDTH", textureView != null ? textureView.getWidth() : -1);
+                intent.putExtra("SURFACE_HEIGHT", textureView != null ? textureView.getHeight() : -1);
+                
+                // Set alpha 1 immediately since we're skipping wake animation for sync
+                if (textureView != null) textureView.setAlpha(1f);
+                if (flFullscreenPreviewAvatar != null) flFullscreenPreviewAvatar.setVisibility(View.INVISIBLE);
+                
+                ServiceStartPolicy.startRecordingAction(this, intent);
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1801,6 +1917,7 @@ public class FullscreenPreviewActivity extends AppCompatActivity {
     // ─────────────────────────────────────────────────────────────────────────
 
     private void sendSurfaceToService(@Nullable Surface surface, int w, int h) {
+        if (isFinishing() || isDestroyed()) return;
         Class<?> svc = getTargetServiceClass();
 
         boolean shouldSync = isRecordingActive || isRecordingPaused || isPreviewOnlyActive

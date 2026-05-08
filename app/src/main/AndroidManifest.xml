@@ -350,6 +350,12 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".ui.miniapps.QRScannerActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"
+            android:exported="false"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".ScreenShotCaptureActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
@@ -416,6 +422,13 @@
             <intent-filter>
                 <action android:name="com.fadcam.TOGGLE_TORCH"/>
                 <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Torch Notification Receiver for handling notification actions -->
+        <receiver android:name=".ui.miniapps.TorchNotificationReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.fadcam.TORCH_OFF"/>
             </intent-filter>
         </receiver>
 

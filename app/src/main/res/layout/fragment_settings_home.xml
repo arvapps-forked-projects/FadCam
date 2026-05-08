@@ -716,6 +716,81 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Mini Apps Section Header -->
+        <TextView
+            android:id="@+id/header_mini_apps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="8dp"
+            android:text="@string/mini_apps_title"
+            android:textColor="?attr/sectionHeaderColor"
+            android:textStyle="bold" />
+
+        <!-- Mini Apps Grid (3 columns) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="0dp">
+
+            <include android:id="@+id/group_mini_torch" layout="@layout/item_mini_app_card" />
+            <include android:id="@+id/group_mini_qr_scanner" layout="@layout/item_mini_app_card" />
+            <include android:id="@+id/group_mini_sound_meter" layout="@layout/item_mini_app_card" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="0dp">
+
+            <include android:id="@+id/group_mini_sensor" layout="@layout/item_mini_app_card" />
+            <include android:id="@+id/group_mini_speedometer" layout="@layout/item_mini_app_card" />
+            <include android:id="@+id/group_mini_clinometer" layout="@layout/item_mini_app_card" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="0dp">
+
+            <include android:id="@+id/group_mini_compass" layout="@layout/item_mini_app_card" />
+            <include android:id="@+id/group_mini_pedometer" layout="@layout/item_mini_app_card" />
+            <include android:id="@+id/group_mini_metal_detector" layout="@layout/item_mini_app_card" />
+        </LinearLayout>
+
+        <!-- Row 4: 2 cards centered in 3-column grid -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="3dp">
+
+            <View android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="0.5" />
+            <include android:id="@+id/group_mini_parking_marker" layout="@layout/item_mini_app_card" />
+            <include android:id="@+id/group_mini_qr_generator" layout="@layout/item_mini_app_card" />
+            <View android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="0.5" />
+        </LinearLayout>
+
         <!-- About Section Header -->
         <TextView
             android:id="@+id/header_about"

@@ -47,6 +47,9 @@ public class ImageViewerActivity extends AppCompatActivity {
     public static final String EXTRA_CAPTURED_AT = "com.fadcam.extra.CAPTURED_AT";
     public static final String EXTRA_SOURCE_LABEL = "com.fadcam.extra.SOURCE_LABEL";
 
+    @Nullable private String itemCategory;
+    @Nullable private String itemDisplayName;
+
     @Nullable
     private View topDock;
     @Nullable
@@ -110,6 +113,8 @@ public class ImageViewerActivity extends AppCompatActivity {
         confidence = getIntent().getFloatExtra(EXTRA_CONFIDENCE, 0f);
         capturedAt = getIntent().getLongExtra(EXTRA_CAPTURED_AT, 0L);
         sourceLabel = getIntent().getStringExtra(EXTRA_SOURCE_LABEL);
+        itemCategory = getIntent().getStringExtra("item_category");
+        itemDisplayName = getIntent().getStringExtra("item_display_name");
 
         if (metaView != null) {
             metaView.setText(buildInlineMeta());
@@ -286,6 +291,13 @@ public class ImageViewerActivity extends AppCompatActivity {
     }
 
     private void showInfoSheet(@NonNull Uri snapshotUri) {
+        if ("MINIAPPS".equals(itemCategory)) {
+            String name = itemDisplayName != null ? itemDisplayName
+                    : snapshotUri.getLastPathSegment();
+            ScanInfoBottomSheet.newInstance(snapshotUri.toString(), name)
+                    .show(getSupportFragmentManager(), "scan_info");
+            return;
+        }
         ForensicsEvidenceInfoBottomSheet.newInstance(
                 className,
                 eventType,

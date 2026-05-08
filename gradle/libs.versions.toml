@@ -2,6 +2,7 @@
 agp = "8.13.1"
 appintroVersion = "6.3.1"
 camerax = "1.6.0"
+zxing = "4.3.0"
 coreKtx = "1.18.0"
 coreSplashscreen = "1.2.0"
 documentfile = "1.1.0"
@@ -39,6 +40,8 @@ camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "ca
 camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 camerax-video = { module = "androidx.camera:camera-video", version.ref = "camerax" }
 camerax-extensions = { module = "androidx.camera:camera-extensions", version.ref = "camerax" }
+camerax-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxing" }
 compiler = { module = "com.github.bumptech.glide:compiler", version.ref = "glide" }
 core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }

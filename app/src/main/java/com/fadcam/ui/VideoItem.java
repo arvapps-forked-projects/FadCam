@@ -21,6 +21,7 @@ public class VideoItem {
         FADITOR,
         STREAM,
         SHOT,
+        MINIAPPS,
         UNKNOWN
     }
 

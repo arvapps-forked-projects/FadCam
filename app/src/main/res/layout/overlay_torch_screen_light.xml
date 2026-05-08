@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white">
+
+    <!-- Floating dock control panel -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="40dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
+
+        <LinearLayout
+            android:id="@+id/screen_light_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:background="@drawable/bg_dock_controls">
+
+            <!-- Close button -->
+            <ImageView
+                android:id="@+id/screen_light_close_btn"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_close"
+                android:tint="@android:color/white"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/button_close"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- Dim icon -->
+            <TextView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginStart="12dp"
+                android:fontFamily="@font/materialicons"
+                android:text="brightness_low"
+                android:textSize="16sp"
+                android:textColor="#E0E0E0"
+                android:gravity="center"
+                android:contentDescription="@null" />
+
+            <!-- Brightness slider -->
+            <com.google.android.material.slider.Slider
+                android:id="@+id/screen_brightness_slider"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp" />
+
+            <!-- Bright icon -->
+            <TextView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:fontFamily="@font/materialicons"
+                android:text="brightness_high"
+                android:textSize="18sp"
+                android:textColor="@android:color/white"
+                android:gravity="center"
+                android:contentDescription="@null" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</FrameLayout>

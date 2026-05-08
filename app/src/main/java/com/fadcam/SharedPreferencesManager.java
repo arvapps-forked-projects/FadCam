@@ -1172,6 +1172,14 @@ public class SharedPreferencesManager {
         sharedPreferences.edit().putString(Constants.PREF_WATERMARK_TIMEZONE_FORMAT, format).apply();
     }
 
+    public boolean isUtmEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_UTM, false);
+    }
+
+    public void setUtmEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_UTM, enabled).apply();
+    }
+
     public int getAudioInputDeviceType() {
         return sharedPreferences.getInt(Constants.PREF_AUDIO_INPUT_DEVICE_TYPE, -1);
     }

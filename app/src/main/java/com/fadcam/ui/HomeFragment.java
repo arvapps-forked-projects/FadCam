@@ -479,6 +479,7 @@ public class HomeFragment extends BaseFragment {
     private boolean isTorchOn = false;
 
     private BroadcastReceiver torchReceiver;
+    private GpsProviderReceiver gpsProviderReceiver;
 
     private Surface textureViewSurface; // To hold the Surface from TextureView
 
@@ -3614,7 +3615,7 @@ public class HomeFragment extends BaseFragment {
         super.onPause();
         FLog.d(TAG, "HomeFragment paused.");
         updateMainSwipeGestureGate(false);
-        if (!isRecordingOrPaused() && (isPreviewOnlyActive || isPreviewOnlyStartPending)) {
+        if (!isRecordingOrPaused() && (isPreviewOnlyActive || isPreviewOnlyStartPending) && !isLaunchingFullscreen) {
             dispatchStopPreviewOnly();
             clearPreviewOnlyPendingState(true);
             isPreviewOnlyActive = false;
@@ -5011,7 +5012,7 @@ public class HomeFragment extends BaseFragment {
                     if (isReturningFromFullscreen) {
                         isReturningFromFullscreen = false;
                     }
-                    if (isPreviewEnabled && (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending)) {
+                    if (isPreviewEnabled && (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending) && !isLaunchingFullscreen) {
                         updateServiceWithCurrentSurface(
                             textureViewSurface,
                             width,
@@ -5043,7 +5044,8 @@ public class HomeFragment extends BaseFragment {
                         isPreviewEnabled &&
                         (isRecordingOrPaused() || isPreviewOnlyActive || isPreviewOnlyStartPending) &&
                         textureViewSurface != null &&
-                        textureViewSurface.isValid()
+                        textureViewSurface.isValid() &&
+                        !isLaunchingFullscreen
                     ) {
                         FLog.d(
                             TAG,
@@ -5070,12 +5072,17 @@ public class HomeFragment extends BaseFragment {
                         // Only send null if we're not returning from fullscreen.
                         // During fullscreen return, texture is destroyed/recreated rapidly, and
                         // sending null causes "Surface lost" dummy surface creation.
-                        if ((isRecordingOrPaused() || isPreviewOnlyActive) && !isReturningFromFullscreen) {
+                        if ((isRecordingOrPaused() || isPreviewOnlyActive) && !isReturningFromFullscreen && !isLaunchingFullscreen) {
                             FLog.d(
                                 TAG,
                                 "onSurfaceTextureDestroyed: Recording active, sending null surface to service."
                             );
                             updateServiceWithCurrentSurface(null);
+                        } else if (isLaunchingFullscreen) {
+                            FLog.d(
+                                TAG,
+                                "onSurfaceTextureDestroyed: Skipping null surface — launching fullscreen"
+                            );
                         } else if (isReturningFromFullscreen) {
                             FLog.d(
                                 TAG,
@@ -5287,6 +5294,13 @@ public class HomeFragment extends BaseFragment {
                 requireContext().getSystemService(Context.LOCATION_SERVICE);
         boolean gpsOn = lm != null && lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
         banner.setVisibility(gpsOn ? View.GONE : View.VISIBLE);
+    }
+
+    private class GpsProviderReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            updateGpsWarningBanner();
+        }
     }
 
     private void startRecording() {
@@ -8908,6 +8922,14 @@ public class HomeFragment extends BaseFragment {
         stopBubbleRotation(); // calls stopHomeBlinkLoop + breathing + floating
         stopHeaderBlinkLoop(); // clean up header logo blink loop
         
+        // Unregister GPS provider change receiver
+        if (gpsProviderReceiver != null) {
+            try {
+                requireContext().unregisterReceiver(gpsProviderReceiver);
+            } catch (IllegalArgumentException ignored) {}
+            gpsProviderReceiver = null;
+        }
+        
         super.onDestroyView();
         TorchService.setHomeFragment(null);
 
@@ -9888,6 +9910,11 @@ public class HomeFragment extends BaseFragment {
         }
         updateGpsWarningBanner();
 
+        // Register GPS provider change listener for real-time banner updates
+        gpsProviderReceiver = new GpsProviderReceiver();
+        IntentFilter gpsFilter = new IntentFilter(android.location.LocationManager.PROVIDERS_CHANGED_ACTION);
+        requireContext().registerReceiver(gpsProviderReceiver, gpsFilter);
+
         btnFullscreenPreview = view.findViewById(R.id.btnFullscreenPreview);
         btnCaptureShotPreview = view.findViewById(R.id.btnCaptureShotPreview);
         containerPreviewZoomHud = view.findViewById(R.id.containerPreviewZoomHud);
@@ -10472,6 +10499,13 @@ public class HomeFragment extends BaseFragment {
             return;
         }
 
+        // During fullscreen launch, NEVER send HomeFragment surfaces to the service.
+        // The fullscreen activity owns the preview surface during this time.
+        if (isLaunchingFullscreen && !isFullscreenTransition) {
+            FLog.d(TAG, "updateServiceWithCurrentSurface: Blocked — fullscreen is launching");
+            return;
+        }
+
         // Avoid waking RecordingService with ACTION_CHANGE_SURFACE when nothing is active.
         // This prevents service churn (create/destroy loops) while idle.
         boolean shouldSyncSingleService =
@@ -10903,7 +10937,7 @@ public class HomeFragment extends BaseFragment {
             if (!isLaunchingPhotoCapture) {
                 stopBubbleRotation();
             }
-            if (!isRecordingOrPaused() && (isPreviewOnlyActive || isPreviewOnlyStartPending)) {
+        if (!isRecordingOrPaused() && (isPreviewOnlyActive || isPreviewOnlyStartPending) && !isLaunchingFullscreen) {
                 dispatchStopPreviewOnly();
                 clearPreviewOnlyPendingState(true);
                 isPreviewOnlyActive = false;

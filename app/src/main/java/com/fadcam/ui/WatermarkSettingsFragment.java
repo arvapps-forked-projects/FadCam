@@ -61,6 +61,7 @@ public class WatermarkSettingsFragment extends Fragment {
     private ActivityResultLauncher<String> permissionLauncher;
     private Runnable pendingGrantAction;
     private View locationRow;
+    private GpsProviderReceiver gpsProviderReceiver;
 
     @Nullable
     @Override
@@ -128,6 +129,22 @@ public class WatermarkSettingsFragment extends Fragment {
         View rowTimezoneFormat = view.findViewById(R.id.row_timezone_format);
         if (rowTimezoneFormat != null) rowTimezoneFormat.setOnClickListener(v -> showTimezoneFormatBottomSheet());
         updateTimezoneFormatRowState();
+
+        // UTM toggle
+        com.fadcam.ui.AvatarToggleView switchUtm = view.findViewById(R.id.switch_utm);
+        if (switchUtm != null) {
+            switchUtm.setChecked(prefs.isUtmEnabled());
+            switchUtm.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                prefs.setUtmEnabled(isChecked);
+                updateUtmHelperVisibility();
+                refreshExtendedRowValues();
+            });
+        }
+        View rowUtm = view.findViewById(R.id.row_utm);
+        if (rowUtm != null) rowUtm.setOnClickListener(v -> {
+            if (switchUtm != null) switchUtm.performClick();
+        });
+        updateUtmHelperVisibility();
 
         // Extended watermark feature toggles
         com.fadcam.ui.AvatarToggleView switchSpeed = view.findViewById(R.id.switch_speed);
@@ -209,6 +226,12 @@ public class WatermarkSettingsFragment extends Fragment {
         });
 
         refreshExtendedRowValues();
+
+        // Register GPS provider change listener for real-time subtitle updates
+        gpsProviderReceiver = new GpsProviderReceiver();
+        android.content.IntentFilter gpsFilter = new android.content.IntentFilter(
+                android.location.LocationManager.PROVIDERS_CHANGED_ACTION);
+        requireContext().registerReceiver(gpsProviderReceiver, gpsFilter);
 
         permissionLauncher = registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
             if (granted) {
@@ -502,6 +525,12 @@ public class WatermarkSettingsFragment extends Fragment {
             fadrecBase += "\n" + customText;
         }
 
+        // Append UTM preview
+        if (prefs.isUtmEnabled()) {
+            fadcamBase += "\nUTM Zone 42N - 372,684m E, 3,512,334m N";
+            fadrecBase += "\nUTM Zone 42N - 372,684m E, 3,512,334m N";
+        }
+
         // Append extended sensor data preview
         String extendedPreview = "";
         if (prefs.isSpeedEnabled()) extendedPreview += "\nSpeed: 80km/h";
@@ -680,6 +709,15 @@ public class WatermarkSettingsFragment extends Fragment {
         sheet.show(getParentFragmentManager(), "timezone_format_sheet");
     }
 
+    private void updateUtmHelperVisibility() {
+        View view = getView();
+        if (view == null) return;
+        View helperRow = view.findViewById(R.id.row_utm_helper);
+        if (helperRow != null) {
+            helperRow.setVisibility(prefs.isUtmEnabled() ? View.VISIBLE : View.GONE);
+        }
+    }
+
     private void refreshExtendedRowValues() {
         View view = getView();
         if (view == null) return;
@@ -715,6 +753,23 @@ public class WatermarkSettingsFragment extends Fragment {
         if (switchTimezone != null && switchTimezone.isChecked() != prefs.isTimezoneEnabled()) {
             switchTimezone.setChecked(prefs.isTimezoneEnabled());
         }
+
+        // UTM subtitle
+        TextView valueUtm = view.findViewById(R.id.value_utm);
+        AvatarToggleView switchUtm = view.findViewById(R.id.switch_utm);
+        if (valueUtm != null) {
+            if (prefs.isUtmEnabled()) {
+                valueUtm.setText(getString(R.string.watermark_utm_on));
+                valueUtm.setTextColor(greenColor);
+            } else {
+                valueUtm.setText(getString(R.string.watermark_utm_off));
+                valueUtm.setTextColor(grayColor);
+            }
+        }
+        if (switchUtm != null && switchUtm.isChecked() != prefs.isUtmEnabled()) {
+            switchUtm.setChecked(prefs.isUtmEnabled());
+        }
+        updateUtmHelperVisibility();
 
         TextView valueSpeed = view.findViewById(R.id.value_speed);
         if (valueSpeed != null) {
@@ -953,6 +1008,24 @@ public class WatermarkSettingsFragment extends Fragment {
                 super(itemView);
                 text = itemView.findViewById(R.id.text_watermark_preview);
             }
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (gpsProviderReceiver != null) {
+            try {
+                requireContext().unregisterReceiver(gpsProviderReceiver);
+            } catch (IllegalArgumentException ignored) {}
+            gpsProviderReceiver = null;
+        }
+    }
+
+    private class GpsProviderReceiver extends android.content.BroadcastReceiver {
+        @Override
+        public void onReceive(android.content.Context context, android.content.Intent intent) {
+            refreshExtendedRowValues();
         }
     }
 }

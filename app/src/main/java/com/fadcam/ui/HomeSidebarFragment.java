@@ -14,12 +14,15 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
 import com.fadcam.ui.AvatarToggleView;
 import androidx.fragment.app.DialogFragment;
 import com.fadcam.R;
 import com.fadcam.SharedPreferencesManager;
 import com.fadcam.ui.picker.OptionItem;
 import com.fadcam.ui.picker.PickerBottomSheetFragment;
+import com.fadcam.ui.miniapps.TorchToolFragment;
+import com.fadcam.ui.OverlayNavUtil;
 import com.google.android.material.sidesheet.SideSheetDialog;
 
 /**
@@ -229,6 +232,155 @@ public class HomeSidebarFragment extends DialogFragment {
                 }
             });
         }
+
+        // Mini Apps Section
+        setupMiniAppRows(view);
+
+        // Mini Apps Info Button
+        View btnMiniAppsInfo = view.findViewById(R.id.btn_mini_apps_info);
+        if (btnMiniAppsInfo != null) {
+            btnMiniAppsInfo.setOnClickListener(v -> {
+                MiniAppsInfoBottomSheet infoBS = MiniAppsInfoBottomSheet.newInstance();
+                infoBS.show(getParentFragmentManager(), "mini_apps_info");
+            });
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // AvatarToggleView handles its own animation cleanup via onDetachedFromWindow().
+    }
+
+    private void setupMiniAppRows(View view) {
+        // Torch Mini App - open full screen tool
+        View torchRow = view.findViewById(R.id.row_mini_app_torch);
+        if (torchRow != null) {
+            torchRow.setOnClickListener(v -> {
+                try {
+                    TorchToolFragment torchTool = TorchToolFragment.newInstance();
+                    OverlayNavUtil.show(requireActivity(), torchTool, "torch_tool");
+                    dismiss();
+                } catch (Exception e) {
+                    FLog.w("HomeSidebar", "Failed to open torch tool", e);
+                }
+            });
+        }
+
+        // Compass Mini App - Coming Soon
+        View compassRow = view.findViewById(R.id.row_mini_app_compass);
+        if (compassRow != null) {
+            compassRow.setOnClickListener(v -> {
+                showMiniAppComingSoon(this, "compass");
+            });
+        }
+
+        // Sound Meter Mini App - Coming Soon
+        View soundMeterRow = view.findViewById(R.id.row_mini_app_sound_meter);
+        if (soundMeterRow != null) {
+            soundMeterRow.setOnClickListener(v -> {
+                showMiniAppComingSoon(this, "sound_meter");
+            });
+        }
+
+        // Sensor Dashboard Mini App - Coming Soon
+        View sensorDashboardRow = view.findViewById(R.id.row_mini_app_sensor_dashboard);
+        if (sensorDashboardRow != null) {
+            sensorDashboardRow.setOnClickListener(v -> {
+                showMiniAppComingSoon(this, "sensor_dashboard");
+            });
+        }
+        // Speedometer Mini App - Coming Soon
+        View speedometerRow = view.findViewById(R.id.row_mini_app_speedometer);
+        if (speedometerRow != null) speedometerRow.setOnClickListener(v -> showMiniAppComingSoon(this, "speedometer"));
+        // Clinometer Mini App - Coming Soon
+        View clinometerRow = view.findViewById(R.id.row_mini_app_clinometer);
+        if (clinometerRow != null) clinometerRow.setOnClickListener(v -> showMiniAppComingSoon(this, "clinometer"));
+        // QR Scanner Mini App - ready to use
+        View qrScannerRow = view.findViewById(R.id.row_mini_app_qr_scanner);
+        if (qrScannerRow != null) qrScannerRow.setOnClickListener(v -> {
+            Intent intent = new Intent(getContext(), com.fadcam.ui.miniapps.QRScannerActivity.class);
+            startActivity(intent);
+            dismiss();
+        });
+        // Pedometer Mini App - Coming Soon
+        View pedometerRow = view.findViewById(R.id.row_mini_app_pedometer);
+        if (pedometerRow != null) pedometerRow.setOnClickListener(v -> showMiniAppComingSoon(this, "pedometer"));
+        // Metal Detector Mini App - Coming Soon
+        View metalDetectorRow = view.findViewById(R.id.row_mini_app_metal_detector);
+        if (metalDetectorRow != null) metalDetectorRow.setOnClickListener(v -> showMiniAppComingSoon(this, "metal_detector"));
+        // Parking Marker Mini App - Coming Soon
+        View parkingMarkerRow = view.findViewById(R.id.row_mini_app_parking_marker);
+        if (parkingMarkerRow != null) parkingMarkerRow.setOnClickListener(v -> showMiniAppComingSoon(this, "parking_marker"));
+        View qrGeneratorRow = view.findViewById(R.id.row_mini_app_qr_generator);
+        if (qrGeneratorRow != null) qrGeneratorRow.setOnClickListener(v -> showMiniAppComingSoon(this, "qr_generator"));
+    }
+
+    public static void showMiniAppComingSoon(Fragment fragment, String appId) {
+        try {
+            String title = null;
+            String desc = null;
+            
+            switch (appId) {
+                case "compass":
+                    title = fragment.getString(R.string.mini_app_compass_title);
+                    desc = fragment.getString(R.string.mini_app_compass_desc);
+                    break;
+                case "sound_meter":
+                    title = fragment.getString(R.string.mini_app_sound_meter_title);
+                    desc = fragment.getString(R.string.mini_app_sound_meter_desc);
+                    break;
+                case "sensor_dashboard":
+                    title = fragment.getString(R.string.mini_app_sensor_dashboard_title);
+                    desc = fragment.getString(R.string.mini_app_sensor_dashboard_desc);
+                    break;
+                case "speedometer":
+                    title = fragment.getString(R.string.mini_app_speedometer_title);
+                    desc = fragment.getString(R.string.mini_app_speedometer_desc);
+                    break;
+                case "clinometer":
+                    title = fragment.getString(R.string.mini_app_clinometer_title);
+                    desc = fragment.getString(R.string.mini_app_clinometer_desc);
+                    break;
+                case "qr_scanner":
+                    title = fragment.getString(R.string.mini_app_qr_scanner_title);
+                    desc = fragment.getString(R.string.mini_app_qr_scanner_desc);
+                    break;
+                case "pedometer":
+                    title = fragment.getString(R.string.mini_app_pedometer_title);
+                    desc = fragment.getString(R.string.mini_app_pedometer_desc);
+                    break;
+                case "metal_detector":
+                    title = fragment.getString(R.string.mini_app_metal_detector_title);
+                    desc = fragment.getString(R.string.mini_app_metal_detector_desc);
+                    break;
+                case "parking_marker":
+                    title = fragment.getString(R.string.mini_app_parking_marker_title);
+                    desc = fragment.getString(R.string.mini_app_parking_marker_desc);
+                    break;
+                case "qr_generator":
+                    title = fragment.getString(R.string.mini_app_qr_generator_title);
+                    desc = fragment.getString(R.string.mini_app_qr_generator_desc);
+                    break;
+            }
+            
+            if (title == null) return;
+            
+            ArrayList<OptionItem> items = new ArrayList<>();
+            items.add(new OptionItem(appId, desc, (String) null));
+            
+            PickerBottomSheetFragment picker = PickerBottomSheetFragment.newInstance(
+                title,
+                items,
+                appId,
+                "mini_app_" + appId,
+                fragment.getString(R.string.mini_app_coming_soon_desc),
+                true
+            );
+            picker.show(fragment.getParentFragmentManager(), "mini_app_coming_soon_" + appId);
+        } catch (Exception e) {
+            FLog.w("HomeSidebar", "Failed to show mini app coming soon", e);
+        }
     }
 
     @Override
@@ -266,12 +418,6 @@ public class HomeSidebarFragment extends DialogFragment {
                 guard++;
             }
         }
-    }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        // AvatarToggleView handles its own animation cleanup via onDetachedFromWindow().
     }
 
     private void openWhatsNew() {

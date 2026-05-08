@@ -271,31 +271,14 @@ public class RecordingService extends Service {
             // location embedding disabled
         }
 
-        // Initialize sensor data provider for compass, speed, altitude
-        if (sharedPreferencesManager != null && (sharedPreferencesManager.isSpeedEnabled()
-                || sharedPreferencesManager.isAltitudeEnabled()
-                || sharedPreferencesManager.isCompassEnabled())) {
-            sensorDataProvider = com.fadcam.sensors.SensorDataProvider.getInstance(getApplicationContext());
-            org.osmdroid.util.GeoPoint currentLoc = locationHelper != null ? locationHelper.getCurrentLocation() : null;
-            android.location.Location androidLoc = null;
-            if (currentLoc != null) {
-                androidLoc = new android.location.Location("manual");
-                androidLoc.setLatitude(currentLoc.getLatitude());
-                androidLoc.setLongitude(currentLoc.getLongitude());
-            }
-            sensorDataProvider.start(androidLoc);
-        }
-
-        // Initialize noise monitor if enabled
-        if (sharedPreferencesManager != null && sharedPreferencesManager.isNoiseEnabled()) {
-            noiseMonitor = com.fadcam.audio.NoiseMonitor.getInstance();
-            noiseMonitor.start(this);
-        }
-
-        // Initialize WeatherService if weather feature is enabled
-        if (sharedPreferencesManager != null && sharedPreferencesManager.isWeatherEnabled()) {
-            weatherService = com.fadcam.network.WeatherService.getInstance(getApplicationContext());
-        }
+        // Sensor providers (NoiseMonitor, SensorDataProvider, WeatherService)
+        // are now initialized lazily in the START_RECORDING intent handler
+        // — NOT here in onCreate — to prevent mic/sensor memory leaks
+        // during preview-only mode and while the service is idle.
+        //
+        // Kill any zombie NoiseMonitor from a previous session that may have
+        // been leaked before this fix was applied.
+        com.fadcam.audio.NoiseMonitor.resetInstance();
 
         createNotificationChannel(); // Setup notifications early
 
@@ -1066,6 +1049,14 @@ public class RecordingService extends Service {
                 FLog.d(TAG, "Ignoring preview-only start: recording already active");
                 return START_STICKY;
             }
+            if (previewOnlyActive) {
+                FLog.d(TAG, "Preview already active — handling surface change only (fullscreen transition)");
+                setupSurfaceTexture(intent);
+                if (previewSurface != null && previewSurface.isValid()) {
+                    ensurePreviewOnlyGlPipeline();
+                }
+                return START_STICKY;
+            }
             setupSurfaceTexture(intent);
             if (previewSurface == null || !previewSurface.isValid()) {
                 pendingPreviewOnlyStart = true;
@@ -1103,6 +1094,42 @@ public class RecordingService extends Service {
                 previewSessionConfigInFlight = false;
                 releasePreviewOnlyGlPipeline();
                 broadcastOnPreviewOnlyStopped();
+            }
+
+            // Initialize extended sensor providers only when recording actually starts
+            // (NOT during preview-only mode — prevents mic/sensor memory leaks)
+            FLog.d(TAG, "Initializing extended sensor providers for recording");
+
+            if (sharedPreferencesManager != null && (sharedPreferencesManager.isSpeedEnabled()
+                    || sharedPreferencesManager.isAltitudeEnabled()
+                    || sharedPreferencesManager.isCompassEnabled())) {
+                if (sensorDataProvider == null) {
+                    sensorDataProvider = com.fadcam.sensors.SensorDataProvider.getInstance(getApplicationContext());
+                }
+                org.osmdroid.util.GeoPoint currentLoc = locationHelper != null ? locationHelper.getCurrentLocation() : null;
+                android.location.Location androidLoc = null;
+                if (currentLoc != null) {
+                    androidLoc = new android.location.Location("manual");
+                    androidLoc.setLatitude(currentLoc.getLatitude());
+                    androidLoc.setLongitude(currentLoc.getLongitude());
+                }
+                sensorDataProvider.start(androidLoc);
+                FLog.d(TAG, "SensorDataProvider initialized for recording");
+            }
+
+            if (sharedPreferencesManager != null && sharedPreferencesManager.isNoiseEnabled()) {
+                if (noiseMonitor == null) {
+                    noiseMonitor = com.fadcam.audio.NoiseMonitor.getInstance();
+                }
+                noiseMonitor.start(this);
+                FLog.d(TAG, "NoiseMonitor initialized for recording");
+            }
+
+            if (sharedPreferencesManager != null && sharedPreferencesManager.isWeatherEnabled()) {
+                if (weatherService == null) {
+                    weatherService = com.fadcam.network.WeatherService.getInstance(getApplicationContext());
+                }
+                FLog.d(TAG, "WeatherService initialized for recording");
             }
             
             // STREAM ENFORCEMENT GATE: Validate and gate streaming mode
@@ -1511,11 +1538,14 @@ public class RecordingService extends Service {
                         bitmapForSave = cropped;
                     }
                 }
+                // Build extra watermark data from live sensors/location
+                String extraWatermark = buildPhotoWatermarkExtras();
                 Uri savedUri = PhotoStorageHelper.saveJpegBitmap(
                         getApplicationContext(),
                         bitmapForSave,
                         true,
-                        shotSource);
+                        shotSource,
+                        extraWatermark);
                 bitmapForSave.recycle();
                 if (savedUri != null) {
                     Intent updateIntent = new Intent(Constants.ACTION_RECORDING_COMPLETE);
@@ -4349,8 +4379,12 @@ public class RecordingService extends Service {
                     } else {
                         glRecordingPipeline.setPreviewSurface(previewSurface);
                     }
-                } else if (hasSurfaceExtra) {
+                } else if (hasSurfaceExtra && !isFullscreenTransition) {
+                    // Never set null during fullscreen transition — keep old surface alive
+                    // until the fullscreen surface arrives (avoids GL pipeline losing render target)
                     glRecordingPipeline.setPreviewSurface(null);
+                } else if (hasSurfaceExtra && isFullscreenTransition) {
+                    FLog.d(TAG, "Skipping null surface — fullscreen transition in progress, keeping old surface");
                 }
             }
             // Only create dummy surface if truly backgrounding, not transitioning to fullscreen
@@ -4520,6 +4554,17 @@ public class RecordingService extends Service {
                 }
             }
             
+            // Append UTM coordinates if enabled and location is available
+            if (sharedPreferencesManager.isUtmEnabled() && locationHelper != null) {
+                org.osmdroid.util.GeoPoint utmPt = locationHelper.getCurrentLocation();
+                if (utmPt != null) {
+                    String utm = com.fadcam.utils.UTMConverter.latLonToUTM(utmPt.getLatitude(), utmPt.getLongitude());
+                    if (utm != null && !utm.isEmpty()) {
+                        cachedLocationWatermarkText += "\n" + utm;
+                    }
+                }
+            }
+            
             lastLocationWatermarkUpdateMs = currentTimeMs;
             FLog.d(TAG, "📍 Location watermark cache updated");
         } else {
@@ -4527,6 +4572,27 @@ public class RecordingService extends Service {
         }
         
         return cachedLocationWatermarkText;
+    }
+
+    private String buildPhotoWatermarkExtras() {
+        StringBuilder sb = new StringBuilder();
+
+        // Location data (same format as video watermark)
+        if (sharedPreferencesManager != null && sharedPreferencesManager.isLocalisationEnabled()) {
+            String loc = getLocationData();
+            if (loc != null && !loc.isEmpty()) {
+                sb.append(loc.trim());
+            }
+        }
+
+        // Extended sensor data (same format as video watermark)
+        String sensors = getExtendedSensorData();
+        if (sensors != null && !sensors.isEmpty()) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(sensors.trim());
+        }
+
+        return sb.toString();
     }
 
     private String getExtendedSensorData() {

@@ -60,6 +60,7 @@ public class PickerBottomSheetFragment extends BottomSheetDialogFragment {
     public static final String ARG_BROWSE_MODE = "browse_mode"; // tap doesn't dismiss; fires BUNDLE_PREVIEW_ID instead
     public static final String BUNDLE_PREVIEW_ID = "preview_id";
     public static final String ARG_AVATAR_SWATCH = "avatar_swatch_mode"; // show avatar preview instead of color circle
+    public static final String ARG_INFO_MODE = "info_mode"; // display-only: no checkmarks, no row click interaction
 
     public static PickerBottomSheetFragment newInstance(
         String title,
@@ -321,6 +322,7 @@ public class PickerBottomSheetFragment extends BottomSheetDialogFragment {
     private boolean useGradientBg = true; // default enabled globally
     private boolean gridMode = false;
     private boolean hideCheck = false;
+    private boolean infoMode = false; // display-only: rows are non-interactive, no checkmarks
     private boolean avatarSwatchMode = false; // render avatar previews instead of color circles
     private boolean sliderMode = false;
     private boolean sliderZoomMode = false;
@@ -397,6 +399,8 @@ public class PickerBottomSheetFragment extends BottomSheetDialogFragment {
             }
             gridMode = args.getBoolean(ARG_GRID_MODE, false);
             hideCheck = args.getBoolean(ARG_HIDE_CHECK, false);
+            infoMode = args.getBoolean(ARG_INFO_MODE, false);
+            if (infoMode) hideCheck = true; // info mode implies no checkmarks
             avatarSwatchMode = args.getBoolean(ARG_AVATAR_SWATCH, false);
             sliderMode = args.getBoolean(ARG_SLIDER_MODE, false);
             FLog.d(
@@ -1129,6 +1133,11 @@ public class PickerBottomSheetFragment extends BottomSheetDialogFragment {
                     }
                 }
 
+                if (infoMode) {
+                    // Display-only mode: rows are purely informational, no interaction
+                    row.setClickable(false);
+                    row.setFocusable(false);
+                } else {
                 row.setOnClickListener(v -> {
                     // Make click toggle the switch for switch items
                     if (item.hasSwitch != null && item.hasSwitch) {
@@ -1234,7 +1243,7 @@ public class PickerBottomSheetFragment extends BottomSheetDialogFragment {
                             160
                         );
                     }
-                });
+                }); } // end if (!infoMode)
                 containerLayout.addView(row);
                 // Add divider between rows replicating settings group style
                 if (index < last) {

@@ -302,10 +302,10 @@ public class DebugLogBottomSheetFragment extends BottomSheetDialogFragment {
     private LinearLayout buildToggleRow(){
         LinearLayout row = new LinearLayout(requireContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
         row.setBackgroundResource(R.drawable.settings_home_row_bg);
-    row.setPadding(dp(14), dp(6), dp(12), dp(6));
+        row.setPadding(dp(14), dp(10), dp(12), dp(10));
         TextView label = new TextView(requireContext());
         label.setText(getString(R.string.setting_debug_title));
         label.setTypeface(label.getTypeface(), android.graphics.Typeface.BOLD);
@@ -321,6 +321,10 @@ public class DebugLogBottomSheetFragment extends BottomSheetDialogFragment {
             Log.setDebugEnabled(isChecked);
         });
     row.addView(sw, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        // Make entire row clickable, not just the avatar
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setOnClickListener(v -> sw.performClick());
     return row;
     }
 
