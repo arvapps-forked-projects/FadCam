@@ -2054,6 +2054,16 @@ public class RecordingService extends Service {
         // Notify RemoteStreamManager so status JSON reflects paused state
         com.fadcam.streaming.RemoteStreamManager.getInstance().pauseRecording();
         
+        // Pause noise monitor and sensors — no audio recorded, no watermark data needed
+        if (noiseMonitor != null && noiseMonitor.isRunning()) {
+            noiseMonitor.stop();
+            FLog.d(TAG, "NoiseMonitor paused with recording");
+        }
+        if (sensorDataProvider != null) {
+            sensorDataProvider.stop();
+            FLog.d(TAG, "SensorDataProvider paused with recording");
+        }
+        
         setupRecordingResumeNotification();
         showRecordingInPausedToast();
         broadcastOnRecordingPaused();
@@ -2073,6 +2083,23 @@ public class RecordingService extends Service {
         sharedPreferencesManager.setRecordingInProgress(true);
         // Notify RemoteStreamManager so status JSON reflects resumed (recording) state
         com.fadcam.streaming.RemoteStreamManager.getInstance().resumeRecording();
+        
+        // Resume noise monitor and sensors if they were enabled
+        if (sharedPreferencesManager != null && sharedPreferencesManager.isNoiseEnabled() && noiseMonitor != null) {
+            noiseMonitor.start(this);
+            FLog.d(TAG, "NoiseMonitor resumed with recording");
+        }
+        if (sensorDataProvider != null) {
+            org.osmdroid.util.GeoPoint currentLoc = locationHelper != null ? locationHelper.getCurrentLocation() : null;
+            android.location.Location androidLoc = null;
+            if (currentLoc != null) {
+                androidLoc = new android.location.Location("manual");
+                androidLoc.setLatitude(currentLoc.getLatitude());
+                androidLoc.setLongitude(currentLoc.getLongitude());
+            }
+            sensorDataProvider.start(androidLoc);
+            FLog.d(TAG, "SensorDataProvider resumed with recording");
+        }
         
         setupRecordingInProgressNotification();
         showRecordingResumedToast();
@@ -4712,6 +4739,7 @@ public class RecordingService extends Service {
 
     private void broadcastOnRecordingResumed() {
         Intent broadcastIntent = new Intent(Constants.BROADCAST_ON_RECORDING_RESUMED);
+        broadcastIntent.setPackage(getPackageName());
         broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_START_TIME, recordingStartTime);
         broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_PAUSE_STARTED_AT, pauseStartedAt);
         broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_ACCUMULATED_PAUSED_DURATION, accumulatedPausedDurationMs);
@@ -4721,6 +4749,7 @@ public class RecordingService extends Service {
 
     private void broadcastOnRecordingPaused() {
         Intent broadcastIntent = new Intent(Constants.BROADCAST_ON_RECORDING_PAUSED);
+        broadcastIntent.setPackage(getPackageName());
         broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_START_TIME, recordingStartTime);
         broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_PAUSE_STARTED_AT, pauseStartedAt);
         broadcastIntent.putExtra(Constants.INTENT_EXTRA_RECORDING_ACCUMULATED_PAUSED_DURATION, accumulatedPausedDurationMs);

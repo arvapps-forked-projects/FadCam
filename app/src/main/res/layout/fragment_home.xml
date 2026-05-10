@@ -451,12 +451,12 @@
         android:background="@drawable/gps_warning_banner_bg"
         android:paddingStart="12dp"
         android:paddingEnd="8dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
         android:layout_marginStart="10dp"
         android:layout_marginEnd="10dp"
         android:layout_marginTop="6dp"
-        android:layout_marginBottom="6dp"
+        android:layout_marginBottom="12dp"
         android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/cardRailTogglePortrait"
         app:layout_constraintStart_toStartOf="parent"
@@ -492,7 +492,7 @@
             android:contentDescription="@string/universal_cancel" />
     </LinearLayout>
 
-    <androidx.cardview.widget.CardView android:id="@+id/cardPreview" android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginStart="6dp" android:layout_marginEnd="6dp" app:cardBackgroundColor="@android:color/transparent" app:cardCornerRadius="8dp" app:cardElevation="0dp" app:layout_constraintBottom_toTopOf="@id/layoutControls" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toBottomOf="@id/banner_gps_warning" app:strokeColor="#4CAF50" app:strokeWidth="15dp">
+    <androidx.cardview.widget.CardView android:id="@+id/cardPreview" android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginStart="6dp" android:layout_marginEnd="6dp" android:layout_marginTop="8dp" app:cardBackgroundColor="@android:color/transparent" app:cardCornerRadius="8dp" app:cardElevation="0dp" app:layout_constraintBottom_toTopOf="@id/layoutControls" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toBottomOf="@id/banner_gps_warning" app:strokeColor="#4CAF50" app:strokeWidth="15dp">
 
         <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent" android:background="@android:color/transparent">
 
@@ -605,6 +605,38 @@
 
             <!-- TextureView for live camera preview (shows on top when recording) -->
             <TextureView android:id="@+id/textureView" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_gravity="center" />
+
+            <!-- Paused recording overlay — shown on top of preview when recording is paused -->
+            <LinearLayout
+                android:id="@+id/paused_preview_overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:background="#CC1a1a1a"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:gravity="center"
+                    android:text="pause_circle"
+                    android:textSize="48sp"
+                    android:textColor="#FFFFFF"
+                    android:alpha="0.9"
+                    android:fontFamily="@font/materialicons" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Recording Paused"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF"
+                    android:alpha="0.9" />
+
+            </LinearLayout>
 
             <!-- Hidden placeholder text (replaced by icons) -->
             <TextView android:id="@+id/tvPreviewPlaceholder" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="@string/ui_preview_area" android:textColor="?attr/homeRailTextPrimary" android:textSize="24sp" android:visibility="gone" />

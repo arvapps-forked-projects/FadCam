@@ -224,6 +224,7 @@ public class HomeFragment extends BaseFragment {
     private ExecutorService executorService;
 
     private TextureView textureView;
+    private View pausedPreviewOverlay;
 
     private Handler tipHandler = new Handler();
     private int typingIndex = 0;
@@ -1503,9 +1504,11 @@ public class HomeFragment extends BaseFragment {
 
                 switch (recordingStateIntent) {
                     case NONE:
+                        hidePausedOverlay();
                         onRecordingStopped();
                         break;
                     case IN_PROGRESS:
+                        hidePausedOverlay();
                         if (isRecording()) {
                             updateRecordingSurface();
                         } else {
@@ -1777,6 +1780,41 @@ public class HomeFragment extends BaseFragment {
         updateStartStopButtonForFoldedState();
         updateStorageInfo();
         updateElapsedHeroAppearance();
+        
+        // Show paused overlay with fade-in, hide stale camera frame
+        showPausedOverlay();
+    }
+
+    private void showPausedOverlay() {
+        if (pausedPreviewOverlay == null || textureView == null) {
+            FLog.w(TAG, "showPausedOverlay: view null, overlay=" + (pausedPreviewOverlay == null) + " texture=" + (textureView == null));
+            return;
+        }
+        FLog.d(TAG, "showPausedOverlay: showing");
+        pausedPreviewOverlay.animate().cancel();
+        textureView.animate().cancel();
+        textureView.setAlpha(0f);
+        pausedPreviewOverlay.setAlpha(0f);
+        pausedPreviewOverlay.setVisibility(View.VISIBLE);
+        pausedPreviewOverlay.animate().alpha(1f).setDuration(300).start();
+    }
+
+    private void hidePausedOverlay() {
+        if (pausedPreviewOverlay == null || textureView == null) {
+            FLog.w(TAG, "hidePausedOverlay: view null, overlay=" + (pausedPreviewOverlay == null) + " texture=" + (textureView == null));
+            return;
+        }
+        FLog.d(TAG, "hidePausedOverlay: hiding");
+        pausedPreviewOverlay.animate().cancel();
+        textureView.animate().cancel();
+        pausedPreviewOverlay.setAlpha(1f);
+        pausedPreviewOverlay.animate().alpha(0f).setDuration(200).withEndAction(() -> {
+            if (pausedPreviewOverlay != null) {
+                pausedPreviewOverlay.setVisibility(View.GONE);
+                FLog.d(TAG, "hidePausedOverlay: animation complete, overlay GONE");
+            }
+        }).start();
+        textureView.setAlpha(1f);
     }
 
     // --- Receiver for MediaRecorder Stopped signal ---
@@ -1920,6 +1958,7 @@ public class HomeFragment extends BaseFragment {
                 TAG,
                 "resetUIButtonsToIdleState: All UI elements reset to idle state"
             );
+            hidePausedOverlay();
         } catch (Exception e) {
             FLog.e(TAG, "Error in resetUIButtonsToIdleState", e);
         }
@@ -4790,6 +4829,7 @@ public class HomeFragment extends BaseFragment {
 
     private void setupTextureView(@NonNull View view) {
         textureView = view.findViewById(R.id.textureView);
+        pausedPreviewOverlay = view.findViewById(R.id.paused_preview_overlay);
 
         FLog.d(
             TAG,
@@ -7224,7 +7264,10 @@ public class HomeFragment extends BaseFragment {
             // Resume storage + stats updates
             if (!infoUpdatesRunning) {
                 if (updateInfoRunnable == null) {
-                    startUpdatingInfo();
+        startUpdatingInfo();
+        
+        // Hide paused overlay with fade-out
+        hidePausedOverlay();
                 } else {
                     infoUpdatesRunning = true;
                     handlerClock.post(updateInfoRunnable);
@@ -7798,6 +7841,7 @@ public class HomeFragment extends BaseFragment {
         Intent stopIntent = new Intent(getActivity(), RecordingService.class);
         stopIntent.setAction(Constants.INTENT_ACTION_PAUSE_RECORDING);
         requireActivity().startService(stopIntent);
+        showPausedOverlay();
     }
 
     private void resumeRecording() {
@@ -7819,6 +7863,8 @@ public class HomeFragment extends BaseFragment {
 
         // Keep camera switch button ENABLED for live switching during resume
         // Don't disable it here
+
+        hidePausedOverlay();
 
         SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
 
@@ -10907,12 +10953,23 @@ public class HomeFragment extends BaseFragment {
             return;
         }
         
-        if (!hidden) {
+            if (!hidden) {
             // Reset stale pending text/state on tab return; real state comes from service callback.
             clearPreviewOnlyPendingState(true);
             // Tab switched back — resume all operations
             if (isResumed()) {
-                performResumeOperations();
+        performResumeOperations();
+        
+        // Restore paused overlay after resume (in case state callback was missed)
+        if (isPaused()) {
+            showPausedOverlay();
+        } else if (!isRecording()) {
+            hidePausedOverlay();
+        }
+            }
+            // Restore paused overlay if recording is still paused
+            if (isPaused()) {
+                showPausedOverlay();
             }
             
             // Camera surface handling

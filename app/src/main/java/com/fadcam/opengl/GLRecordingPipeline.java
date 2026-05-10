@@ -2438,7 +2438,8 @@ public class GLRecordingPipeline {
                 }
             });
             // Only force a render in preview-only mode (not during active recording).
-            // During recording, camera frames drive the render loop via onFrameAvailable.
+            // During recording, camera frames drive the render loop via onFrameAvailable;
+            // posting renderRunnable here without a fresh frame causes frame-wait timeouts.
             if (handler != null && previewOnlyRendering && !isRecording) {
                 if (renderRunnableQueued.compareAndSet(false, true)) {
                     handler.post(renderRunnable);

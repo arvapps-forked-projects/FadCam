@@ -451,9 +451,22 @@ public class TrashFragment extends BaseFragment implements TrashAdapter.OnTrashI
             if (item != null && item.isForensicsEvidence()) evidence++;
         }
         int videos = Math.max(0, total - evidence);
-        if (chipAll != null) chipAll.setText(getString(R.string.forensics_filter_with_count, getString(R.string.forensics_filter_all), total));
-        if (chipVideos != null) chipVideos.setText(getString(R.string.forensics_filter_with_count, getString(R.string.nav_records), videos));
-        if (chipEvidence != null) chipEvidence.setText(getString(R.string.forensics_filter_with_count, getString(R.string.forensics_gallery_title), evidence));
+        if (chipAll != null) chipAll.setText(makeChipLabel(getString(R.string.forensics_filter_all), total));
+        if (chipVideos != null) chipVideos.setText(makeChipLabel(getString(R.string.nav_records), videos));
+        if (chipEvidence != null) chipEvidence.setText(makeChipLabel(getString(R.string.forensics_gallery_title), evidence));
+    }
+
+    private android.text.SpannableString makeChipLabel(String label, int count) {
+        android.text.SpannableString ss = new android.text.SpannableString(label + "  " + count);
+        int accent = resolveThemeColor(R.attr.colorButton);
+        int shade = android.graphics.Color.rgb(
+                android.graphics.Color.red(accent) + (255 - android.graphics.Color.red(accent)) / 8,
+                android.graphics.Color.green(accent) + (255 - android.graphics.Color.green(accent)) / 8,
+                android.graphics.Color.blue(accent) + (255 - android.graphics.Color.blue(accent)) / 8);
+        float density = getResources().getDisplayMetrics().density;
+        ss.setSpan(new com.fadcam.ui.utils.PillBadgeSpan(shade, 0xFFFFFFFF, density),
+                label.length() + 2, ss.length(), android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return ss;
     }
 
     private void updateFilterSelection() {

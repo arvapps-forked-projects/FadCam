@@ -817,11 +817,24 @@ public class ForensicsGalleryFragment extends Fragment {
                 default: object++; break;
             }
         }
-        if (chipAll != null) chipAll.setText(getString(R.string.forensics_filter_with_count, getString(R.string.forensics_filter_all), rows.size()));
-        if (chipPerson != null) chipPerson.setText(getString(R.string.forensics_filter_with_count, getString(R.string.forensics_filter_person), person));
-        if (chipVehicle != null) chipVehicle.setText(getString(R.string.forensics_filter_with_count, getString(R.string.forensics_filter_vehicle), vehicle));
-        if (chipPet != null) chipPet.setText(getString(R.string.forensics_filter_with_count, getString(R.string.forensics_filter_pet), pet));
-        if (chipObject != null) chipObject.setText(getString(R.string.forensics_filter_with_count, getString(R.string.forensics_filter_object), object));
+        if (chipAll != null) chipAll.setText(makeChipLabel(getString(R.string.forensics_filter_all), rows.size()));
+        if (chipPerson != null) chipPerson.setText(makeChipLabel(getString(R.string.forensics_filter_person), person));
+        if (chipVehicle != null) chipVehicle.setText(makeChipLabel(getString(R.string.forensics_filter_vehicle), vehicle));
+        if (chipPet != null) chipPet.setText(makeChipLabel(getString(R.string.forensics_filter_pet), pet));
+        if (chipObject != null) chipObject.setText(makeChipLabel(getString(R.string.forensics_filter_object), object));
+    }
+
+    private android.text.SpannableString makeChipLabel(String label, int count) {
+        android.text.SpannableString ss = new android.text.SpannableString(label + "  " + count);
+        int accent = resolveThemeColor(R.attr.colorButton);
+        int shade = android.graphics.Color.rgb(
+                android.graphics.Color.red(accent) + (255 - android.graphics.Color.red(accent)) / 8,
+                android.graphics.Color.green(accent) + (255 - android.graphics.Color.green(accent)) / 8,
+                android.graphics.Color.blue(accent) + (255 - android.graphics.Color.blue(accent)) / 8);
+        float density = getResources().getDisplayMetrics().density;
+        ss.setSpan(new com.fadcam.ui.utils.PillBadgeSpan(shade, 0xFFFFFFFF, density),
+                label.length() + 2, ss.length(), android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return ss;
     }
 
     private void renderStats(@NonNull List<ForensicsSnapshotWithMedia> rows) {

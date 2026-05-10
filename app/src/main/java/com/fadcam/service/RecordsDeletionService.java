@@ -770,6 +770,7 @@ public class RecordsDeletionService extends Service {
         }
 
         Intent updateIntent = new Intent(Constants.ACTION_RECORDS_DELETE_SESSION_UPDATED);
+        updateIntent.setPackage(getPackageName());
         updateIntent.putExtra(Constants.EXTRA_RECORDS_DELETE_SESSION_JSON,
                 RecordsDeletionSessionSnapshot.toJson(snapshot));
         sendBroadcast(updateIntent);
@@ -778,6 +779,7 @@ public class RecordsDeletionService extends Service {
             List<String> completed = Collections.singletonList(
                     snapshot.completedUriStrings.get(snapshot.completedUriStrings.size() - 1));
             Intent itemIntent = new Intent(Constants.ACTION_RECORDS_DELETE_ITEM_COMPLETED);
+            itemIntent.setPackage(getPackageName());
             itemIntent.putStringArrayListExtra(Constants.EXTRA_RECORDS_DELETE_COMPLETED_URIS,
                     new ArrayList<>(completed));
             itemIntent.putExtra(Constants.EXTRA_RECORDS_DELETE_SESSION_ID, snapshot.sessionId);
@@ -787,6 +789,7 @@ public class RecordsDeletionService extends Service {
 
         if (sessionFinished || includeCompletionIntent) {
             Intent finishedIntent = new Intent(Constants.ACTION_RECORDS_DELETE_SESSION_FINISHED);
+            finishedIntent.setPackage(getPackageName());
             finishedIntent.putExtra(Constants.EXTRA_RECORDS_DELETE_SESSION_JSON,
                     RecordsDeletionSessionSnapshot.toJson(snapshot));
             sendBroadcast(finishedIntent);
