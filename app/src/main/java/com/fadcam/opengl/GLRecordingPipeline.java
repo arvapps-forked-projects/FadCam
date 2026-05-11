@@ -56,6 +56,8 @@ public class GLRecordingPipeline {
     private HandlerThread renderThread;
     private Handler handler;
     private final AtomicBoolean renderRunnableQueued = new AtomicBoolean(false);
+    private long lastSlowRenderRunnableWarnMs = 0L;
+    private static final long SLOW_RENDER_RUNNABLE_WARN_INTERVAL_MS = 3000;
     private final int videoWidth;
     private final int videoHeight;
     private int videoBitrate;
@@ -1461,7 +1463,8 @@ public class GLRecordingPipeline {
 
                 if (glRenderer != null) {
                     long renderPhaseStartMs = System.nanoTime() / 1_000_000L;
-                    glRenderer.renderFrame();
+                    boolean dualMode = (dualCameraConfig != null);
+                    glRenderer.renderFrame(dualMode); // Dual cam uses stale-frame to keep encoder flowing
                     renderFrameMs = (System.nanoTime() / 1_000_000L) - renderPhaseStartMs;
                 }
                 long drainPhaseStartMs = System.nanoTime() / 1_000_000L;
@@ -1490,12 +1493,16 @@ public class GLRecordingPipeline {
             } finally {
                 long totalMs = System.nanoTime() / 1_000_000L - runnableStartMs;
                 if (totalMs > 80) {
-                    FLog.w(TAG, "SLOW renderRunnable: " + totalMs
-                            + " ms total [audioDrain=" + audioDrainMs
-                            + ", actions=" + rendererActionMs
-                            + ", renderFrame=" + renderFrameMs
-                            + ", drainEncoder=" + drainEncoderMs
-                            + ", rollover=" + rolloverMs + "]");
+                    long now = System.currentTimeMillis();
+                    if (now - lastSlowRenderRunnableWarnMs > SLOW_RENDER_RUNNABLE_WARN_INTERVAL_MS) {
+                        FLog.w(TAG, "SLOW renderRunnable: " + totalMs
+                                + " ms total [audioDrain=" + audioDrainMs
+                                + ", actions=" + rendererActionMs
+                                + ", renderFrame=" + renderFrameMs
+                                + ", drainEncoder=" + drainEncoderMs
+                                + ", rollover=" + rolloverMs + "]");
+                        lastSlowRenderRunnableWarnMs = now;
+                    }
                 }
                 renderRunnableQueued.set(false);
             }

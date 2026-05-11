@@ -118,6 +118,8 @@ public class DualCameraRecordingService extends Service {
     private volatile DualCameraState state = DualCameraState.DISABLED;
     private DualCameraConfig config;
     private long recordingStartTime;
+    private long pauseStartedAt;
+    private long accumulatedPausedDurationMs;
 
     // ── Threading ──────────────────────────────────────────────────────
 
@@ -128,6 +130,7 @@ public class DualCameraRecordingService extends Service {
     // ── System ─────────────────────────────────────────────────────────
 
     private SharedPreferencesManager prefs;
+    private com.fadcam.watermark.WatermarkManager watermarkManager;
     private DualCameraCapability capability;
     private PowerManager.WakeLock wakeLock;
 
@@ -391,6 +394,12 @@ public class DualCameraRecordingService extends Service {
             recordingPipeline = null;
         }
 
+        // Destroy watermark sensor providers
+        if (watermarkManager != null) {
+            watermarkManager.destroy();
+            watermarkManager = null;
+        }
+
         // Close cameras
         closeCamera(primarySession, primaryCameraDevice, "primary");
         closeCamera(secondarySession, secondaryCameraDevice, "secondary");
@@ -414,6 +423,9 @@ public class DualCameraRecordingService extends Service {
 
         prefs.setRecordingInProgress(false);
         releaseWakeLock();
+        clearRecordingTimelineState();
+        pauseStartedAt = 0;
+        accumulatedPausedDurationMs = 0;
 
         broadcastRecordingComplete(true);
         lastRecordingUriString = null;
@@ -430,8 +442,12 @@ public class DualCameraRecordingService extends Service {
         if (recordingPipeline != null) {
             recordingPipeline.pauseRecording();
         }
+        if (watermarkManager != null) watermarkManager.pauseSensors();
         state = DualCameraState.PAUSED;
-        broadcastAction(Constants.BROADCAST_ON_DUAL_RECORDING_PAUSED);
+        pauseStartedAt = SystemClock.elapsedRealtime();
+        persistRecordingTimelineState();
+        broadcastActionWithTiming(Constants.BROADCAST_ON_DUAL_RECORDING_PAUSED);
+        updatePausedNotification();
         FLog.i(TAG, "Dual recording paused");
     }
 
@@ -444,8 +460,15 @@ public class DualCameraRecordingService extends Service {
         if (recordingPipeline != null) {
             recordingPipeline.resumeRecording();
         }
+        if (watermarkManager != null) watermarkManager.resumeSensors(null);
         state = DualCameraState.RECORDING;
-        broadcastAction(Constants.BROADCAST_ON_DUAL_RECORDING_RESUMED);
+        if (pauseStartedAt > 0L) {
+            accumulatedPausedDurationMs += Math.max(0L, SystemClock.elapsedRealtime() - pauseStartedAt);
+            pauseStartedAt = 0L;
+        }
+        persistRecordingTimelineState();
+        broadcastActionWithTiming(Constants.BROADCAST_ON_DUAL_RECORDING_RESUMED);
+        updateResumedNotification();
         FLog.i(TAG, "Dual recording resumed");
     }
 
@@ -1085,24 +1108,12 @@ public class DualCameraRecordingService extends Service {
                 lastRecordingUriString = null;
             }
 
-            // ── Watermark provider ────────────────────────────────────
-            WatermarkInfoProvider watermarkProvider = () -> {
-                String watermarkOption = prefs.getWatermarkOption();
-                String customText = prefs.getWatermarkCustomText();
-                String customTextLine = (customText != null && !customText.isEmpty())
-                        ? "\n" + customText : "";
-                switch (watermarkOption) {
-                    case "no_watermark":
-                        return "";
-                    case "timestamp":
-                        return getDualCamTimestamp() + customTextLine;
-                    case "badge_fadcam":
-                        return "Captured by <FADCAM_ICON>" + customTextLine;
-                    case "timestamp_fadcam":
-                    default:
-                        return "Captured by <FADCAM_ICON> - " + getDualCamTimestamp() + customTextLine;
-                }
-            };
+            // ── Watermark provider (shared WatermarkManager) ──────────
+            watermarkManager = new com.fadcam.watermark.WatermarkManager(this, prefs);
+            // DualCameraRecordingService doesn't have its own LocationHelper,
+            // so WatermarkManager creates one internally.
+            watermarkManager.initialize(null);
+            WatermarkInfoProvider watermarkProvider = watermarkManager;
             
             // ── Build unified pipeline with DualCameraConfig ──────────
             if (safRecordingPfd != null) {
@@ -1268,7 +1279,8 @@ public class DualCameraRecordingService extends Service {
                     .putLong(Constants.PREF_RECORDING_START_TIME, recordingStartTime)
                     .commit();
 
-            broadcastAction(Constants.BROADCAST_ON_DUAL_RECORDING_STARTED);
+            persistRecordingTimelineState();
+            broadcastActionWithTiming(Constants.BROADCAST_ON_DUAL_RECORDING_STARTED);
             FLog.i(TAG, "✅ Dual camera recording started");
         } catch (Exception e) {
             FLog.e(TAG, "Failed to start pipeline encoding", e);
@@ -1286,109 +1298,6 @@ public class DualCameraRecordingService extends Service {
      *
      * @return Formatted timestamp string.
      */
-    private String getDualCamTimestamp() {
-        String formatted = new SimpleDateFormat("dd/MMM/yyyy hh:mm:ss a", Locale.ENGLISH).format(new Date());
-        // Convert any Arabic-Indic numerals to Western-Arabic (0-9) for consistency
-        return formatted
-                .replace('\u0660', '0').replace('\u0661', '1').replace('\u0662', '2')
-                .replace('\u0663', '3').replace('\u0664', '4').replace('\u0665', '5')
-                .replace('\u0666', '6').replace('\u0667', '7').replace('\u0668', '8')
-                .replace('\u0669', '9');
-    }
-
-    /**
-     * Creates output MP4 file respecting user's storage location preference.
-     * <p>
-     * Internal mode: writes directly to app's recording directory, returns File.
-     * Custom/SAF mode: opens ParcelFileDescriptor for SAF URI, returns null.
-     */
-    @Nullable
-    private File createOutputFile() {
-        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        String filename = "DualCam_" + timestamp + "." + Constants.RECORDING_FILE_EXTENSION;
-        
-        String storageMode = prefs.getStorageMode();
-        
-        if (SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode)) {
-            // Custom/SAF mode — write directly to SAF location via ParcelFileDescriptor
-            try {
-                String treeUriString = prefs.getCustomStorageUri();
-                if (treeUriString == null || treeUriString.isEmpty()) {
-                    FLog.e(TAG, "No custom storage location configured");
-                    return null;
-                }
-
-                DocumentFile treeDoc = RecordingStoragePaths.getSafCameraSourceDir(
-                        this,
-                        treeUriString,
-                        RecordingStoragePaths.CameraSource.DUAL,
-                        true);
-                if (treeDoc == null || !treeDoc.exists() || !treeDoc.canWrite()) {
-                    FLog.e(TAG, "Cannot write to custom storage location");
-                    return null;
-                }
-
-                DocumentFile videoFile = treeDoc.createFile("video/mp4", filename);
-                if (videoFile == null) {
-                    FLog.e(TAG, "Failed to create SAF file: " + filename);
-                    return null;
-                }
-
-                safRecordingPfd = getContentResolver().openFileDescriptor(videoFile.getUri(), "w");
-                safRecordingUri = videoFile.getUri();
-                safOutputFileName = filename;
-                FLog.d(TAG, "SAF mode: created file descriptor for " + filename);
-                
-                return null;  // Signal SAF mode (fd will be used instead)
-            } catch (Exception e) {
-                FLog.e(TAG, "Error creating SAF file", e);
-                return null;
-            }
-        } else {
-            // Internal mode — write directly to recording directory
-            File videoDir = RecordingStoragePaths.getInternalCameraSourceDir(
-                    this, RecordingStoragePaths.CameraSource.DUAL, true);
-            if (videoDir == null) {
-                FLog.e(TAG, "Cannot create recording directory for dual camera");
-                return null;
-            }
-            safRecordingPfd = null;
-            safRecordingUri = null;
-            safOutputFileName = null;
-            return new File(videoDir, filename);
-        }
-    }
-
-    /** Starts the foreground notification (same channel as RecordingService). */
-    private void startForegroundNotification() {
-        Intent stopIntent = new Intent(this, DualCameraRecordingService.class);
-        stopIntent.setAction(Constants.INTENT_ACTION_STOP_DUAL_RECORDING);
-        PendingIntent stopPendingIntent = PendingIntent.getService(
-                this,
-                2020,
-                stopIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification_icon)
-                .setContentTitle(getString(R.string.notification_video_recording))
-                .setContentText("Dual camera recording…")
-                .setOngoing(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .addAction(R.drawable.stop_rounded, getString(R.string.stop_recording), stopPendingIntent);
-
-        Notification notification = builder.build();
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
-        }
-    }
-
     // ── Thread management ─────────────────────────────────────────────
 
     private void startBackgroundThread() {
@@ -1500,6 +1409,172 @@ public class DualCameraRecordingService extends Service {
         stopSelf();
     }
 
+    // ── Output file creation ────────────────────────────────────────────
+
+    @Nullable
+    private File createOutputFile() {
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+        String filename = "DualCam_" + timestamp + "." + Constants.RECORDING_FILE_EXTENSION;
+        
+        String storageMode = prefs.getStorageMode();
+        
+        if (SharedPreferencesManager.STORAGE_MODE_CUSTOM.equals(storageMode)) {
+            try {
+                String treeUriString = prefs.getCustomStorageUri();
+                if (treeUriString == null || treeUriString.isEmpty()) {
+                    FLog.e(TAG, "No custom storage location configured");
+                    return null;
+                }
+                DocumentFile treeDoc = com.fadcam.utils.RecordingStoragePaths.getSafCameraSourceDir(
+                        this, treeUriString,
+                        com.fadcam.utils.RecordingStoragePaths.CameraSource.DUAL, true);
+                if (treeDoc == null || !treeDoc.exists() || !treeDoc.canWrite()) {
+                    FLog.e(TAG, "Cannot write to custom storage location");
+                    return null;
+                }
+                DocumentFile videoFile = treeDoc.createFile("video/mp4", filename);
+                if (videoFile == null) {
+                    FLog.e(TAG, "Failed to create SAF file: " + filename);
+                    return null;
+                }
+                safRecordingPfd = getContentResolver().openFileDescriptor(videoFile.getUri(), "w");
+                safRecordingUri = videoFile.getUri();
+                safOutputFileName = filename;
+                FLog.d(TAG, "SAF mode: created file descriptor for " + filename);
+                return null;
+            } catch (Exception e) {
+                FLog.e(TAG, "Error creating SAF file", e);
+                return null;
+            }
+        } else {
+            File videoDir = com.fadcam.utils.RecordingStoragePaths.getInternalCameraSourceDir(
+                    this, com.fadcam.utils.RecordingStoragePaths.CameraSource.DUAL, true);
+            if (videoDir == null) {
+                FLog.e(TAG, "Cannot create recording directory for dual camera");
+                return null;
+            }
+            safRecordingPfd = null;
+            safRecordingUri = null;
+            safOutputFileName = null;
+            return new File(videoDir, filename);
+        }
+    }
+
+    // ── Notification ───────────────────────────────────────────────────
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        try {
+            String channelName = prefs.getNotificationChannelName();
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                    CHANNEL_ID, channelName, android.app.NotificationManager.IMPORTANCE_LOW);
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
+            if (nm != null) nm.createNotificationChannel(channel);
+        } catch (IllegalArgumentException e) {
+            FLog.w(TAG, "Notification channel already exists, reusing: " + e.getMessage());
+        }
+    }
+
+    private NotificationCompat.Builder buildDualCameraNotification() {
+        String title = prefs.getNotificationTitle();
+        if (title == null || title.isEmpty()) {
+            title = getString(R.string.notification_video_recording);
+        }
+        String preset = prefs.getNotificationPreset();
+        String text = prefs.getNotificationText(false);
+        if (text == null || text.isEmpty()) {
+            text = "Dual camera recording…";
+        }
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setOngoing(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW);
+
+        int smallIconResId;
+        switch (preset) {
+            case SharedPreferencesManager.NOTIFICATION_PRESET_SYSTEM_UPDATE:
+            case SharedPreferencesManager.NOTIFICATION_PRESET_DOWNLOADING:
+                smallIconResId = android.R.drawable.stat_sys_download;
+                break;
+            case SharedPreferencesManager.NOTIFICATION_PRESET_SYNCING:
+                smallIconResId = android.R.drawable.stat_notify_sync;
+                break;
+            default:
+                smallIconResId = R.drawable.ic_notification_icon;
+                break;
+        }
+        builder.setSmallIcon(smallIconResId);
+
+        if (!SharedPreferencesManager.NOTIFICATION_PRESET_DEFAULT.equals(preset)) {
+            Intent emptyIntent = new Intent();
+            PendingIntent emptyPi = PendingIntent.getActivity(this, 0, emptyIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            builder.setContentIntent(emptyPi);
+        }
+
+        if (!prefs.isNotificationStopButtonHidden()) {
+            Intent stopIntent = new Intent(this, DualCameraRecordingService.class);
+            stopIntent.setAction(Constants.INTENT_ACTION_STOP_DUAL_RECORDING);
+            PendingIntent stopPi = PendingIntent.getService(this, 2020, stopIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            builder.addAction(R.drawable.stop_rounded, getString(R.string.stop_recording), stopPi);
+        }
+
+        return builder;
+    }
+
+    private void startForegroundNotification() {
+        createNotificationChannel();
+        Notification notification = buildDualCameraNotification().build();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+        } else {
+            startForeground(NOTIFICATION_ID, notification);
+        }
+    }
+
+    private void updatePausedNotification() {
+        String text = prefs.getNotificationText(true);
+        if (text != null && !text.isEmpty()) {
+            NotificationCompat.Builder builder = buildDualCameraNotification()
+                    .setContentText(text);
+            android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
+            if (nm != null) nm.notify(NOTIFICATION_ID, builder.build());
+        }
+    }
+
+    private void updateResumedNotification() {
+        startForegroundNotification();
+    }
+
+    // ── Timing persistence ────────────────────────────────────────────
+
+    private void persistRecordingTimelineState() {
+        getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(Constants.PREF_RECORDING_START_TIME, recordingStartTime)
+            .putLong(Constants.PREF_RECORDING_PAUSE_STARTED_AT, pauseStartedAt)
+            .putLong(Constants.PREF_RECORDING_ACCUMULATED_PAUSED_DURATION, accumulatedPausedDurationMs)
+            .commit();
+    }
+
+    private void clearRecordingTimelineState() {
+        getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .remove(Constants.PREF_RECORDING_START_TIME)
+            .remove(Constants.PREF_RECORDING_PAUSE_STARTED_AT)
+            .remove(Constants.PREF_RECORDING_ACCUMULATED_PAUSED_DURATION)
+            .apply();
+        FLog.d(TAG, "Cleared dual recording timeline state");
+    }
+
     // ── Broadcasting ──────────────────────────────────────────────────
 
     /**
@@ -1508,7 +1583,19 @@ public class DualCameraRecordingService extends Service {
      * can receive the events — matching the pattern used by RecordingService.
      */
     private void broadcastAction(@NonNull String action) {
-        sendBroadcast(new Intent(action));
+        Intent intent = new Intent(action);
+        intent.setPackage(getPackageName());
+        sendBroadcast(intent);
+    }
+
+    /** Sends a broadcast with recording timing extras attached. */
+    private void broadcastActionWithTiming(@NonNull String action) {
+        Intent intent = new Intent(action);
+        intent.setPackage(getPackageName());
+        intent.putExtra(Constants.INTENT_EXTRA_RECORDING_START_TIME, recordingStartTime);
+        intent.putExtra(Constants.INTENT_EXTRA_RECORDING_PAUSE_STARTED_AT, pauseStartedAt);
+        intent.putExtra(Constants.INTENT_EXTRA_RECORDING_ACCUMULATED_PAUSED_DURATION, accumulatedPausedDurationMs);
+        sendBroadcast(intent);
     }
 
     private void broadcastError(@NonNull String reason) {

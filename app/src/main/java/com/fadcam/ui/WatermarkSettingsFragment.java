@@ -146,6 +146,12 @@ public class WatermarkSettingsFragment extends Fragment {
         });
         updateUtmHelperVisibility();
 
+        View rowAccuracy = view.findViewById(R.id.row_accuracy);
+        if (rowAccuracy != null) rowAccuracy.setOnClickListener(v -> {
+            com.fadcam.ui.AvatarToggleView sw = view.findViewById(R.id.switch_accuracy);
+            if (sw != null) sw.performClick();
+        });
+
         // Extended watermark feature toggles
         com.fadcam.ui.AvatarToggleView switchSpeed = view.findViewById(R.id.switch_speed);
         if (switchSpeed != null) {
@@ -160,6 +166,14 @@ public class WatermarkSettingsFragment extends Fragment {
             switchAltitude.setChecked(prefs.isAltitudeEnabled());
             switchAltitude.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 prefs.setAltitudeEnabled(isChecked);
+                refreshExtendedRowValues();
+            });
+        }
+        com.fadcam.ui.AvatarToggleView switchAccuracy = view.findViewById(R.id.switch_accuracy);
+        if (switchAccuracy != null) {
+            switchAccuracy.setChecked(prefs.isAccuracyEnabled());
+            switchAccuracy.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                prefs.setAccuracyEnabled(isChecked);
                 refreshExtendedRowValues();
             });
         }
@@ -535,6 +549,7 @@ public class WatermarkSettingsFragment extends Fragment {
         String extendedPreview = "";
         if (prefs.isSpeedEnabled()) extendedPreview += "\nSpeed: 80km/h";
         if (prefs.isAltitudeEnabled()) extendedPreview += "\nAlt: 59m";
+        if (prefs.isAccuracyEnabled()) extendedPreview += "\nAccuracy: 12m";
         if (prefs.isCompassEnabled()) extendedPreview += "\nCompass: 220° SW";
         if (prefs.isNoiseEnabled()) extendedPreview += "\nNoise: 45dB";
         if (prefs.isWeatherEnabled()) extendedPreview += "\n25°C Clear\nWind: 15 km/h";
@@ -809,6 +824,26 @@ public class WatermarkSettingsFragment extends Fragment {
         AvatarToggleView switchAltitude = view.findViewById(R.id.switch_altitude);
         if (switchAltitude != null && switchAltitude.isChecked() != prefs.isAltitudeEnabled()) {
             switchAltitude.setChecked(prefs.isAltitudeEnabled());
+        }
+
+        TextView valueAccuracy = view.findViewById(R.id.value_accuracy);
+        if (valueAccuracy != null) {
+            if (prefs.isAccuracyEnabled()) {
+                if (!gpsEnabled) {
+                    valueAccuracy.setText(getString(R.string.watermark_gps_disabled_warning));
+                    valueAccuracy.setTextColor(redColor);
+                } else {
+                    valueAccuracy.setText(getString(R.string.watermark_accuracy_on));
+                    valueAccuracy.setTextColor(greenColor);
+                }
+            } else {
+                valueAccuracy.setText(getString(R.string.watermark_accuracy_off));
+                valueAccuracy.setTextColor(grayColor);
+            }
+        }
+        AvatarToggleView switchAccuracy = view.findViewById(R.id.switch_accuracy);
+        if (switchAccuracy != null && switchAccuracy.isChecked() != prefs.isAccuracyEnabled()) {
+            switchAccuracy.setChecked(prefs.isAccuracyEnabled());
         }
 
         TextView valueCompass = view.findViewById(R.id.value_compass);

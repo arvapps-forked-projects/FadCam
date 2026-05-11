@@ -1124,6 +1124,14 @@ public class SharedPreferencesManager {
         sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_ALTITUDE, enabled).apply();
     }
 
+    public boolean isAccuracyEnabled() {
+        return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_ACCURACY, false);
+    }
+
+    public void setAccuracyEnabled(boolean enabled) {
+        sharedPreferences.edit().putBoolean(Constants.PREF_WATERMARK_ACCURACY, enabled).apply();
+    }
+
     public boolean isCompassEnabled() {
         return sharedPreferences.getBoolean(Constants.PREF_WATERMARK_COMPASS, false);
     }

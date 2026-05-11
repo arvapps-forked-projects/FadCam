@@ -2277,6 +2277,9 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="watermark_altitude_title">Altitude (m)</string>
     <string name="watermark_altitude_off">Off</string>
     <string name="watermark_altitude_on">On — Altitude from GPS satellites</string>
+    <string name="watermark_accuracy_title">GPS Accuracy (m)</string>
+    <string name="watermark_accuracy_off">Off</string>
+    <string name="watermark_accuracy_on">On — Horizontal accuracy from GPS satellites</string>
     <string name="watermark_compass_title">Compass Direction</string>
     <string name="watermark_compass_off">Off</string>
     <string name="watermark_compass_on_sensor">On — Direction from device compass sensor</string>
@@ -2419,4 +2422,8 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="mini_app_parking_marker_desc">Save your parking spot and navigate back with GPS arrow</string>
     <string name="mini_app_qr_generator_title">QR Generator</string>
     <string name="mini_app_qr_generator_desc">Create QR codes from text, URLs, and contacts</string>
+
+    <!-- Mini Apps Info Sheet -->
+    <string name="mini_apps_planned_shortcuts_title">Planned: Shortcuts &amp; Automation</string>
+    <string name="mini_apps_planned_shortcuts_desc">Home screen shortcuts for instant access to any Mini App without opening FadCam first.\n\nIntent-based automation support (Tasker, MacroDroid, etc.) for triggering Mini Apps programmatically — use QR scanning, torch, and more from your automated workflows.</string>
 </resources>

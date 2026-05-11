@@ -141,6 +141,11 @@ public class RecordingService extends Service {
     private long lastLocationWatermarkUpdateMs = 0;
     private String cachedLocationWatermarkText = "";
 
+    // Cached GPS provider state — refreshed every 5s to avoid unnecessary system calls
+    private boolean cachedGpsProviderEnabled = false;
+    private long lastGpsProviderCheckMs = 0;
+    private static final long GPS_PROVIDER_CHECK_INTERVAL_MS = 5000;
+
     private RecordingState recordingState = RecordingState.NONE;
     private boolean previewOnlyActive = false;
     private boolean pendingPreviewOnlyStart = false;
@@ -1100,6 +1105,12 @@ public class RecordingService extends Service {
             // (NOT during preview-only mode — prevents mic/sensor memory leaks)
             FLog.d(TAG, "Initializing extended sensor providers for recording");
 
+            // Shared watermark manager (DRY — used by both single and dual camera)
+            if (watermarkManager == null) {
+                watermarkManager = new com.fadcam.watermark.WatermarkManager(this, sharedPreferencesManager);
+            }
+            watermarkManager.initialize(locationHelper);
+
             if (sharedPreferencesManager != null && (sharedPreferencesManager.isSpeedEnabled()
                     || sharedPreferencesManager.isAltitudeEnabled()
                     || sharedPreferencesManager.isCompassEnabled())) {
@@ -1960,6 +1971,12 @@ public class RecordingService extends Service {
                 weatherService = null;
                 FLog.d(TAG, "All extended sensor providers cleaned up");
 
+                // Also destroy shared WatermarkManager
+                if (watermarkManager != null) {
+                    watermarkManager.destroy();
+                    watermarkManager = null;
+                }
+
                 // Final cleanup on the main thread
                 mainHandler.post(() -> {
                     // Release wake lock if held
@@ -2063,6 +2080,7 @@ public class RecordingService extends Service {
             sensorDataProvider.stop();
             FLog.d(TAG, "SensorDataProvider paused with recording");
         }
+        if (watermarkManager != null) watermarkManager.pauseSensors();
         
         setupRecordingResumeNotification();
         showRecordingInPausedToast();
@@ -2100,6 +2118,7 @@ public class RecordingService extends Service {
             sensorDataProvider.start(androidLoc);
             FLog.d(TAG, "SensorDataProvider resumed with recording");
         }
+        if (watermarkManager != null) watermarkManager.resumeSensors(locationHelper);
         
         setupRecordingInProgressNotification();
         showRecordingResumedToast();
@@ -4598,6 +4617,20 @@ public class RecordingService extends Service {
             FLog.d(TAG, "📍 Using cached location data (too soon to update)");
         }
         
+        // Show GPS-off message if provider is disabled — covers location + UTM independently
+        if (!cachedGpsProviderEnabled) {
+            StringBuilder gpsOffMsg = new StringBuilder("\nLocation: GPS is off");
+            if (sharedPreferencesManager.isUtmEnabled()) {
+                gpsOffMsg.append("\nUTM: GPS is off");
+            }
+            return gpsOffMsg.toString();
+        }
+
+        // GPS just turned on but cache is stale — force immediate refresh
+        if (cachedLocationWatermarkText.isEmpty()) {
+            lastLocationWatermarkUpdateMs = 0;
+        }
+
         return cachedLocationWatermarkText;
     }
 
@@ -4627,6 +4660,16 @@ public class RecordingService extends Service {
             return "";
         }
 
+        // Throttled GPS provider check — same API as HomeFragment banner, cached for 5s
+        long now = System.currentTimeMillis();
+        if (now - lastGpsProviderCheckMs >= GPS_PROVIDER_CHECK_INTERVAL_MS) {
+            android.location.LocationManager lm = (android.location.LocationManager)
+                    getSystemService(Context.LOCATION_SERVICE);
+            cachedGpsProviderEnabled = lm != null
+                    && lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
+            lastGpsProviderCheckMs = now;
+        }
+
         if (locationHelper != null && sensorDataProvider != null) {
             android.location.Location rawLoc = locationHelper.getRawLocation();
             if (rawLoc != null) {
@@ -4637,15 +4680,37 @@ public class RecordingService extends Service {
         StringBuilder sb = new StringBuilder();
 
         if (sharedPreferencesManager.isSpeedEnabled() && sensorDataProvider != null) {
-            float speed = sensorDataProvider.getSpeedKmh();
-            FLog.d(TAG, "Extended: speed=" + speed + " km/h");
-            sb.append("\nSpeed: ").append(String.format("%.0f", speed)).append("km/h");
+            if (!cachedGpsProviderEnabled) {
+                FLog.d(TAG, "Extended: speed=GPS is off");
+                sb.append("\nSpeed: GPS is off");
+            } else {
+                float speed = sensorDataProvider.getSpeedKmh();
+                FLog.d(TAG, "Extended: speed=" + speed + " km/h");
+                sb.append("\nSpeed: ").append(String.format("%.0f", speed)).append(" km/h");
+            }
         }
 
         if (sharedPreferencesManager.isAltitudeEnabled() && sensorDataProvider != null) {
-            double alt = sensorDataProvider.getAltitude();
-            FLog.d(TAG, "Extended: altitude=" + alt + " m");
-            sb.append("\nAlt: ").append(String.format("%.0f", alt)).append("m");
+            if (!cachedGpsProviderEnabled) {
+                FLog.d(TAG, "Extended: altitude=GPS is off");
+                sb.append("\nAlt: GPS is off");
+            } else {
+                double alt = sensorDataProvider.getAltitude();
+                FLog.d(TAG, "Extended: altitude=" + alt + " m");
+                sb.append("\nAlt: ").append(String.format("%.0f", alt)).append("m");
+            }
+        }
+
+        // Accuracy — gated behind its own toggle like other GPS features
+        if (sharedPreferencesManager.isAccuracyEnabled() && sensorDataProvider != null) {
+            if (!cachedGpsProviderEnabled) {
+                FLog.d(TAG, "Extended: accuracy=GPS is off");
+                sb.append("\nAccuracy: GPS is off");
+            } else {
+                float acc = sensorDataProvider.getAccuracy();
+                FLog.d(TAG, "Extended: accuracy=" + acc + " m");
+                sb.append("\nAccuracy: ").append(String.format("%.0f", acc)).append("m");
+            }
         }
 
         if (sharedPreferencesManager.isCompassEnabled() && sensorDataProvider != null) {
@@ -6113,6 +6178,7 @@ public class RecordingService extends Service {
     // Add these fields to RecordingService class
     private GLRecordingPipeline glRecordingPipeline;
     private WatermarkInfoProvider watermarkInfoProvider;
+    private com.fadcam.watermark.WatermarkManager watermarkManager;
     
     // Track current segment file for streaming
     private File currentSegmentFile;

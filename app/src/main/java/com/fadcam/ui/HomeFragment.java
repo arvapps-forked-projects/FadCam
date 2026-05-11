@@ -1471,6 +1471,13 @@ public class HomeFragment extends BaseFragment {
             isDualRecordingActive = true;
             if (recordingState == RecordingState.NONE) {
                 recordingState = RecordingState.IN_PROGRESS;
+                // Restore timing from SharedPreferences (same keys as normal recording)
+                android.content.SharedPreferences sp = requireContext()
+                        .getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE);
+                recordingStartTime = sp.getLong(Constants.PREF_RECORDING_START_TIME, 0L);
+                recordingPauseStartedAt = sp.getLong(Constants.PREF_RECORDING_PAUSE_STARTED_AT, 0L);
+                recordingAccumulatedPausedDurationMs = sp.getLong(
+                        Constants.PREF_RECORDING_ACCUMULATED_PAUSED_DURATION, 0L);
                 setUIForRecordingActive();
             }
             return;
@@ -2637,6 +2644,7 @@ public class HomeFragment extends BaseFragment {
                     FLog.d(TAG, "✅ DUAL_RECORDING_STARTED received");
                     isDualRecordingActive = true;
                     recordingState = RecordingState.IN_PROGRESS;
+                    applyRecordingTimelineFromIntent(i);
                     setUIForRecordingActive();
                     if (getContext() != null) {
                         Utils.showQuickToast(requireContext(), R.string.dual_recording_started);
@@ -2665,6 +2673,7 @@ public class HomeFragment extends BaseFragment {
                 public void onReceive(Context context, Intent i) {
                     if (!isAdded()) return;
                     FLog.d(TAG, "⏸️ DUAL_RECORDING_PAUSED received");
+                    applyRecordingTimelineFromIntent(i);
                     onRecordingPaused();
                 }
             };
@@ -2675,6 +2684,7 @@ public class HomeFragment extends BaseFragment {
                 public void onReceive(Context context, Intent i) {
                     if (!isAdded()) return;
                     FLog.d(TAG, "▶️ DUAL_RECORDING_RESUMED received");
+                    applyRecordingTimelineFromIntent(i);
                     onRecordingResumed();
                 }
             };

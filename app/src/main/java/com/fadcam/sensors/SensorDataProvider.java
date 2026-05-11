@@ -16,7 +16,6 @@ public class SensorDataProvider implements SensorEventListener {
     private static final String TAG = "SensorDataProvider";
     private static SensorDataProvider instance;
 
-    private static final float STATIONARY_THRESHOLD_MS = 1.5f;
     private static final int BEARING_MIN_DISTANCE_M = 2;
     private static final float BEARING_SMOOTHING_ALPHA = 0.4f;
 
@@ -146,21 +145,21 @@ public class SensorDataProvider implements SensorEventListener {
                 + ", bearing=" + String.format("%.0f", smoothedBearing)
                 + " (hasBearing=" + location.hasBearing()
                 + ", gps=" + String.format("%.0f", location.getBearing()) + ")"
-                + ", alt=" + String.format("%.1f", location.getAltitude()) + "m");
+                + ", alt=" + String.format("%.1f", location.getAltitude()) + "m"
+                + ", acc=" + (location.hasAccuracy()
+                        ? String.format("%.0f", location.getAccuracy()) + "m" : "none"));
     }
 
     private void updateSpeedFromGps() {
         if (currentLocation == null) return;
 
         if (currentLocation.hasSpeed()) {
-            float gpsSpeedMs = currentLocation.getSpeed();
-            currentSpeedMs = gpsSpeedMs < STATIONARY_THRESHOLD_MS ? 0f : gpsSpeedMs;
+            currentSpeedMs = currentLocation.getSpeed();
         } else if (previousLocation != null && previousLocationTime > 0) {
             float distance = previousLocation.distanceTo(currentLocation);
             long timeDeltaMs = lastLocationTime - previousLocationTime;
             if (timeDeltaMs > 100 && timeDeltaMs < 10000) {
-                float calcMs = distance / (timeDeltaMs / 1000f);
-                currentSpeedMs = calcMs < STATIONARY_THRESHOLD_MS ? 0f : calcMs;
+                currentSpeedMs = distance / (timeDeltaMs / 1000f);
             }
         } else {
             currentSpeedMs = 0f;
@@ -264,6 +263,13 @@ public class SensorDataProvider implements SensorEventListener {
         return 0f;
     }
 
+    public float getAccuracy() {
+        if (currentLocation != null && currentLocation.hasAccuracy()) {
+            return currentLocation.getAccuracy();
+        }
+        return 0f;
+    }
+
     public String getCompassDirection() {
         float azimuth = getCompassAzimuth();
         int degrees = (int) azimuth;
@@ -288,7 +294,7 @@ public class SensorDataProvider implements SensorEventListener {
         if (compassDataReceived && sensorAzimuth >= 0) {
             return sensorAzimuth;
         }
-        if (hasBearingFromGps && smoothedBearing >= 0 && currentSpeedMs > STATIONARY_THRESHOLD_MS) {
+        if (hasBearingFromGps && smoothedBearing >= 0) {
             return smoothedBearing;
         }
         return 0f;

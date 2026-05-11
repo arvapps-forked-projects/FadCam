@@ -124,6 +124,30 @@
                 android:textSize="13sp"
                 android:lineSpacingExtra="4dp" />
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#404040"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mini_apps_planned_shortcuts_title"
+                android:textColor="?attr/colorHeading"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mini_apps_planned_shortcuts_desc"
+                android:textColor="?attr/pickerTextPrimary"
+                android:textSize="13sp"
+                android:lineSpacingExtra="4dp" />
+
         </LinearLayout>
 
     </ScrollView>

@@ -80,6 +80,8 @@ public class GLWatermarkRenderer {
     private boolean warnedNoExternalTexture = false;
     // Timestamp of last warning to avoid flooding logs (ms)
     private long lastNoExternalTextureWarnMs = 0L;
+    private long lastSlowRenderWarnMs = 0L;
+    private static final long SLOW_RENDER_WARN_INTERVAL_MS = 3000;
     // Global verbosity gate - set to false to suppress noisy GL warnings in normal
     // runs
     private static boolean VERBOSE_GL_LOGS = false;
@@ -315,13 +317,22 @@ public class GLWatermarkRenderer {
     }
 
     public void renderFrame() {
+        renderFrame(false);
+    }
+
+    /** Renders a frame, optionally using a stale frame when no fresh one is available. */
+    public void renderFrame(boolean allowStaleFrame) {
         try {
             // First render to encoder (critical for recording)
             long encStart = System.nanoTime();
-            renderToEncoder();
+            renderToEncoderInternal(allowStaleFrame);
             long encMs = (System.nanoTime() - encStart) / 1_000_000L;
             if (encMs > 80) {
-                FLog.w(TAG, "SLOW renderToEncoder: " + encMs + " ms");
+                long now = System.currentTimeMillis();
+                if (now - lastSlowRenderWarnMs > SLOW_RENDER_WARN_INTERVAL_MS) {
+                    FLog.w(TAG, "SLOW renderToEncoder: " + encMs + " ms");
+                    lastSlowRenderWarnMs = now;
+                }
             }
 
             // Then try to render to preview (non-critical)
@@ -330,7 +341,11 @@ public class GLWatermarkRenderer {
                 renderToPreview();
                 long prevMs = (System.nanoTime() - prevStart) / 1_000_000L;
                 if (prevMs > 80) {
-                    FLog.w(TAG, "SLOW renderToPreview: " + prevMs + " ms");
+                    long now = System.currentTimeMillis();
+                    if (now - lastSlowRenderWarnMs > SLOW_RENDER_WARN_INTERVAL_MS) {
+                        FLog.w(TAG, "SLOW renderToPreview: " + prevMs + " ms");
+                        lastSlowRenderWarnMs = now;
+                    }
                 }
             } catch (Exception e) {
                 FLog.w(TAG, "Preview rendering failed in renderFrame", e);
@@ -552,18 +567,18 @@ public class GLWatermarkRenderer {
                 }
             } else {
                 // Wait for a new frame if needed
-                synchronized (frameSyncObject) {
-                    while (!frameAvailable) {
-                        try {
-                            frameSyncObject.wait(100);
-                            if (!frameAvailable) {
-                                FLog.w(TAG, "renderToEncoder: frame wait timed out");
+                    synchronized (frameSyncObject) {
+                        while (!frameAvailable) {
+                            try {
+                                frameSyncObject.wait(33); // one-frame budget at 30fps
+                                if (!frameAvailable) {
+                                    FLog.w(TAG, "renderToEncoder: frame wait timed out");
+                                    return;
+                                }
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
                                 return;
                             }
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            return;
-                        }
                     }
                     frameAvailable = false;
                 }
