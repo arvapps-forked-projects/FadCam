@@ -227,6 +227,10 @@ public class DualCameraRecordingService extends Service {
                 handleToggleTorch();
                 break;
 
+            case Constants.INTENT_ACTION_SET_FRONT_VIDEO_MIRROR:
+                handleSetFrontVideoMirror(intent);
+                break;
+
             case Constants.INTENT_ACTION_SET_EXPOSURE_COMPENSATION:
                 handleSetExposureCompensation(intent);
                 break;
@@ -473,8 +477,8 @@ public class DualCameraRecordingService extends Service {
     }
 
     /**
-     * Swap primary ↔ secondary cameras without stopping recording.
-     * The pipeline swaps which texture is rendered full-screen vs PiP.
+     * Swap primary ↔ secondary cameras by closing and recreating capture sessions.
+     * Cameras are reassigned to surfaces so the GL renderer needs no swap logic.
      */
     private void handleSwapCameras() {
         if (state != DualCameraState.RECORDING && state != DualCameraState.PAUSED) {
@@ -482,7 +486,6 @@ public class DualCameraRecordingService extends Service {
             return;
         }
 
-        // Toggle primary in config
         DualCameraConfig.PrimaryCamera newPrimary =
                 (config.getPrimaryCamera() == DualCameraConfig.PrimaryCamera.BACK)
                         ? DualCameraConfig.PrimaryCamera.FRONT
@@ -493,9 +496,38 @@ public class DualCameraRecordingService extends Service {
                 .build();
         prefs.saveDualCameraConfig(config);
 
-        // Tell pipeline to swap rendering order
+        // Notify renderer which camera is now front (for rotation/flip logic)
         if (recordingPipeline != null) {
-            recordingPipeline.swapCameras();
+            recordingPipeline.setFullscreenCameraIsFront(
+                newPrimary == DualCameraConfig.PrimaryCamera.FRONT);
+        }
+
+        // Close existing sessions and stop repeating requests
+        if (primarySession != null) {
+            try { primarySession.stopRepeating(); primarySession.close(); } catch (Exception ignored) {}
+            primarySession = null;
+        }
+        if (secondarySession != null) {
+            try { secondarySession.stopRepeating(); secondarySession.close(); } catch (Exception ignored) {}
+            secondarySession = null;
+        }
+
+        // Swap camera device references
+        CameraDevice tmp = primaryCameraDevice;
+        primaryCameraDevice = secondaryCameraDevice;
+        secondaryCameraDevice = tmp;
+
+        // Recreate sessions: each camera targets the SAME surface as before
+        // (primaryCameraDevice → cameraInputSurface, secondaryCameraDevice → pipCameraInputSurface)
+        if (recordingPipeline != null) {
+            Surface ps = recordingPipeline.getPrimaryCameraInputSurface();
+            Surface ss = recordingPipeline.getSecondaryCameraInputSurface();
+            if (ps != null && primaryCameraDevice != null) {
+                createCaptureSession(primaryCameraDevice, ps, true);
+            }
+            if (ss != null && secondaryCameraDevice != null) {
+                createCaptureSession(secondaryCameraDevice, ss, false);
+            }
         }
 
         broadcastAction(Constants.BROADCAST_ON_DUAL_CAMERAS_SWAPPED);
@@ -549,7 +581,9 @@ public class DualCameraRecordingService extends Service {
     // ════════════════════════════════════════════════════════════════════
 
     /**
-     * Toggles the torch (flash) on the primary camera.
+     * Toggles the torch on whichever running camera supports flash.
+     * When the primary camera (e.g. front) lacks hardware flash, the secondary
+     * (back) camera's session is used instead so torch always works.
      */
     private void handleToggleTorch() {
         if (primaryRequestBuilder == null || primarySession == null) {
@@ -557,18 +591,60 @@ public class DualCameraRecordingService extends Service {
             return;
         }
         isTorchOn = !isTorchOn;
-        primaryRequestBuilder.set(CaptureRequest.FLASH_MODE,
+
+        // Determine which camera session supports torch
+        CameraCaptureSession torchSession = primarySession;
+        CaptureRequest.Builder torchBuilder = primaryRequestBuilder;
+        boolean primaryHasFlash = false;
+        try {
+            String primaryId = (config.getPrimaryCamera() == DualCameraConfig.PrimaryCamera.BACK)
+                    ? backCameraId : frontCameraId;
+            CameraCharacteristics chars = cameraManager.getCameraCharacteristics(primaryId);
+            Boolean flashAvail = chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+            primaryHasFlash = (flashAvail != null && flashAvail);
+        } catch (Exception e) {
+            FLog.w(TAG, "Could not check flash availability for primary camera", e);
+        }
+
+        if (!primaryHasFlash && secondarySession != null && secondaryRequestBuilder != null) {
+            torchSession = secondarySession;
+            torchBuilder = secondaryRequestBuilder;
+            FLog.d(TAG, "Primary camera has no flash — using secondary camera torch");
+        }
+
+        torchBuilder.set(CaptureRequest.FLASH_MODE,
                 isTorchOn ? CaptureRequest.FLASH_MODE_TORCH
                           : CaptureRequest.FLASH_MODE_OFF);
-        if (applyPrimaryRepeating()) {
-            FLog.d(TAG, "Torch toggled: " + (isTorchOn ? "ON" : "OFF"));
+
+        try {
+            torchSession.setRepeatingRequest(torchBuilder.build(), null, backgroundHandler);
+            FLog.d(TAG, "Torch toggled: " + (isTorchOn ? "ON" : "OFF")
+                    + " (using " + (torchSession == primarySession ? "primary" : "secondary") + " session)");
+        } catch (CameraAccessException e) {
+            FLog.e(TAG, "Failed to toggle torch", e);
+            isTorchOn = !isTorchOn;
+            return;
         }
-        // Persist and broadcast
+
         prefs.sharedPreferences.edit()
                 .putBoolean(Constants.PREF_TORCH_STATE, isTorchOn).apply();
         Intent broadcast = new Intent(Constants.BROADCAST_ON_TORCH_STATE_CHANGED);
         broadcast.putExtra(Constants.INTENT_EXTRA_TORCH_STATE, isTorchOn);
         sendBroadcast(broadcast);
+    }
+
+    private void handleSetFrontVideoMirror(Intent intent) {
+        boolean enabled = intent.getBooleanExtra(
+                Constants.EXTRA_FRONT_VIDEO_MIRROR_ENABLED,
+                prefs.isFrontVideoMirrorEnabled());
+        prefs.setFrontVideoMirrorEnabled(enabled);
+        if (recordingPipeline != null) {
+            recordingPipeline.setFrontVideoMirrorEnabled(enabled);
+        }
+        Intent mirrorBcast = new Intent(Constants.BROADCAST_ON_MIRROR_CHANGED);
+        mirrorBcast.putExtra(Constants.EXTRA_MIRROR_ENABLED, enabled);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(mirrorBcast);
+        FLog.i(TAG, "Front video mirror set: " + enabled);
     }
 
     /**

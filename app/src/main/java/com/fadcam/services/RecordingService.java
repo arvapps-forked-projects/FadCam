@@ -5194,15 +5194,29 @@ public class RecordingService extends Service {
                     || recordingState == RecordingState.PAUSED
                     || previewOnlyActive) {
                 try {
-                    isRecordingTorchEnabled = !isRecordingTorchEnabled; // Toggle the state for the session
-                    FLog.d(TAG, "Toggling recording torch via CaptureRequest. New state: " + isRecordingTorchEnabled);
+                    isRecordingTorchEnabled = !isRecordingTorchEnabled;
+                    // Check if current camera supports flash; fall back to back camera if not
+                    boolean currentHasFlash = currentCameraCharacteristics != null
+                            && currentCameraCharacteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) != null
+                            && currentCameraCharacteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
 
-                    captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
-                            isRecordingTorchEnabled ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
-
-                    // Apply the change by updating the repeating request
-                    captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
-                    FLog.d(TAG, "Recording torch repeating request updated.");
+                    if (currentHasFlash) {
+                        captureRequestBuilder.set(CaptureRequest.FLASH_MODE,
+                                isRecordingTorchEnabled ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
+                        captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler);
+                    } else {
+                        // Front camera without flash — use system-level torch on back camera
+                        try {
+                            String backId = getBackCameraId();
+                            if (backId != null) {
+                                cameraManager.setTorchMode(backId, isRecordingTorchEnabled);
+                                FLog.d(TAG, "Front camera has no flash — using back camera torch: " + isRecordingTorchEnabled);
+                            }
+                        } catch (Exception camEx) {
+                            FLog.e(TAG, "Failed to use back camera torch fallback", camEx);
+                            isRecordingTorchEnabled = !isRecordingTorchEnabled;
+                        }
+                    }
 
                     // Broadcast state change TO THE UI so it can update its torch button
                     Intent intent = new Intent(Constants.BROADCAST_ON_TORCH_STATE_CHANGED);
@@ -5232,6 +5246,24 @@ public class RecordingService extends Service {
             FLog.w(TAG,
                     "Cannot toggle recording torch via CaptureRequest - session, request builder, or camera device is null.");
         }
+    }
+
+    /** Returns the first back-facing camera ID that supports flash, or any back camera. */
+    @Nullable
+    private String getBackCameraId() {
+        try {
+            if (cameraManager == null) return null;
+            for (String id : cameraManager.getCameraIdList()) {
+                CameraCharacteristics chars = cameraManager.getCameraCharacteristics(id);
+                Integer facing = chars.get(CameraCharacteristics.LENS_FACING);
+                if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
+                    return id;
+                }
+            }
+        } catch (Exception e) {
+            FLog.e(TAG, "Error finding back camera", e);
+        }
+        return null;
     }
 
     // --- Status Check ---

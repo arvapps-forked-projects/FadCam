@@ -1724,6 +1724,7 @@ public class HomeFragment extends BaseFragment {
 
     private void onRecordingResumed() {
         recordingState = RecordingState.IN_PROGRESS;
+        hidePausedOverlay();
 
         buttonPauseResume.setIcon(
             AppCompatResources.getDrawable(
@@ -5285,10 +5286,15 @@ public class HomeFragment extends BaseFragment {
 
     private void pushFrontMirrorToService(boolean enabled) {
         if (!isAdded() || getContext() == null) return;
-        if (!isRecordingOrPaused() && !isMyServiceRunning(RecordingService.class)) {
+        if (!isRecordingOrPaused() && !isMyServiceRunning(RecordingService.class)
+                && !isMyServiceRunning(DualCameraRecordingService.class)) {
             return;
         }
-        Intent intent = new Intent(getContext(), RecordingService.class);
+        // Route to correct service
+        Class<?> targetService = isDualRecordingActive
+                ? DualCameraRecordingService.class
+                : RecordingService.class;
+        Intent intent = new Intent(getContext(), targetService);
         intent.setAction(Constants.INTENT_ACTION_SET_FRONT_VIDEO_MIRROR);
         intent.putExtra(Constants.EXTRA_FRONT_VIDEO_MIRROR_ENABLED, enabled);
         try {
@@ -5302,8 +5308,7 @@ public class HomeFragment extends BaseFragment {
         if (buttonMirrorSwitch == null || sharedPreferencesManager == null) return;
         CameraType selectedCamera = sharedPreferencesManager.getCameraSelection();
         boolean shouldShow =
-            selectedCamera == CameraType.FRONT &&
-            !selectedCamera.isDual() &&
+            (selectedCamera == CameraType.FRONT || selectedCamera.isDual()) &&
             !getClass().getName().contains("FadRecHomeFragment");
 
         buttonMirrorSwitch.setVisibility(shouldShow ? View.VISIBLE : View.GONE);
@@ -5462,13 +5467,9 @@ public class HomeFragment extends BaseFragment {
             return;
         }
 
-        // Prevent starting if either recording service is already running
-        if (isMyServiceRunning(DualCameraRecordingService.class)) {
-            FLog.w(TAG, "DualCameraRecordingService already running");
-            return;
-        }
-        if (isMyServiceRunning(RecordingService.class)) {
-            FLog.w(TAG, "RecordingService already running, cannot start dual recording");
+        // Prevent starting if a recording is already active
+        if (sharedPreferencesManager.isRecordingInProgress()) {
+            FLog.w(TAG, "A recording is already in progress — cannot start dual recording");
             return;
         }
 

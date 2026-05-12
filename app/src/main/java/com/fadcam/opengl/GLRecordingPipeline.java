@@ -527,6 +527,12 @@ public class GLRecordingPipeline {
         }
     }
 
+    public void setFullscreenCameraIsFront(boolean front) {
+        if (glRenderer != null) {
+            glRenderer.setFullscreenCameraIsFront(front);
+        }
+    }
+
     /**
      * Live-updates the PiP configuration (position, size, border, corners).
      * Thread-safe — can be called from any thread.
