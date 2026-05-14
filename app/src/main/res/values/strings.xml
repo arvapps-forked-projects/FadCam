@@ -1461,7 +1461,7 @@ Recommended: 192000 bps, 48000 Hz for most users.</string>
     <!-- Update Bottom Sheet Strings -->
     <string name="update_sarcastic_heading">📦 Oh look, another update...</string>
     <string name="update_visit_github">Visit GitHub</string>
-    <string name="update_version_arrow">  →  </string>
+    <string name="update_version_arrow">  >>  </string>
     <!-- Update variations -->
     <string name="update_variation_1">Still on &lt;font color=\'#E43C3C\'>v%1$s&lt;/font>? That\'s... nostalgic.&lt;br>Meanwhile, &lt;font color=\'#77DD77\'>v%2$s&lt;/font> is out there making waves. Time to catch up!</string>
     <string name="update_variation_2">&lt;font color=\'#E43C3C\'>v%1$s&lt;/font> is so last season.&lt;br>Meanwhile, &lt;font color=\'#77DD77\'>v%2$s&lt;/font> is ready to impress with new features and bug fixes. Upgrade for a better ride!</string>

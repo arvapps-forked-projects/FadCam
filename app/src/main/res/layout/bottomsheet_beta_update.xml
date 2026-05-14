@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@android:color/transparent">
+
+     <TextView
+         android:layout_width="40dp"
+         android:layout_height="40dp"
+         android:layout_gravity="center"
+         android:fontFamily="@font/materialicons"
+         android:text="science"
+         android:textColor="#BA68C8"
+         android:textSize="28sp"
+         android:gravity="center"
+         android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Beta Update Available" android:textColor="@android:color/white"
+        android:textSize="18sp" android:textStyle="bold" android:gravity="center"
+        android:layout_marginBottom="6dp"/>
+
+     <TextView
+         android:id="@+id/tv_beta_sheet_version"
+         android:layout_width="match_parent" android:layout_height="wrap_content"
+         android:text="v4.0.0  >>  v4.0.0-beta9" android:textColor="#BA68C8"
+         android:textSize="14sp" android:textStyle="bold" android:gravity="center"
+         android:layout_marginBottom="14dp"/>
+
+    <TextView
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="The FadCam beta is a standalone app that can be installed alongside the stable version. It will not interfere with your stable app or its data.\n\nInstall the beta to test new features before they reach the stable release."
+        android:textColor="#D0D0D0" android:textSize="13sp" android:gravity="center"
+        android:lineSpacingExtra="3dp" android:layout_marginBottom="20dp"/>
+
+     <Button
+         android:id="@+id/btn_beta_get" android:layout_width="match_parent"
+         android:layout_height="48dp" android:text="Get Beta" android:textColor="@android:color/white"
+         android:backgroundTint="#4527A0" android:layout_marginBottom="8dp"/>
+
+    <Button
+        android:id="@+id/btn_beta_dismiss" style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent" android:layout_height="40dp"
+        android:text="Maybe Later" android:textColor="#999"/>
+
+</LinearLayout>

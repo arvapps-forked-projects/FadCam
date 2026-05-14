@@ -472,32 +472,25 @@ public class AboutFragment extends BaseFragment {
         ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
         updateExecutor.execute(() -> {
             try {
-                java.net.URL url = new java.net.URL("https://github.com/anonfaded/FadCam/releases/latest");
-                java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
-                connection.setInstanceFollowRedirects(false); // Do not follow redirects
-                connection.connect();
-                String location = connection.getHeaderField("Location");
-                connection.disconnect();
-                String latestVersion = null;
-                String tagUrl = "https://github.com/anonfaded/FadCam/releases/latest";
-                if (location != null && location.contains("/tag/")) {
-                    int tagIndex = location.lastIndexOf("/tag/");
-                    tagUrl = location;
-                    latestVersion = location.substring(tagIndex + 5).replace("v", "").trim();
-                }
                 String currentVersion = getAppVersionForUpdates();
-                final String finalCurrentVersion = currentVersion;
-                final String finalLatestVersion = latestVersion;
-                final String finalTagUrl = tagUrl;
+                com.fadcam.services.UpdateCheckService.UpdateCheckResult result =
+                    com.fadcam.services.UpdateCheckService.checkForUpdate(currentVersion);
+
                 requireActivity().runOnUiThread(() -> {
                     dismissLoadingDialog();
-                    if (finalLatestVersion != null && isUpdateAvailable(finalCurrentVersion, finalLatestVersion)) {
-                        String changelog = ""; // Not available via this method
-                        UpdateAvailableBottomSheet.newInstance(finalLatestVersion, changelog, finalTagUrl)
+                    if (result.errorOccurred) {
+                        showErrorDialog("Failed to check for updates. Please try again later.");
+                    } else if (result.hasStable) {
+                        UpdateAvailableBottomSheet.newInstance(
+                            result.stableVersion, "", result.stableUrl)
                             .show(getParentFragmentManager(), "UpdateAvailableBottomSheet");
                     } else {
-                        showUpToDateDialog();
+                        if (result.hasBeta) {
+                            showUpToDateDialog("\n\nBeta v" + result.betaVersion + " available",
+                                    result.betaUrl);
+                        } else {
+                            showUpToDateDialog("", null);
+                        }
                     }
                 });
             } catch (Exception e) {
@@ -508,27 +501,6 @@ public class AboutFragment extends BaseFragment {
                 });
             }
         });
-    }
-
-    private boolean isUpdateAvailable(String currentVersion, String latestVersion) {
-        boolean currentIsBeta = currentVersion.contains("beta");
-
-        currentVersion = currentVersion.replace("-beta", "");
-        String[] current = currentVersion.split("\\.");
-        String[] latest = latestVersion.split("\\.");
-
-        for (int i = 0; i < Math.min(current.length, latest.length); i++) {
-            int currentPart = Integer.parseInt(current[i]);
-            int latestPart = Integer.parseInt(latest[i]);
-
-            if (latestPart > currentPart) {
-                return true;
-            } else if (latestPart < currentPart) {
-                return false;
-            }
-        }
-
-        return latest.length > current.length || (latest.length == current.length && currentIsBeta);
     }
 
     private void showLoadingDialog(String message) {
@@ -564,8 +536,16 @@ public class AboutFragment extends BaseFragment {
 
 
     private void showUpToDateDialog() {
+        showUpToDateDialog("", null);
+    }
+
+    private void showUpToDateDialog(String extraMessage, String betaUrl) {
         TextView messageView = new TextView(requireContext());
-        messageView.setText(getString(R.string.up_to_date_description));
+        String msg = getString(R.string.up_to_date_description);
+        if (extraMessage != null && !extraMessage.isEmpty()) {
+            msg += extraMessage;
+        }
+        messageView.setText(msg);
         
         // Check if we're using Snow Veil theme
         String currentTheme = SharedPreferencesManager.getInstance(requireContext()).sharedPreferences.getString(com.fadcam.Constants.PREF_APP_THEME, Constants.DEFAULT_APP_THEME);
@@ -581,6 +561,10 @@ public class AboutFragment extends BaseFragment {
                 .setTitle(getString(R.string.up_to_date))
                 .setView(messageView)
                 .setPositiveButton("OK", null);
+
+        if (betaUrl != null && !betaUrl.isEmpty()) {
+            builder.setNeutralButton("Get Beta", (dialog, which) -> openUrl(betaUrl));
+        }
         
         AlertDialog dialog = builder.create();
         dialog.setOnShowListener(dialogInterface -> setDialogButtonColors(dialog));

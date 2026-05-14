@@ -26,41 +26,277 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingTop="12dp"
-            android:paddingBottom="12dp"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp">
+            android:paddingTop="12dp" android:paddingBottom="12dp"
+            android:paddingStart="6dp" android:paddingEnd="6dp">
 
             <ImageView
                 android:id="@+id/home_sidebar_close_btn"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:layout_marginEnd="12dp"
+                android:layout_width="14dp" android:layout_height="14dp"
+                android:layout_marginEnd="0dp"
                 android:src="@drawable/ic_close"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:tint="?attr/pickerTextSecondary"
-                android:clickable="true"
-                android:focusable="true" />
+                android:clickable="true" android:focusable="true"/>
 
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
+                android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:layout_marginStart="4dp"
                 android:text="@string/home_options_title"
                 android:textColor="?attr/pickerTextPrimary"
-                android:textStyle="bold"
-                android:textSize="18sp"
-                android:textAlignment="viewStart"/>
+                android:textStyle="bold" android:textSize="17sp"/>
         </LinearLayout>
 
-        <!-- Divider below header -->
         <com.google.android.material.divider.MaterialDivider
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:layout_marginStart="0dp"
+            android:layout_marginEnd="0dp" app:dividerColor="#262626"/>
+
+        <!-- Profiles placeholder -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginStart="14dp"
-            android:layout_marginEnd="12dp"
-            app:dividerColor="#262626"/>
+            android:orientation="vertical"
+            android:background="@drawable/settings_group_card_bg"
+            android:layout_marginTop="4dp"
+            android:clickable="true"
+            android:focusable="true">
+
+        <LinearLayout
+            android:id="@+id/row_profiles"
+            style="@style/SettingsGroupRow"
+            android:clickable="true" android:focusable="true"
+            android:minHeight="56dp">
+
+            <TextView android:layout_width="24dp" android:layout_height="24dp"
+                android:layout_marginEnd="16dp" android:fontFamily="@font/materialicons"
+                android:text="account_circle" android:textColor="?attr/colorHeading"
+                android:textSize="18sp" android:gravity="center"/>
+
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Profiles" android:textColor="?attr/colorHeading"
+                    android:textSize="15sp" android:textStyle="bold"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="Save and load recording presets instantly"
+                    android:textColor="?attr/pickerTextSecondary" android:textSize="12sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/mini_app_coming_soon"
+                    android:textColor="@android:color/white" android:textSize="9sp"
+                    android:textStyle="bold" android:textAllCaps="true"
+                    android:background="@drawable/bg_coming_soon_badge"
+                    android:paddingHorizontal="6dp" android:paddingVertical="2dp"/>
+                <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                    android:layout_marginStart="6dp" android:src="@drawable/ic_arrow_right"
+                    android:tint="@android:color/darker_gray"/>
+            </LinearLayout>
+        </LinearLayout>
+        </LinearLayout>
+
+        <!-- Group: Update Available -->
+        <LinearLayout
+            android:id="@+id/update_available_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="@drawable/settings_group_card_bg"
+            android:padding="12dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:id="@+id/update_group_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Update Available"
+                android:textColor="?attr/colorAccent"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:letterSpacing="0.08"
+                android:gravity="center"
+                android:layout_marginBottom="10dp"/>
+
+            <!-- Stable Card -->
+            <FrameLayout
+                android:id="@+id/card_update_stable"
+                android:clipToOutline="true"
+                android:outlineProvider="background"
+                android:background="@drawable/card_bg_stable"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
+                android:layout_marginBottom="8dp"
+                
+                
+                
+                
+                
+                android:clickable="true"
+                android:focusable="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="14dp" android:paddingEnd="12dp" android:paddingTop="12dp" android:paddingBottom="12dp">
+
+                    <TextView android:layout_width="24dp" android:layout_height="24dp"
+                        android:layout_marginEnd="10dp" android:fontFamily="@font/materialicons"
+                        android:text="verified" android:textColor="#FFFFFF" android:textSize="18sp"
+                        android:gravity="center"/>
+
+<LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="horizontal" android:gravity="center_vertical">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Stable Release" android:textColor="#FFFFFF"
+                                android:textStyle="bold" android:textSize="12sp"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="16dp"
+                                android:layout_marginStart="6dp" android:paddingHorizontal="6dp"
+                                android:text="NEW" android:textColor="#FFFFFF"
+                                android:textSize="8sp" android:textStyle="bold"
+                                android:gravity="center"
+                                android:background="@drawable/bg_badge_stable"/>
+                        </LinearLayout>
+                          <TextView android:id="@+id/tv_stable_version" android:layout_width="wrap_content"
+                             android:layout_height="wrap_content" android:text="v--  >>  v--"
+                             android:textColor="#66BB6A" android:textSize="11sp" android:layout_marginTop="2dp"/>
+                    </LinearLayout>
+
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:layout_marginStart="12dp"
+                        android:src="@drawable/ic_arrow_right"
+                        android:tint="#FFFFFF" android:alpha="0.5"/>
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- Beta Card -->
+            <FrameLayout
+                android:id="@+id/card_update_beta"
+                android:clipToOutline="true"
+                android:outlineProvider="background"
+                android:background="@drawable/card_bg_beta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
+                android:layout_marginBottom="8dp"
+                
+                
+                
+                
+                
+                android:clickable="true"
+                android:focusable="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="14dp" android:paddingEnd="12dp" android:paddingTop="12dp" android:paddingBottom="12dp">
+
+                    <TextView android:layout_width="24dp" android:layout_height="24dp"
+                        android:layout_marginEnd="10dp" android:fontFamily="@font/materialicons"
+                        android:text="science" android:textColor="#FFFFFF" android:textSize="18sp"
+                        android:gravity="center"/>
+
+<LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="horizontal" android:gravity="center_vertical">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Beta Release" android:textColor="#FFFFFF"
+                                android:textStyle="bold" android:textSize="12sp"/>
+                            <TextView android:layout_width="wrap_content" android:layout_height="16dp"
+                                android:layout_marginStart="6dp" android:paddingHorizontal="6dp"
+                                android:text="NEW" android:textColor="#FFFFFF"
+                                android:textSize="8sp" android:textStyle="bold"
+                                android:gravity="center"
+                                android:background="@drawable/bg_badge_beta"/>
+                        </LinearLayout>
+                          <TextView android:id="@+id/tv_beta_version" android:layout_width="wrap_content"
+                             android:layout_height="wrap_content" android:text="v--  >>  v--"
+                             android:textColor="#BA68C8" android:textSize="11sp" android:layout_marginTop="2dp"/>
+                    </LinearLayout>
+
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:layout_marginStart="12dp"
+                        android:src="@drawable/ic_arrow_right"
+                        android:tint="#FFFFFF" android:alpha="0.5"/>
+                </LinearLayout>
+            </FrameLayout>
+
+            <!-- Pro Card -->
+            <FrameLayout
+                android:id="@+id/card_update_pro"
+                android:clipToOutline="true"
+                android:outlineProvider="background"
+                android:background="@drawable/card_bg_pro"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
+                android:layout_marginBottom="8dp"
+                
+                
+                
+                
+                
+                android:clickable="true"
+                android:focusable="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="14dp" android:paddingEnd="12dp" android:paddingTop="12dp" android:paddingBottom="12dp">
+
+                    <ImageView android:layout_width="24dp" android:layout_height="24dp"
+                        android:layout_marginEnd="10dp"
+                        android:src="@drawable/ic_crown" android:tint="#FFFFFF"
+                        android:scaleType="centerInside"/>
+
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                            android:orientation="horizontal" android:gravity="center_vertical">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="FadCam Pro" android:textColor="#FFFFFF"
+                                android:textStyle="bold" android:textSize="12sp"/>
+                             <TextView android:layout_width="wrap_content" android:layout_height="16dp"
+                                android:layout_marginStart="6dp" android:paddingHorizontal="6dp"
+                                android:text="NEW" android:textColor="#1A1A1A"
+                                android:textSize="8sp" android:textStyle="bold"
+                                android:gravity="center"
+                                android:background="@drawable/bg_badge_pro"/>
+                        </LinearLayout>
+                          <TextView android:id="@+id/tv_pro_version" android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" android:text="v--  >>  v--"
+                            android:textColor="#FFFFFF" android:textSize="11sp" android:layout_marginTop="2dp"/>
+                    </LinearLayout>
+
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp"
+                        android:layout_marginStart="12dp"
+                        android:src="@drawable/ic_arrow_right"
+                        android:tint="#FFFFFF" android:alpha="0.5"/>
+        </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
 
         <!-- Group: Display Settings -->
         <TextView
@@ -137,7 +373,7 @@
                     android:id="@+id/iv_preview_toggle"
                     android:layout_width="52dp"
                     android:layout_height="52dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="0dp"
                     android:layout_gravity="center_vertical" />
 
             </LinearLayout>
@@ -145,8 +381,8 @@
             <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
                 app:dividerColor="#262626"/>
 
             <LinearLayout
@@ -199,7 +435,7 @@
                     android:id="@+id/switch_preview_quick_actions_toggle"
                     android:layout_width="52dp"
                     android:layout_height="52dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="0dp"
                     android:layout_gravity="center_vertical" />
 
             </LinearLayout>
@@ -311,8 +547,8 @@
             <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
                 app:dividerColor="#262626"/>
 
             <!-- QR Scanner Mini App (READY) -->
@@ -375,8 +611,8 @@
             <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
                 app:dividerColor="#262626"/>
 
             <!-- Compass Mini App - Coming Soon -->
@@ -436,7 +672,7 @@
                             android:textStyle="bold"
                             android:gravity="center"
                             android:background="@drawable/bg_coming_soon_badge"
-                            android:layout_marginStart="8dp" />
+                            android:layout_marginStart="0dp" />
 
                     </LinearLayout>
 
@@ -467,8 +703,8 @@
             <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
                 app:dividerColor="#262626"/>
 
             <!-- Sound Meter Mini App - Coming Soon -->
@@ -528,7 +764,7 @@
                             android:textStyle="bold"
                             android:gravity="center"
                             android:background="@drawable/bg_coming_soon_badge"
-                            android:layout_marginStart="8dp" />
+                            android:layout_marginStart="0dp" />
 
                     </LinearLayout>
 
@@ -559,8 +795,8 @@
             <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
                 app:dividerColor="#262626"/>
 
             <!-- Sensor Dashboard Mini App - Coming Soon -->
@@ -620,7 +856,7 @@
                             android:textStyle="bold"
                             android:gravity="center"
                             android:background="@drawable/bg_coming_soon_badge"
-                            android:layout_marginStart="8dp" />
+                            android:layout_marginStart="0dp" />
 
                     </LinearLayout>
 
@@ -684,7 +920,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="0dp"
                     android:background="@drawable/bg_coming_soon_badge"
                     android:paddingStart="6dp"
                     android:paddingEnd="6dp"
@@ -737,7 +973,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="0dp"
                     android:background="@drawable/bg_coming_soon_badge"
                     android:paddingStart="6dp"
                     android:paddingEnd="6dp"
@@ -790,7 +1026,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="0dp"
                     android:background="@drawable/bg_coming_soon_badge"
                     android:paddingStart="6dp"
                     android:paddingEnd="6dp"
@@ -843,7 +1079,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="0dp"
                     android:background="@drawable/bg_coming_soon_badge"
                     android:paddingStart="6dp"
                     android:paddingEnd="6dp"
@@ -896,7 +1132,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="0dp"
                     android:background="@drawable/bg_coming_soon_badge"
                     android:paddingStart="6dp"
                     android:paddingEnd="6dp"
@@ -949,7 +1185,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="0dp"
                     android:background="@drawable/bg_coming_soon_badge"
                     android:paddingStart="6dp"
                     android:paddingEnd="6dp"
@@ -1045,7 +1281,7 @@
                             android:textStyle="bold"
                             android:gravity="center"
                             android:background="@drawable/bg_coming_soon_badge"
-                            android:layout_marginStart="8dp"
+                            android:layout_marginStart="0dp"
                             android:visibility="gone" />
 
                     </LinearLayout>
@@ -1075,8 +1311,8 @@
             <com.google.android.material.divider.MaterialDivider
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="0dp"
                 app:dividerColor="#262626"/>
 
             <!-- Tips row -->
@@ -1171,7 +1407,7 @@
                 <ImageView
                     android:layout_width="20dp"
                     android:layout_height="20dp"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="0dp"
                     android:src="@drawable/ic_discord" />
 
                 <TextView

@@ -271,7 +271,7 @@ public class HomeFragment extends BaseFragment {
     private ImageView ivCardRailToggleLandscape;
     
     private ImageView btnHamburgerMenu;
-    private View hamburgerBadgeDot;
+    private TextView hamburgerBadgeDot;
     private ImageView ivAppTitle; // App logo in header
     private TextView tvPreviewPlaceholder;
     private TextView tvPreviewHint; // Hint text for long press to enable preview
@@ -1349,14 +1349,13 @@ public class HomeFragment extends BaseFragment {
             showUnsupportedHardwareMessage();
         }
 
-        // ----- Update Check Bottom Sheet Start -----
+        // ----- Update Check (Atom feed) -----
         if (
             com.fadcam.SharedPreferencesManager.isAutoUpdateCheckEnabled(
                 requireContext()
             ) &&
             DeviceHelper.isInternetAvailable(requireContext())
         ) {
-            // Only show once per app open
             if (
                 getParentFragmentManager().findFragmentByTag(
                     "UpdateAvailableBottomSheet"
@@ -1367,69 +1366,40 @@ public class HomeFragment extends BaseFragment {
                     Executors.newSingleThreadExecutor();
                 updateExecutor.execute(() -> {
                     try {
-                        java.net.URL url = new java.net.URL(
-                            "https://github.com/anonfaded/FadCam/releases/latest"
-                        );
-                        java.net.HttpURLConnection connection =
-                            (java.net.HttpURLConnection) url.openConnection();
-                        connection.setRequestMethod("GET");
-                        connection.setInstanceFollowRedirects(false); // Do not follow redirects
-                        connection.connect();
-                        String location = connection.getHeaderField("Location");
-                        connection.disconnect();
-                        String latestVersion = null;
-                        String tagUrl =
-                            "https://github.com/anonfaded/FadCam/releases/latest";
-                        if (location != null && location.contains("/tag/")) {
-                            int tagIndex = location.lastIndexOf("/tag/");
-                            tagUrl = location;
-                            latestVersion = location
-                                .substring(tagIndex + 5)
-                                .replace("v", "")
-                                .trim();
-                        }
                         String currentVersion = getAppVersionForUpdates();
-                        if (
-                            latestVersion != null &&
-                            isUpdateAvailable(currentVersion, latestVersion)
-                        ) {
-                            String changelog = ""; // Not available via this method
-                            final String finalLatestVersion = latestVersion;
-                            final String finalTagUrl = tagUrl;
-                            requireActivity().runOnUiThread(() -> {
-                                    // Add safety check to ensure fragment is still attached when showing bottom
-                                    // sheet
-                                    if (
-                                        isAdded() &&
-                                        !isDetached() &&
-                                        getActivity() != null &&
-                                        !getActivity().isFinishing()
-                                    ) {
-                                        try {
-                                            UpdateAvailableBottomSheet.newInstance(
-                                                finalLatestVersion,
-                                                changelog,
-                                                finalTagUrl
-                                            ).show(
-                                                getParentFragmentManager(),
-                                                "UpdateAvailableBottomSheet"
-                                            );
-                                        } catch (IllegalStateException e) {
-                                            // Log the error but don't crash - this can happen during language changes
-                                            FLog.e(
-                                                TAG,
-                                                "Fragment not associated with fragment manager",
-                                                e
-                                            );
-                                        }
-                                    } else {
-                                        FLog.d(
-                                            TAG,
-                                            "Update check: Fragment not in valid state to show bottom sheet"
-                                        );
-                                    }
-                                });
+                        com.fadcam.services.UpdateCheckService.UpdateCheckResult result =
+                            com.fadcam.services.UpdateCheckService.checkForUpdate(currentVersion);
+
+                        if (result.errorOccurred) {
+                            FLog.w(TAG, "Update check returned error, skipping UI");
+                            return;
                         }
+
+                        // Show bottom sheet ONLY for stable updates
+                        if (result.hasStable) {
+                            final String finalVersion = result.stableVersion;
+                            final String finalUrl = result.stableUrl;
+                            requireActivity().runOnUiThread(() -> {
+                                if (isAdded() && !isDetached()
+                                        && getActivity() != null
+                                        && !getActivity().isFinishing()) {
+                                    try {
+                                        UpdateAvailableBottomSheet.newInstance(
+                                            finalVersion, "", finalUrl
+                                        ).show(getParentFragmentManager(),
+                                               "UpdateAvailableBottomSheet");
+                                    } catch (IllegalStateException e) {
+                                        FLog.e(TAG, "Cannot show update sheet", e);
+                                    }
+                                }
+                            });
+                        }
+
+                        // Update hamburger badge if any update available
+                        if (result.hasAnyUpdate()) {
+                            requireActivity().runOnUiThread(() -> updateUpdateBadge(true));
+                        }
+
                     } catch (Exception e) {
                         FLog.e(TAG, "Update check failed", e);
                     }
@@ -12821,28 +12791,11 @@ public class HomeFragment extends BaseFragment {
         }
     }
 
-    // Utility method to compare versions and determine if an update is available
-    private boolean isUpdateAvailable(
-        String currentVersion,
-        String latestVersion
-    ) {
-        boolean currentIsBeta = currentVersion.contains("beta");
-        currentVersion = currentVersion.replace("-beta", "");
-        String[] current = currentVersion.split("\\.");
-        String[] latest = latestVersion.split("\\.");
-        for (int i = 0; i < Math.min(current.length, latest.length); i++) {
-            int currentPart = Integer.parseInt(current[i]);
-            int latestPart = Integer.parseInt(latest[i]);
-            if (latestPart > currentPart) {
-                return true;
-            } else if (latestPart < currentPart) {
-                return false;
-            }
+    /** Updates the hamburger menu update badge. */
+    private void updateUpdateBadge(boolean show) {
+        if (hamburgerBadgeDot != null) {
+            hamburgerBadgeDot.setVisibility(show ? View.VISIBLE : View.GONE);
         }
-        return (
-            latest.length > current.length ||
-            (latest.length == current.length && currentIsBeta)
-        );
     }
 
     /**
@@ -12850,12 +12803,6 @@ public class HomeFragment extends BaseFragment {
      * incrementally.
      */
     public interface ProgressCallback {
-        /**
-         * Called when progress is made during file loading.
-         *
-         * @param current Current number of files processed
-         * @param total   Total number of files to process
-         */
         void onProgress(int current, int total);
     }
 

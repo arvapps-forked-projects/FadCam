@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@android:color/transparent">
+
+     <ImageView
+         android:layout_width="40dp" android:layout_height="40dp"
+         android:layout_gravity="center"
+         android:src="@drawable/ic_crown"
+         android:tint="#FFD700"
+         android:scaleType="centerInside"
+         android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="FadCam Pro Update" android:textColor="@android:color/white"
+        android:textSize="18sp" android:textStyle="bold" android:gravity="center"
+        android:layout_marginBottom="6dp"/>
+
+     <TextView
+         android:id="@+id/tv_pro_sheet_version"
+         android:layout_width="match_parent" android:layout_height="wrap_content"
+         android:text="v4.0.0  >>  v5.0.0" android:textColor="#FFFFFF"
+         android:textSize="14sp" android:textStyle="bold" android:gravity="center"
+         android:layout_marginBottom="14dp"/>
+
+    <TextView
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="A new version of FadCam Pro is available.\n\nFor free users, the stable release will arrive after approximately 60 days. Pro users receive updates immediately."
+        android:textColor="#D0D0D0" android:textSize="13sp" android:gravity="center"
+        android:lineSpacingExtra="3dp" android:layout_marginBottom="18dp"/>
+
+     <Button
+         android:id="@+id/btn_pro_get" android:layout_width="match_parent"
+         android:layout_height="48dp" android:text="Get FadCam Pro"
+         android:textColor="#1A1A1A" android:backgroundTint="#FFD700"
+         android:layout_marginBottom="8dp"/>
+
+    <Button
+        android:id="@+id/btn_pro_dismiss" style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent" android:layout_height="40dp"
+        android:text="Maybe Later" android:textColor="#999"/>
+
+</LinearLayout>

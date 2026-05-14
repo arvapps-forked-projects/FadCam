@@ -1,5 +1,17 @@
 # Lessons Learned
 
+## Build Command Best Practices (2026-05-12)
+
+**Rule**: Always use `./gradlew assembleDefaultDebug installDefaultDebug` instead of `./gradlew clean build`.
+
+**Why**: 
+- `clean` is unnecessary and wastes time
+- `build` rebuilds everything, not needed for incremental changes
+- `assembleDefaultDebug installDefaultDebug` is the correct workflow for fast iteration
+- This is the project standard per AGENTS.md
+
+**Pattern**: When building for testing/verification, always use the optimized assembly + install pattern.
+
 ## QRScanner Crash: YUV Format Mismatch (2026-05-07)
 
 **Pattern**: When fixing camera image format crashes, verify ALL code paths that consume the image data.

@@ -58,7 +58,7 @@
             android:paddingLeft="0dp"
             android:paddingRight="0dp"
             android:paddingTop="0dp"
-            android:paddingBottom="16dp"
+            android:paddingBottom="62dp"
             android:gravity="center_horizontal"
             android:background="@android:color/transparent">
 
@@ -73,80 +73,90 @@
                 app:lottie_autoPlay="true"
                 app:lottie_loop="true" />
 
-            <TextView
-                android:id="@+id/tvSarcasticMessage"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/update_sarcastic_heading"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="#FFFFFF"
-                android:gravity="center"
-                android:layout_marginTop="0dp"
-                android:layout_marginBottom="8dp"
-                android:paddingLeft="32dp"
-                android:paddingRight="32dp"
-                android:fontFamily="sans-serif-medium" />
-
-            <TextView
-                android:id="@+id/tvUpdateDescription"
+            <!-- Dark container for text content -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="14sp"
-                android:gravity="start"
-                android:textAlignment="viewStart"
-                android:layout_marginBottom="12dp"
-                android:lineSpacingExtra="2dp"
-                android:textColor="#FFFFFF"
-                android:lineSpacingMultiplier="1.2"
-                android:paddingLeft="32dp"
-                android:paddingRight="32dp"
-                android:autoLink="web"
-                android:linksClickable="true" />
-
-            <!-- Version row: current version (red), arrow, new version (green) -->
-            <LinearLayout
-                android:id="@+id/versionRow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginBottom="10dp">
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/settings_group_card_bg"
+                android:layout_marginTop="16dp"
+                android:layout_marginLeft="16dp"
+                android:layout_marginRight="16dp"
+                android:layout_marginBottom="16dp"
+                android:gravity="center_horizontal">
 
                 <TextView
-                    android:id="@+id/tvCurrentVersion"
+                    android:id="@+id/tvSarcasticMessage"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="v1.0.0"
-                    android:textColor="#E43C3C"
-                    android:textStyle="bold"
+                    android:text="@string/update_sarcastic_heading"
                     android:textSize="16sp"
-                    android:fontFamily="monospace" />
-
-                <TextView
-                    android:id="@+id/tvArrow"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/update_version_arrow"
+                    android:textStyle="bold"
                     android:textColor="#FFFFFF"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:includeFontPadding="true"
-                    android:ellipsize="none"
-                    android:singleLine="true"
-                    android:minWidth="40dp"
-                    android:gravity="center" />
+                    android:gravity="center"
+                    android:layout_marginBottom="8dp"
+                    android:fontFamily="sans-serif-medium" />
 
                 <TextView
-                    android:id="@+id/tvNewVersion"
+                    android:id="@+id/tvUpdateDescription"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="14sp"
+                    android:gravity="start"
+                    android:textAlignment="viewStart"
+                    android:layout_marginBottom="12dp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="#FFFFFF"
+                    android:lineSpacingMultiplier="1.2"
+                    android:autoLink="web"
+                    android:linksClickable="true" />
+
+                <!-- Version row: current version (green), arrow, new version (green) -->
+                <LinearLayout
+                    android:id="@+id/versionRow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="v2.0.0"
-                    android:textColor="#77DD77"
-                    android:textStyle="bold"
-                    android:textSize="16sp"
-                    android:fontFamily="monospace" />
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginBottom="10dp">
+
+                    <TextView
+                        android:id="@+id/tvCurrentVersion"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="v1.0.0"
+                        android:textColor="#2E7D32"
+                        android:textStyle="bold"
+                        android:textSize="16sp"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/tvArrow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/update_version_arrow"
+                        android:textColor="#FFFFFF"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:includeFontPadding="true"
+                        android:ellipsize="none"
+                        android:singleLine="true"
+                        android:minWidth="40dp"
+                        android:gravity="center" />
+
+                    <TextView
+                        android:id="@+id/tvNewVersion"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="v2.0.0"
+                        android:textColor="#43A047"
+                        android:textStyle="bold"
+                        android:textSize="16sp"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+
             </LinearLayout>
 
             <LinearLayout

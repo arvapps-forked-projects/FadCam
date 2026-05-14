@@ -764,7 +764,20 @@ public class MainActivity extends AppCompatActivity {
                 float dy = ev.getRawY() - swipeDownY;
                 if (Math.abs(dx) > Math.max(swipeTouchSlop * 6f, 180f)
                         && Math.abs(dx) > Math.abs(dy) * SWIPE_HORIZONTAL_RATIO) {
-                    int target = currentFragmentPosition + (dx < 0 ? 1 : -1);
+                    // Check layout direction for RTL-aware swipe handling
+                    boolean isRtl = getWindow().getDecorView().getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+                    boolean isSwipeBack = isRtl ? (dx < 0) : (dx > 0);
+                    
+                    // Swipe "back" from home tab opens sidebar instead of navigating
+                    if (isSwipeBack && currentFragmentPosition == 0) {
+                        openHomeSidebarFromSwipe();
+                        swipeHandled = true;
+                        swipeCandidate = false;
+                        return true;
+                    }
+                    // RTL-aware tab navigation: reverse direction in RTL layout
+                    int direction = isRtl ? (dx > 0 ? 1 : -1) : (dx < 0 ? 1 : -1);
+                    int target = currentFragmentPosition + direction;
                     if (target >= 0 && target <= 5) {
                         switchFragment(target, true);
                         swipeHandled = true;
@@ -784,6 +797,19 @@ public class MainActivity extends AppCompatActivity {
                 break;
         }
         return super.dispatchTouchEvent(ev);
+    }
+
+    /** Opens the home sidebar when the user swipes left from the home tab. */
+    private void openHomeSidebarFromSwipe() {
+        if (currentFragmentPosition == 0) {
+            androidx.fragment.app.FragmentManager fm = getSupportFragmentManager();
+            String tag = getFragmentTagForPosition(0);
+            androidx.fragment.app.Fragment frag = fm.findFragmentByTag(tag);
+            if (frag instanceof com.fadcam.ui.HomeFragment) {
+                com.fadcam.ui.HomeSidebarFragment sidebar = com.fadcam.ui.HomeSidebarFragment.newInstance();
+                sidebar.show(fm, "HomeSidebar");
+            }
+        }
     }
 
     private boolean isSwipeExcludedTarget(View touchedView) {
