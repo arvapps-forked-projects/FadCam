@@ -1,4 +1,4 @@
-<!-- Context: project-intelligence/nav | Priority: high | Version: 1.0 | Updated: 2025-01-12 -->
+<!-- Context: project-intelligence/nav | Priority: high | Version: 1.3 | Updated: 2026-05-17 -->
 
 # Project Intelligence
 
@@ -9,22 +9,22 @@
 ```
 .opencode/context/project-intelligence/
 ├── navigation.md              # This file - quick overview
-├── business-domain.md         # Business context and problem statement
-├── technical-domain.md        # Stack, architecture, technical decisions
-├── business-tech-bridge.md    # How business needs map to solutions
-├── decisions-log.md           # Major decisions with rationale
-└── living-notes.md            # Active issues, debt, open questions
+├── business-domain.md         # Business context and problem statement (v2.0)
+├── technical-domain.md        # Stack, architecture, technical decisions (v2.1)
+├── business-tech-bridge.md    # How business needs map to solutions (v2.0)
+├── decisions-log.md           # Major decisions with rationale (v2.0)
+└── living-notes.md            # Active issues, debt, open questions (v2.0)
 ```
 
 ## Quick Routes
 
 | What You Need | File | Description |
 |---------------|------|-------------|
-| Understand the "why" | `business-domain.md` | Problem, users, value proposition |
-| Understand the "how" | `technical-domain.md` | Stack, architecture, integrations |
-| See the connection | `business-tech-bridge.md` | Business → technical mapping |
-| Know the context | `decisions-log.md` | Why decisions were made |
-| Current state | `living-notes.md` | Active issues and open questions |
+| Understand the "why" | `business-domain.md` | Problem, users, value proposition, roadmap |
+| Understand the "how" | `technical-domain.md` | Stack (Java 8, Camera2, Media3, Room), architecture, patterns |
+| See the connection | `business-tech-bridge.md` | Business → technical mapping for all features |
+| Know the context | `decisions-log.md` | 7 documented decisions (Camera2, fMP4, Java, privacy, Patreon, stores, SDK 36) |
+| Current state | `living-notes.md` | 5 tech debt items, 3 open questions, active projects |
 | All of the above | Read all files in order | Full project intelligence |
 
 ## Usage

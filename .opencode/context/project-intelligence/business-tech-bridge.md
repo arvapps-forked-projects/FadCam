@@ -1,94 +1,64 @@
-<!-- Context: project-intelligence/bridge | Priority: high | Version: 1.0 | Updated: 2025-01-12 -->
+<!-- Context: project-intelligence/bridge | Priority: high | Version: 2.0 | Updated: 2026-05-17 -->
 
 # Business ↔ Tech Bridge
 
-> Document how business needs translate to technical solutions. This is the critical connection point.
+> How FadCam's business needs translate to technical solutions.
 
 ## Quick Reference
-
-- **Purpose**: Show stakeholders technical choices serve business goals
-- **Purpose**: Show developers business constraints drive architecture
+- **Purpose**: Connect business goals to technical implementations
 - **Update When**: New features, refactoring, business pivot
 
 ## Core Mapping
-
 | Business Need | Technical Solution | Why This Mapping | Business Value |
 |---------------|-------------------|------------------|----------------|
-| [Users need X] | [Technical implementation] | [Why this maps] | [Value delivered] |
-| [Business wants Y] | [Technical implementation] | [Why this maps] | [Value delivered] |
-| [Compliance requires Z] | [Technical implementation] | [Why this maps] | [Value delivered] |
+| Record discreetly without screen on | Background service + Camera2 API + screen-off capability | Camera2 gives raw access needed for background recording | Core differentiator vs commercial apps |
+| Prevent file corruption on crash | Fragmented MP4 muxing (Media3 Muxer) | Each segment is independently playable | Users never lose critical footage |
+| No data collection / privacy-first | FLog w/ auto-redaction, no analytics SDKs, no cloud dependencies | Privacy is the product's core value proposition | Trust and differentiation in market |
+| Professional screen recording | FadRec module w/ MediaProjection API + OpenGL overlay | MediaProjection is the only Android API for screen capture | Expands user base to content creators |
+| Remote monitoring from anywhere | NanoHTTPD local server + web interface | Lightweight, no cloud dependency needed | Security use case without subscription costs |
+| Dual camera recording | Concurrent camera sessions via Camera2 + PiP compositing | Camera2 supports concurrent camera IDs | Unique feature for comprehensive recording |
+| Wide device compatibility | Min SDK 24 (Android 7.0), CameraX lifecycle | CameraX handles device-specific camera quirks | Largest possible user base |
+| Monetize without ads | Patreon integration, Pro build variants (pro, proPlus) | Separate build variants w/ different app IDs | Revenue without compromising privacy |
+| Distribute widely | ABI splits (arm64 + armeabi-v7a), universal APK | Smaller downloads for users, broad compatibility | More downloads across all channels |
+| Android 15+ compatibility | 16KB page alignment, targetSdk 36 | Google requires 16KB alignment for Android 15 | Future-proof, Play Store compliance |
 
-## Feature Mapping Examples
+## Feature: Background Recording
+**Business Context**: Users need to record video while phone screen is off (dashcam, security, discreet recording)
+**Technical Implementation**: Foreground service (`RecordingService.java`, 6995 lines) using Camera2 API directly, not CameraX, for full control over recording pipeline
+**Connection**: Camera2 provides the low-level access needed to keep recording when screen is off. CameraX alone can't do this.
 
-### Feature: [Feature Name]
+## Feature: Fragmented MP4
+**Business Context**: Users can't afford to lose recordings if phone crashes or battery dies mid-recording
+**Technical Implementation**: Media3 Muxer writes fragmented MP4 segments; each segment is independently playable. MP4Parser (isoparser) handles box structure parsing for playback
+**Connection**: Standard MP4 requires finalization (moov atom at end). Fragmented MP4 writes playable data continuously.
 
-**Business Context**:
-- User need: [What users need]
-- Business goal: [Why this matters to business]
-- Priority: [Why this was prioritized]
+## Feature: FadRec Screen Recorder
+**Business Context**: Content creators need professional screen recording with annotation tools
+**Technical Implementation**: MediaProjection API for screen capture, OpenGL pipeline for annotation overlays (pen, eraser, text, shapes), Media3 Transformer for post-processing
+**Connection**: MediaProjection is Android's only screen capture API. OpenGL enables real-time annotation overlays.
 
-**Technical Implementation**:
-- Solution: [What was built]
-- Architecture: [How it fits the system]
-- Trade-offs: [What was considered and why it won]
-
-**Connection**:
-[Explain clearly how the technical solution serves the business need. What would happen without this feature? What does this feature enable for the business?]
-
-### Feature: [Feature Name]
-
-**Business Context**:
-- User need: [What users need]
-- Business goal: [Why this matters to business]
-- Priority: [Why this was prioritized]
-
-**Technical Implementation**:
-- Solution: [What was built]
-- Architecture: [How it fits the system]
-- Trade-offs: [What was considered and why it won]
-
-**Connection**:
-[Explain clearly how the technical solution serves the business need.]
+## Feature: Remote Streaming
+**Business Context**: Users want to monitor their phone camera remotely (security, baby monitor)
+**Technical Implementation**: NanoHTTPD serves MJPEG stream on local network, web interface for control, RemoteAuthManager for stream key authentication
+**Connection**: Local-only streaming means no cloud dependency, no subscription, no data leaving the device.
 
 ## Trade-off Decisions
-
-When business and technical needs conflict, document the trade-off:
-
 | Situation | Business Priority | Technical Priority | Decision Made | Rationale |
 |-----------|-------------------|-------------------|---------------|-----------|
-| [Conflict] | [What business wants] | [What tech wants] | [What was chosen] | [Why this was right] |
-
-## Common Misalignments
-
-| Misalignment | Warning Signs | Resolution Approach |
-|--------------|---------------|---------------------|
-| [Type of mismatch] | [Symptoms to watch for] | [How to address] |
+| Camera API choice | Works on all devices | Use modern CameraX | Camera2 for recording + CameraX for lifecycle | Camera2 needed for background recording; CameraX for device compatibility elsewhere |
+| Language choice | Fast development | Kotlin for modern features | Java 8 | Existing codebase is Java; migration cost outweighs benefits |
+| Monetization | Revenue | Keep it simple | Patreon lifetime access + build variants | No subscription model aligns with privacy-first ethos |
 
 ## Stakeholder Communication
-
-This file helps translate between worlds:
-
-**For Business Stakeholders**:
-- Shows that technical investments serve business goals
-- Provides context for why certain choices were made
-- Demonstrates ROI of technical decisions
-
-**For Technical Stakeholders**:
-- Provides business context for architectural decisions
-- Shows the "why" behind constraints and requirements
-- Helps prioritize technical debt with business impact
+**For Business Stakeholders**: Technical investments (Camera2, fragmented MP4, FLog) directly serve the privacy-first, reliable recording value proposition
+**For Technical Stakeholders**: Business constraints (no cloud, no analytics, open-source) drive architecture decisions like local-only streaming and FLog redaction
 
 ## Onboarding Checklist
-
-- [ ] Understand the core business needs this project addresses
-- [ ] See how each major feature maps to business value
-- [ ] Know the key trade-offs and why decisions were made
-- [ ] Be able to explain to stakeholders why technical choices matter
-- [ ] Be able to explain to developers why business constraints exist
+- [ ] Understand how each major feature maps to a business need
+- [ ] Know the key trade-offs (Camera2 vs CameraX, Java vs Kotlin)
+- [ ] Be able to explain why technical choices serve business goals
 
 ## Related Files
-
-- `business-domain.md` - Business needs in detail
-- `technical-domain.md` - Technical implementation in detail
-- `decisions-log.md` - Decisions made with full context
-- `living-notes.md` - Current open questions and issues
+- `business-domain.md` — Business needs in detail
+- `technical-domain.md` — Technical implementation in detail
+- `decisions-log.md` — Decisions made with full context
