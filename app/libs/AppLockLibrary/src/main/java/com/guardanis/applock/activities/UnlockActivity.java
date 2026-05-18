@@ -1,15 +1,14 @@
 package com.guardanis.applock.activities;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.widget.Toast;
-
-import com.fadcam.R;
-import com.guardanis.applock.AppLock;
-import com.guardanis.applock.views.UnlockViewController;
-
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
+import com.fadcam.R;
+import com.guardanis.applock.views.UnlockViewController;
 
 public class UnlockActivity extends AppCompatActivity implements UnlockViewController.Delegate {
 
@@ -28,6 +27,13 @@ public class UnlockActivity extends AppCompatActivity implements UnlockViewContr
         this.viewController.setDelegate(this);
         this.viewController.setupRootFlow();
         this.viewController.setAutoAuthorizationEnabled(true);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                handleBackPressed();
+            }
+        });
     }
 
     @Override

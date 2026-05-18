@@ -439,6 +439,8 @@ public class MainActivity extends AppCompatActivity {
         // Enable edge-to-edge display for Android 15 compatibility
         enableEdgeToEdge();
 
+        setupBackPressedHandler();
+
         // startup)-----------
         try {
             if (this.sharedPreferencesManager == null) {
@@ -1068,6 +1070,48 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void setupBackPressedHandler() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                // Unified: handle any visible overlay fragment (trash or settings)
+                if (handleOverlayBack()) {
+                    FLog.d("OverlayDebug", "onBackPressed: dismissed overlay fragment");
+                    return;
+                }
+
+                // If we're not on the home tab, go to home tab first before exiting
+                if (getCurrentFragmentPosition() != 0) {
+                    switchFragment(0, true); // Enable animation
+                } else {
+                    // Check if we should skip this back handling
+                    if (skipNextBackHandling) {
+                        skipNextBackHandling = false;
+                        setEnabled(false);
+                        getOnBackPressedDispatcher().onBackPressed();
+                        return;
+                    }
+
+                    // We're on the home tab, implement double back press to exit
+                    if (doubleBackToExitPressedOnce) {
+                        // Remove the callback to prevent it from executing after app close
+                        backPressHandler.removeCallbacks(backPressRunnable);
+                        setEnabled(false);
+                        getOnBackPressedDispatcher().onBackPressed();
+                        return;
+                    }
+
+                    // First back press - show toast and set flag
+                    doubleBackToExitPressedOnce = true;
+                    Toast.makeText(MainActivity.this, "Press back again to exit", Toast.LENGTH_SHORT).show();
+
+                    // Reset the flag after a delay
+                    backPressHandler.postDelayed(backPressRunnable, BACK_PRESS_DELAY);
+                }
+            }
+        });
+    }
+
     @Override
     public void onBackPressed() {
         // Unified: handle any visible overlay fragment (trash or settings)
@@ -1380,24 +1424,8 @@ public class MainActivity extends AppCompatActivity {
         Fragment top = getSupportFragmentManager().findFragmentById(R.id.overlay_fragment_container);
         if (top == null)
             return false;
-        // Animate fade out then pop
-        // method(handleOverlayBack_raceGuard)-----------
-        final Fragment beforeTop = getSupportFragmentManager().findFragmentById(R.id.overlay_fragment_container);
-        overlayContainer.animate().alpha(0f).setDuration(160).withEndAction(() -> {
-            Fragment currentTop = getSupportFragmentManager().findFragmentById(R.id.overlay_fragment_container);
-            boolean sameInstance = currentTop == beforeTop;
-            if (sameInstance) {
-                overlayContainer.setVisibility(View.GONE);
-                overlayContainer.setAlpha(1f);
-                if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
-                    getSupportFragmentManager().popBackStack();
-                }
-            } else {
-                // A different overlay appeared; don't hide or pop.
-                overlayContainer.setAlpha(1f);
-            }
-        }).start();
-        // method(handleOverlayBack_raceGuard)-----------
+        // Use popLevel: pops one sub-fragment if stacked, dismisses overlay if only one
+        OverlayNavUtil.popLevel(this);
         return true;
     }
 
