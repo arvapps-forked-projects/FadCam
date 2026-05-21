@@ -1096,6 +1096,7 @@
     <string name="faditor_split_success">Segment split into two</string>
     <string name="faditor_split_error">Cannot split here — too close to edge</string>
     <string name="faditor_delete_last_segment">Cannot delete the only segment</string>
+    <string name="faditor_delete_last_segments">Cannot delete the only segment</string>
     <string name="faditor_segment_deleted">Segment deleted</string>
     <string name="faditor_segment_duplicated">Segment duplicated</string>
     <string name="faditor_crop_title">Crop Aspect Ratio</string>
@@ -2309,6 +2310,10 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="audio_device_type_bt_sco">Bluetooth (SCO)</string>
     <string name="audio_device_type_bt_a2dp">Bluetooth (A2DP)</string>
     <string name="audio_device_type_ble_headset">BLE Headset</string>
+    <string name="audio_device_type_wired_headphones">Wired Headphones</string>
+    <string name="audio_device_type_ble_broadcast">BLE Broadcast</string>
+    <string name="audio_device_type_ble_speaker">BLE Speaker</string>
+    <string name="audio_device_type_builtin_mic">Built-in Mic</string>
     <string name="audio_device_type_external">External Microphone</string>
 
     <!-- Mini Apps Section -->
@@ -2403,6 +2408,39 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="torch_timer_custom_apply">Apply</string>
     <string name="torch_timer_custom_error_positive">Duration must be greater than 0</string>
     <string name="torch_timer_custom_error_invalid">Invalid number</string>
+    <string name="torch_timer_custom_duration">Custom Duration</string>
+    <string name="torch_custom_unit_seconds">Seconds</string>
+    <string name="torch_custom_unit_minutes">Minutes</string>
+    <string name="torch_custom_unit_hours">Hours</string>
+
+    <!-- Torch Notification -->
+    <string name="torch_notification_channel_name">Torch Active</string>
+    <string name="torch_notification_channel_desc">Notification shown when torch is on</string>
+    <string name="torch_notification_title">Torch is On</string>
+    <string name="torch_notification_text">Tap to turn off</string>
+
+    <!-- Torch Timer (alternate key, used by some Mini App screens) -->
+    <string name="torchtimer_label">Auto-off Timer</string>
+    <string name="torchtimer_desc">Flash turns off automatically after the set time</string>
+    <string name="torchtimer_off">Off</string>
+    <string name="torchtimer_picker_helper">Timer starts only when flash is active</string>
+    <string name="torchtimer_cancel">Cancel Timer</string>
+    <string name="torchtimer_30s">30 seconds</string>
+    <string name="torchtimer_1m">1 minute</string>
+    <string name="torchtimer_2m">2 minutes</string>
+    <string name="torchtimer_5m">5 minutes</string>
+    <string name="torchtimer_10m">10 minutes</string>
+    <string name="torchtimer_15m">15 minutes</string>
+    <string name="torchtimer_30m">30 minutes</string>
+    <string name="torchtimer_1h">1 hour</string>
+    <string name="torchtimer_custom_title">Set Custom Timer</string>
+    <string name="torchtimer_custom_unit_helper">Choose time unit</string>
+    <string name="torchtimer_custom_hint">Enter duration</string>
+    <string name="torchtimer_custom_minutes_example">Example: 5 for 5 minutes</string>
+    <string name="torchtimer_custom_hours_example">Example: 2 for 2 hours</string>
+    <string name="torchtimer_custom_apply">Apply</string>
+    <string name="torchtimer_custom_error_positive">Duration must be greater than 0</string>
+    <string name="torchtimer_custom_error_invalid">Invalid number</string>
 
     <string name="watermark_utm_title">UTM Coordinates</string>
     <string name="watermark_utm_off">Off</string>
@@ -2414,6 +2452,13 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <string name="mini_app_clinometer_desc">Measure angles and slopes using gyroscope</string>
     <string name="mini_app_qr_scanner_title">QR Scanner</string>
     <string name="mini_app_qr_scanner_desc">Scan QR codes and barcodes instantly</string>
+    <string name="qr_scanner_format_badge">QR CODE</string>
+    <string name="qr_scanner_hint">Point camera at QR or barcode</string>
+    <string name="qr_scanner_camera_permission_required">Camera permission required</string>
+    <string name="qr_scanner_copied">Copied to clipboard</string>
+    <string name="qr_scanner_could_not_load">Could not load image</string>
+    <string name="qr_scanner_no_barcode">No barcode found in image</string>
+    <string name="qr_scanner_failed_process">Failed to process image</string>
     <string name="mini_app_pedometer_title">Pedometer</string>
     <string name="mini_app_pedometer_desc">Step counter using built-in step sensor</string>
     <string name="mini_app_metal_detector_title">Metal Detector</string>
@@ -2426,4 +2471,180 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <!-- Mini Apps Info Sheet -->
     <string name="mini_apps_planned_shortcuts_title">Planned: Shortcuts &amp; Automation</string>
     <string name="mini_apps_planned_shortcuts_desc">Home screen shortcuts for instant access to any Mini App without opening FadCam first.\n\nIntent-based automation support (Tasker, MacroDroid, etc.) for triggering Mini Apps programmatically — use QR scanning, torch, and more from your automated workflows.</string>
+
+    <!-- Lab Tab -->
+    <string name="export_center">Export Center</string>
+
+    <!-- Remote Tab -->
+    <string name="remote_server_status">Server Status</string>
+
+    <!-- Remote Bottom Sheets -->
+    <string name="remote_server_endpoints">Server Endpoints</string>
+    <string name="remote_get_requests">GET Requests</string>
+    <string name="remote_post_requests">POST Requests</string>
+    <string name="remote_server_root">Server Root</string>
+    <string name="remote_live_stream">Live Stream</string>
+    <string name="remote_status_api">Status API</string>
+    <string name="remote_init_segment">Init Segment</string>
+    <string name="remote_torch_toggle">Torch Toggle</string>
+    <string name="remote_post_requests_remote_control">POST Requests (Remote Control)</string>
+    <string name="remote_network_health">Network Health</string>
+    <string name="remote_status">Status</string>
+    <string name="remote_excellent">Excellent</string>
+    <string name="remote_test_now">Test Now</string>
+    <string name="remote_speed_metrics">Speed Metrics</string>
+    <string name="remote_download">Download</string>
+    <string name="remote_upload">Upload</string>
+    <string name="remote_signal_strength">Signal Strength</string>
+    <string name="remote_latency_ping">Latency (Ping)</string>
+    <string name="remote_last_tested">Last tested: %s</string>
+    <string name="remote_connected_clients">Connected Clients</string>
+    <string name="remote_client_data_usage">Client Data Usage</string>
+    <string name="remote_total_served">Total Served</string>
+    <string name="remote_active_clients">Active Clients</string>
+    <string name="remote_per_client_breakdown">Per-Client Breakdown</string>
+    <string name="remote_no_clients">No clients connected</string>
+    <string name="remote_battery_info">Battery Information</string>
+    <string name="remote_current_level">Current Level</string>
+    <string name="remote_battery_consumed">Battery Consumed (Streaming)</string>
+    <string name="remote_charging_status">Charging Status</string>
+    <string name="remote_not_charging">Not Charging</string>
+    <string name="remote_low_battery_threshold">Low Battery Warning Threshold</string>
+    <string name="remote_set">Set</string>
+    <string name="remote_device_battery_capacity">Device Battery Capacity</string>
+    <string name="remote_save">Save</string>
+    <string name="remote_estimates_for_device">Estimates for your device:</string>
+    <string name="remote_uptime_details">Uptime Details</string>
+    <string name="remote_server_uptime">Server Uptime</string>
+    <string name="remote_session_started_at">Session Started At</string>
+    <string name="remote_video_segments">Video Segments (Fragments)</string>
+    <string name="remote_buffered">Buffered</string>
+    <string name="remote_buffer_size">Buffer Size</string>
+    <string name="remote_sequence_range">Sequence Range</string>
+    <string name="remote_oldest">Oldest</string>
+    <string name="remote_latest">Latest</string>
+    <string name="remote_what_are_segments">What are segments?</string>
+    <string name="remote_stream_orientation">Stream Orientation</string>
+    <string name="remote_choose_orientation">Choose orientation for streaming only</string>
+    <string name="remote_portrait">Portrait</string>
+    <string name="remote_vertical_orientation">Vertical orientation (9:16)</string>
+    <string name="remote_landscape">Landscape</string>
+    <string name="remote_horizontal_orientation">Horizontal orientation (16:9)</string>
+    <string name="remote_auto_default">Auto (Default)</string>
+    <string name="remote_follow_recording_orientation">Follow app recording orientation</string>
+    <string name="remote_quality_low">Low</string>
+    <string name="remote_quality_medium">Medium</string>
+    <string name="remote_quality_high">High</string>
+    <string name="remote_quality_ultra">Ultra</string>
+    <string name="remote_event_logs">Event Logs</string>
+    <string name="remote_client_events">Client events</string>
+    <string name="remote_pages">Pages</string>
+    <string name="remote_layers">Layers</string>
+    <string name="remote_access_endpoints_desc">Access your streaming server via these HTTP endpoints</string>
+    <string name="remote_control_via_api_desc">Control FadCam remotely via API calls</string>
+    <string name="remote_buffered_segments_desc">Buffered segments ready for streaming</string>
+    <string name="remote_battery_low_warning">⚠️ Low Battery - Plug charger ASAP</string>
+    <string name="remote_enter_percentage_hint">Enter percentage</string>
+    <string name="remote_enter_mah_hint">Enter mAh (1000-10000)</string>
+
+    <!-- Sidebar Home -->
+    <string name="sidebar_profiles">Profiles</string>
+    <string name="sidebar_profiles_desc">Save and load recording presets instantly</string>
+    <string name="sidebar_update_available">Update Available</string>
+    <string name="sidebar_stable_release">Stable Release</string>
+    <string name="sidebar_beta_release">Beta Release</string>
+    <string name="sidebar_fadcam_pro">FadCam Pro</string>
+    <string name="badge_new">NEW</string>
+
+    <!-- Update Bottom Sheets -->
+    <string name="update_pro_title">FadCam Pro Update</string>
+    <string name="update_pro_desc">A new version of FadCam Pro is available.\n\nFor free users, the stable release will arrive after approximately 60 days. Pro users receive updates immediately.</string>
+    <string name="update_get_pro">Get FadCam Pro</string>
+    <string name="update_maybe_later">Maybe Later</string>
+    <string name="update_beta_title">Beta Update Available</string>
+    <string name="update_beta_desc">The FadCam beta is a standalone app that can be installed alongside the stable version. It will not interfere with your stable app or its data.\n\nInstall the beta to test new features before they reach the stable release.</string>
+    <string name="update_get_beta">Get Beta</string>
+
+    <!-- Mini Apps Info Sheet -->
+    <string name="mini_apps_about_title">About Mini Apps</string>
+    <string name="mini_apps_current_tools">Current Tools</string>
+    <string name="mini_apps_qr_scanner_reference">QR Scanner reference</string>
+
+    <!-- Screen Recording -->
+    <string name="screen_recording_title">Screen Recording</string>
+    <string name="screen_recording_notif_title">FadRec - Screen Recording</string>
+    <string name="screen_recording_saved">Screen Recording Saved</string>
+    <string name="screen_recording_tap_to_view">Tap to view your recording</string>
+    <string name="notification_action_stop">Stop</string>
+
+    <!-- FadMic -->
+    <string name="fadmic_coming_soon">FadMic (Mic Recording) coming soon!</string>
+
+    <!-- Toast messages -->
+    <string name="toast_stream_server_starting">Stream server starting...</string>
+    <string name="toast_stream_server_stopped">Stream server stopped</string>
+    <string name="toast_no_cloud_viewers">No cloud viewers connected</string>
+    <string name="toast_no_clients">No clients connected</string>
+    <string name="toast_device_id_copied">Device ID copied</string>
+    <string name="toast_endpoint_copied">Copied: %s</string>
+    <string name="toast_battery_set_threshold">Battery warning threshold set to %s</string>
+    <string name="toast_battery_set_capacity">Battery capacity set to %s</string>
+    <string name="toast_orientation_set">Orientation already set to %s</string>
+    <string name="toast_quality_set">Quality already set to %s</string>
+
+    <!-- Remote Recording Mode -->
+    <string name="remote_recording_mode">Recording Mode</string>
+    <string name="remote_mode_stream_only">Stream Only</string>
+    <string name="remote_mode_stream_only_desc">Stream without saving to storage</string>
+    <string name="remote_mode_stream_save">Stream &amp; Save</string>
+    <string name="remote_mode_stream_save_desc">Stream and save recording to storage</string>
+    <string name="remote_not_started">Not started</string>
+    <string name="remote_uptime_seconds_label">seconds</string>
+    <string name="remote_uptime_unix_prefix">Unix:</string>
+
+    <!-- Battery Info Sheet -->
+    <string name="battery_threshold_desc">When battery drops to or below this percentage, a warning will be displayed</string>
+    <string name="battery_capacity_desc">Check your device manual or settings for exact capacity. This adjusts your battery estimate calculations.</string>
+    <string name="battery_charging">Charging</string>
+    <string name="battery_discharging">Discharging</string>
+    <string name="battery_rate_per_hour">Rate: ~%.1f%% per hour</string>
+    <string name="battery_hours_remaining">~%.1f hours remaining</string>
+    <string name="battery_hours_plus_remaining">~%dh+ remaining</string>
+    <string name="battery_unable_to_calculate">Unable to calculate</string>
+    <string name="battery_unable_to_parse">Unable to parse battery info</string>
+    <string name="battery_enter_percentage">Please enter a percentage</string>
+    <string name="battery_percentage_range">Percentage must be between 5 and 100</string>
+    <string name="battery_invalid_number">Invalid number</string>
+    <string name="battery_enter_mah">Please enter battery capacity in mAh</string>
+    <string name="battery_mah_range">Capacity must be between 1000 and 10000 mAh</string>
+    <string name="battery_threshold_set">Battery warning threshold set to %d%%</string>
+    <string name="battery_failed_threshold">Failed to set threshold: %s</string>
+    <string name="battery_capacity_set">Battery capacity set to %d mAh</string>
+    <string name="battery_failed_capacity">Failed to set capacity: %s</string>
+    <string name="battery_current_threshold">Current threshold: %d%%</string>
+    <string name="battery_current_capacity">Current capacity: %d mAh</string>
+    <string name="battery_estimate_per_hour">\u2022 Per-hour consumption: ~%.1f%%</string>
+    <string name="battery_estimate_at_100">\u2022 At 100%% battery: ~%.1f hours</string>
+
+    <!-- Home screen camera info -->
+    <string name="home_fps_format">%dfps</string>
+    <string name="home_orientation_portrait">Portrait</string>
+    <string name="home_orientation_landscape">Landscape</string>
+    <string name="home_storage_format">%.2f GB</string>
+
+    <!-- HTTP methods -->
+    <string name="http_get" translatable="false">GET</string>
+    <string name="http_post" translatable="false">POST</string>
+
+    <!-- Appearance Settings -->
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="setting_theme">Theme</string>
+    <string name="setting_language">Language</string>
+    <string name="setting_app_icon">App Icon</string>
+
+    <!-- Audio Settings -->
+    <string name="setting_enabled">Enabled</string>
+    <string name="setting_disabled">Disabled</string>
+    <string name="setting_no_mic_headphones">(No-mic headphones)</string>
+    <string name="setting_audio_advanced_summary">%d kbps @ %d Hz</string>
 </resources>

@@ -1105,4 +1105,3294 @@ FadCam 为录制使用分段式 MP4 格式。这意味着视频被保存为多�
     <string name="stream_instr_3">3. 在同一 WiFi 下打开 VLC 或任何 HLS 播放器</string>
     <string name="stream_instr_4">4. 在媒体播放器中粘贴 URL 以观看直播</string>
     <string name="stream_network_info">流媒体播放需要连接到同一 WiFi 网络</string>
+<!-- audio_device_type_ble_headset -->
+<string name="audio_device_type_ble_headset">BLE耳机</string>
+
+<!-- audio_device_type_bt_a2dp -->
+<string name="audio_device_type_bt_a2dp">蓝牙（A2DP）</string>
+
+<!-- audio_device_type_bt_sco -->
+<string name="audio_device_type_bt_sco">蓝牙（SCO）</string>
+
+<!-- audio_device_type_external -->
+<string name="audio_device_type_external">外部麦克风</string>
+
+<!-- audio_device_type_usb -->
+<string name="audio_device_type_usb">USB</string>
+
+<!-- audio_device_type_usb_headset -->
+<string name="audio_device_type_usb_headset">USB耳机</string>
+
+<!-- audio_device_type_wired_headset -->
+<string name="audio_device_type_wired_headset">有线耳机</string>
+
+<!-- battery_estimate_disclaimer -->
+<string name="battery_estimate_disclaimer" formatted="false">基于实际测试：在5000mAh设备上连续直播8小时耗电61%。在下方更新您的设备容量以获得个性化估算。</string>
+
+<!-- battery_estimate_title -->
+<string name="battery_estimate_title">预计剩余直播时间</string>
+
+<!-- button_close -->
+<string name="button_close">关闭</string>
+
+<!-- button_copy -->
+<string name="button_copy">复制</string>
+
+<!-- button_gallery -->
+<string name="button_gallery">浏览相册</string>
+
+<!-- button_info -->
+<string name="button_info">信息</string>
+
+<!-- button_scan_again -->
+<string name="button_scan_again">重新扫描</string>
+
+<!-- button_settings_cam_dual -->
+<string name="button_settings_cam_dual">双摄（画中画）</string>
+
+<!-- button_share -->
+<string name="button_share">分享</string>
+
+<!-- button_torch -->
+<string name="button_torch">手电筒</string>
+
+<!-- camera_permission_denied -->
+<string name="camera_permission_denied">摄像头权限被拒绝。</string>
+
+<!-- cloud_account_button_desc -->
+<string name="cloud_account_button_desc">FadSec Cloud</string>
+
+<!-- cloud_account_connecting -->
+<string name="cloud_account_connecting">正在连接…</string>
+
+<!-- cloud_account_device_id -->
+<string name="cloud_account_device_id">设备ID</string>
+
+<!-- cloud_account_device_name_desc -->
+<string name="cloud_account_device_name_desc">此名称将显示在您的FadSec Cloud仪表盘中</string>
+
+<!-- cloud_account_device_name_hint -->
+<string name="cloud_account_device_name_hint">输入设备名称（例如：我的手机）</string>
+
+<!-- cloud_account_device_name_title -->
+<string name="cloud_account_device_name_title">命名您的设备</string>
+
+<!-- cloud_account_helper_text -->
+<string name="cloud_account_helper_text">取消关联以断开与您的账户的连接。您可以使用不同名称重新关联。</string>
+
+<!-- cloud_account_link -->
+<string name="cloud_account_link">关联设备</string>
+
+<!-- cloud_account_link_failed -->
+<string name="cloud_account_link_failed">关联设备失败。请重试。</string>
+
+<!-- cloud_account_link_success -->
+<string name="cloud_account_link_success">设备关联成功！</string>
+
+<!-- cloud_account_linked -->
+<string name="cloud_account_linked">设备已关联</string>
+
+<!-- cloud_account_login_required -->
+<string name="cloud_account_login_required">请登录以关联您的设备</string>
+
+<!-- cloud_account_not_linked -->
+<string name="cloud_account_not_linked">未关联</string>
+
+<!-- cloud_account_title -->
+<string name="cloud_account_title">FadSec Cloud</string>
+
+<!-- cloud_account_unlink -->
+<string name="cloud_account_unlink">取消关联设备</string>
+
+<!-- cloud_account_unlink_confirm -->
+<string name="cloud_account_unlink_confirm">您确定要取消关联此设备吗？</string>
+
+<!-- cloud_account_unlink_success -->
+<string name="cloud_account_unlink_success">设备已取消关联</string>
+
+<!-- cloud_account_webview_title -->
+<string name="cloud_account_webview_title">FadSec Cloud</string>
+
+<!-- cloud_button_label -->
+<string name="cloud_button_label">FadSec Cloud</string>
+
+<!-- cloud_button_title -->
+<string name="cloud_button_title">FadSec Cloud</string>
+
+<!-- cloud_streaming_not_linked -->
+<string name="cloud_streaming_not_linked">请先关联设备以启用</string>
+
+<!-- cloud_streaming_status_off -->
+<string name="cloud_streaming_status_off">仅在本地直播</string>
+
+<!-- cloud_streaming_status_on -->
+<string name="cloud_streaming_status_on">正在上传到FadSec Cloud</string>
+
+<!-- cloud_streaming_title -->
+<string name="cloud_streaming_title">云直播</string>
+
+<!-- digital_forensics_capture_scope -->
+<string name="digital_forensics_capture_scope">证据捕获范围</string>
+
+<!-- digital_forensics_coming_soon -->
+<string name="digital_forensics_coming_soon">计划在未来更新中添加。</string>
+
+<!-- digital_forensics_coming_soon_short -->
+<string name="digital_forensics_coming_soon_short">即将推出</string>
+
+<!-- digital_forensics_daily_helper -->
+<string name="digital_forensics_daily_helper">显示简洁的每日报告，包括总事件数和事件类型，让您无需打开每个视频即可快速查看活动。</string>
+
+<!-- digital_forensics_daily_summary -->
+<string name="digital_forensics_daily_summary">每日摘要</string>
+
+<!-- digital_forensics_dangerous_helper -->
+<string name="digital_forensics_dangerous_helper">高级安全标注为可选项且严格。除非您特别需要高灵敏度安全标签，否则请保持关闭。</string>
+
+<!-- digital_forensics_discord_alerts -->
+<string name="digital_forensics_discord_alerts">Discord提醒</string>
+
+<!-- digital_forensics_discord_coming_soon_toast -->
+<string name="digital_forensics_discord_coming_soon_toast">Discord提醒将在未来更新中添加。</string>
+
+<!-- digital_forensics_enable -->
+<string name="digital_forensics_enable">启用数字取证</string>
+
+<!-- digital_forensics_enable_helper -->
+<string name="digital_forensics_enable_helper">将此视为您的智能证据传感器。启用后，FadCam会保存检测活动的时间线，方便您稍后跳转到重要时刻。</string>
+
+<!-- digital_forensics_event_dangerous_object -->
+<string name="digital_forensics_event_dangerous_object">危险物体标签</string>
+
+<!-- digital_forensics_event_person -->
+<string name="digital_forensics_event_person">人员事件</string>
+
+<!-- digital_forensics_event_pet -->
+<string name="digital_forensics_event_pet">宠物事件</string>
+
+<!-- digital_forensics_event_vehicle -->
+<string name="digital_forensics_event_vehicle">车辆事件</string>
+
+<!-- digital_forensics_evidence_enable -->
+<string name="digital_forensics_evidence_enable">启用证据收集</string>
+
+<!-- digital_forensics_evidence_helper -->
+<string name="digital_forensics_evidence_helper">启用后，检测结果将实时写入取证数据库并保存证据帧。如果仅需实时预览标签而不需存储增长，请保持关闭。</string>
+
+<!-- digital_forensics_heatmap -->
+<string name="digital_forensics_heatmap">热力图洞察</string>
+
+<!-- digital_forensics_heatmap_helper -->
+<string name="digital_forensics_heatmap_helper">根据检测到的位置构建运动热力图。越亮的区域表示摄像头视野中该区域活动越频繁。</string>
+
+<!-- digital_forensics_helper -->
+<string name="digital_forensics_helper">数字取证分两部分：实时预览叠加层和保存的证据。如果仅需实时AI视觉标签，请关闭证据收集。如需取证历史记录，请开启证据收集并选择要存储的内容。</string>
+
+<!-- digital_forensics_motion_lab_dependency -->
+<string name="digital_forensics_motion_lab_dependency">Motion Lab当前已禁用。取证录制依赖于Motion Lab分析。请先启用Motion Lab以捕获取证事件。</string>
+
+<!-- digital_forensics_overlay -->
+<string name="digital_forensics_overlay">在实时预览中显示AI叠加层</string>
+
+<!-- digital_forensics_overlay_helper -->
+<string name="digital_forensics_overlay_helper">当可用时，这会在实时预览中绘制简单标签，让您实时看到AI识别的内容。关闭以保持预览画面干净。</string>
+
+<!-- digital_forensics_person_helper -->
+<string name="digital_forensics_person_helper">在运动检测会话中检测到人员时记录事件。最适合家庭房间监控和入口日志。</string>
+
+<!-- digital_forensics_pet_helper -->
+<string name="digital_forensics_pet_helper">宠物标记需要专用模型，仍在扩展中。仅在测试早期支持时开启。</string>
+
+<!-- digital_forensics_picker_disabled_desc -->
+<string name="digital_forensics_picker_disabled_desc">关闭此选项。</string>
+
+<!-- digital_forensics_picker_enabled_desc -->
+<string name="digital_forensics_picker_enabled_desc">开启此选项。</string>
+
+<!-- digital_forensics_picker_switch_label -->
+<string name="digital_forensics_picker_switch_label">启用此选项</string>
+
+<!-- digital_forensics_preview_default -->
+<string name="digital_forensics_preview_default">人员 92%</string>
+
+<!-- digital_forensics_preview_subtitle -->
+<string name="digital_forensics_preview_subtitle">模拟叠加层预览，帮助用户理解标签、置信度和证据框架。</string>
+
+<!-- digital_forensics_preview_title -->
+<string name="digital_forensics_preview_title">实时检测预览</string>
+
+<!-- digital_forensics_row_subtitle -->
+<string name="digital_forensics_row_subtitle">证据时间线、身份重新关联与智能洞察</string>
+
+<!-- digital_forensics_scope_both -->
+<string name="digital_forensics_scope_both">人员和物体</string>
+
+<!-- digital_forensics_scope_both_helper -->
+<string name="digital_forensics_scope_both_helper">最适合完整安全证据：人员加非人员物体。</string>
+
+<!-- digital_forensics_scope_objects -->
+<string name="digital_forensics_scope_objects">仅物体</string>
+
+<!-- digital_forensics_scope_objects_helper -->
+<string name="digital_forensics_scope_objects_helper">仅存储非人员检测（车辆、宠物、物体）。</string>
+
+<!-- digital_forensics_scope_people -->
+<string name="digital_forensics_scope_people">仅人员</string>
+
+<!-- digital_forensics_scope_people_helper -->
+<string name="digital_forensics_scope_people_helper">仅存储人员检测以节省存储空间并聚焦人类活动。</string>
+
+<!-- digital_forensics_scope_picker_helper -->
+<string name="digital_forensics_scope_picker_helper">选择应作为证据持久保存的内容。这会影响数据库记录和保存的证据帧。</string>
+
+<!-- digital_forensics_status_disabled -->
+<string name="digital_forensics_status_disabled">已禁用</string>
+
+<!-- digital_forensics_status_enabled -->
+<string name="digital_forensics_status_enabled">已启用（正在收集取证事件元数据）</string>
+
+<!-- digital_forensics_status_enabled_short -->
+<string name="digital_forensics_status_enabled_short">已启用</string>
+
+<!-- digital_forensics_title -->
+<string name="digital_forensics_title">数字取证</string>
+
+<!-- digital_forensics_vehicle_helper -->
+<string name="digital_forensics_vehicle_helper">车辆标记需要专用模型，仍在扩展中。在模型支持落地前可保持关闭。</string>
+
+<!-- dual_cam_appearance_helper -->
+<string name="dual_cam_appearance_helper">自定义PiP叠加层的视觉外观，包括边框、圆角和间距。</string>
+
+<!-- dual_cam_banner_checking -->
+<string name="dual_cam_banner_checking">正在检查设备兼容性…</string>
+
+<!-- dual_cam_banner_supported -->
+<string name="dual_cam_banner_supported">已检测到两个摄像头，但并发支持尚未确认。点击查看详情。</string>
+
+<!-- dual_cam_banner_supported_confirmed -->
+<string name="dual_cam_banner_supported_confirmed">双摄像头已得到您的设备完全支持及确认。</string>
+
+<!-- dual_cam_banner_tap_details -->
+<string name="dual_cam_banner_tap_details">详情</string>
+
+<!-- dual_cam_banner_unsupported -->
+<string name="dual_cam_banner_unsupported">此设备不支持双摄像头。</string>
+
+<!-- dual_cam_info_android_label -->
+<string name="dual_cam_info_android_label">Android版本</string>
+
+<!-- dual_cam_info_api_label -->
+<string name="dual_cam_info_api_label">API级别</string>
+
+<!-- dual_cam_info_concurrent_label -->
+<string name="dual_cam_info_concurrent_label">并发摄像头API</string>
+
+<!-- dual_cam_info_concurrent_no -->
+<string name="dual_cam_info_concurrent_no">未确认</string>
+
+<!-- dual_cam_info_concurrent_yes -->
+<string name="dual_cam_info_concurrent_yes">已确认 ✓</string>
+
+<!-- dual_cam_info_device_label -->
+<string name="dual_cam_info_device_label">设备</string>
+
+<!-- dual_cam_info_devices_explanation -->
+<string name="dual_cam_info_devices_explanation">搭载高通骁龙855或更新、Google Tensor、三星Exynos 990或更新、以及联发科天玑1000或更新的设备通常支持并发摄像头访问。</string>
+
+<!-- dual_cam_info_processor_label -->
+<string name="dual_cam_info_processor_label">处理器</string>
+
+<!-- dual_cam_info_status_label -->
+<string name="dual_cam_info_status_label">状态</string>
+
+<!-- dual_cam_info_supported_status -->
+<string name="dual_cam_info_supported_status">✓ 您的设备支持双摄像头录制。</string>
+
+<!-- dual_cam_info_supported_unconfirmed -->
+<string name="dual_cam_info_supported_unconfirmed">⚠ 您的设备有两个摄像头，但并发支持尚未确认。可能可用。</string>
+
+<!-- dual_cam_info_title -->
+<string name="dual_cam_info_title">设备兼容性</string>
+
+<!-- dual_cam_info_unsupported_explanation -->
+<string name="dual_cam_info_unsupported_explanation">双摄像头录制需要您的设备同时运行前置和后置摄像头。这是一项硬件能力，取决于您设备的处理器和摄像头硬件。大多数2020年后的旗舰手机支持此功能。中端和旧设备通常不支持。
+
+这不是一个缺陷 — 这是您设备的硬件限制。</string>
+
+<!-- dual_cam_info_unsupported_status -->
+<string name="dual_cam_info_unsupported_status">✗ 您的设备不支持双摄像头录制。</string>
+
+<!-- dual_cam_info_which_devices -->
+<string name="dual_cam_info_which_devices">哪些设备支持？</string>
+
+<!-- dual_cam_info_why_unsupported -->
+<string name="dual_cam_info_why_unsupported">为什么不支持双摄像头？</string>
+
+<!-- dual_cam_layout_helper -->
+<string name="dual_cam_layout_helper">配置双摄像头录制过程中画中画叠加层的位置、大小和主摄像头。</string>
+
+<!-- dual_cam_pip_margin_hint -->
+<string name="dual_cam_pip_margin_hint">0 – 48 dp</string>
+
+<!-- dual_cam_pip_margin_title -->
+<string name="dual_cam_pip_margin_title">画中画边距</string>
+
+<!-- dual_cam_pip_position_helper -->
+<string name="dual_cam_pip_position_helper">选择副摄像头（画中画）叠加层放置的角落。</string>
+
+<!-- dual_cam_pip_position_title -->
+<string name="dual_cam_pip_position_title">画中画位置</string>
+
+<!-- dual_cam_pip_size_helper -->
+<string name="dual_cam_pip_size_helper">控制画中画叠加层相对于全输出宽度的尺寸。</string>
+
+<!-- dual_cam_pip_size_title -->
+<string name="dual_cam_pip_size_title">画中画大小</string>
+
+<!-- dual_cam_preview_helper -->
+<string name="dual_cam_preview_helper">例如，这是PiP模式在横屏模式下的显示效果。</string>
+
+<!-- dual_cam_preview_pip -->
+<string name="dual_cam_preview_pip">画中画</string>
+
+<!-- dual_cam_preview_primary -->
+<string name="dual_cam_preview_primary">主摄像头</string>
+
+<!-- dual_cam_primary_camera_helper -->
+<string name="dual_cam_primary_camera_helper">选择哪个摄像头填充全帧。另一个摄像头将显示为画中画叠加层。</string>
+
+<!-- dual_cam_primary_camera_title -->
+<string name="dual_cam_primary_camera_title">主摄像头</string>
+
+<!-- dual_cam_round_corners_helper -->
+<string name="dual_cam_round_corners_helper">为PiP叠加层应用圆角，呈现现代外观。</string>
+
+<!-- dual_cam_round_corners_title -->
+<string name="dual_cam_round_corners_title">圆角</string>
+
+<!-- dual_cam_section_appearance -->
+<string name="dual_cam_section_appearance">外观</string>
+
+<!-- dual_cam_section_layout -->
+<string name="dual_cam_section_layout">布局</string>
+
+<!-- dual_cam_section_preview -->
+<string name="dual_cam_section_preview">预览</string>
+
+<!-- dual_cam_settings_row_subtitle -->
+<string name="dual_cam_settings_row_subtitle">配置画中画布局与外观</string>
+
+<!-- dual_cam_settings_row_title -->
+<string name="dual_cam_settings_row_title">双摄像头设置</string>
+
+<!-- dual_cam_show_border_helper -->
+<string name="dual_cam_show_border_helper">在PiP叠加层周围显示细边框，以在视觉上与背景区分开。</string>
+
+<!-- dual_cam_show_border_title -->
+<string name="dual_cam_show_border_title">画中画边框</string>
+
+<!-- dual_camera_error -->
+<string name="dual_camera_error">双摄像头错误：%s</string>
+
+<!-- dual_camera_not_supported_toast -->
+<string name="dual_camera_not_supported_toast">此设备不支持双摄像头</string>
+
+<!-- dual_camera_pip_settings -->
+<string name="dual_camera_pip_settings">双摄像头画中画设置</string>
+
+<!-- dual_cameras_swapped -->
+<string name="dual_cameras_swapped">摄像头已交换</string>
+
+<!-- dual_recording_started -->
+<string name="dual_recording_started">双摄像头录制已开始</string>
+
+<!-- dual_recording_stopped -->
+<string name="dual_recording_stopped">双摄像头录制已停止</string>
+
+<!-- e2e_encryption_change_title -->
+<string name="e2e_encryption_change_title">更改端到端加密密码</string>
+
+<!-- e2e_encryption_configured -->
+<string name="e2e_encryption_configured">已配置 — 片段已端到端加密</string>
+
+<!-- e2e_encryption_not_configured -->
+<string name="e2e_encryption_not_configured">未配置 — 配置以启用云直播</string>
+
+<!-- e2e_encryption_setup_desc -->
+<string name="e2e_encryption_setup_desc">您的FadSec ID密码用于生成流加密密钥。此密码必须与您在FadCam仪表盘上查看直播时使用的密码一致。</string>
+
+<!-- e2e_encryption_setup_hint -->
+<string name="e2e_encryption_setup_hint">输入您的FadSec ID密码</string>
+
+<!-- e2e_encryption_setup_title -->
+<string name="e2e_encryption_setup_title">设置端到端加密密码</string>
+
+<!-- e2e_encryption_title -->
+<string name="e2e_encryption_title">端到端直播加密</string>
+
+<!-- export_complete -->
+<string name="export_complete">完成</string>
+
+<!-- export_error_hint -->
+<string name="export_error_hint">点击关闭</string>
+
+<!-- export_eta_hours -->
+<string name="export_eta_hours">预计 %d 小时</string>
+
+<!-- export_eta_minutes -->
+<string name="export_eta_minutes">预计 %d 分钟</string>
+
+<!-- export_eta_seconds -->
+<string name="export_eta_seconds">预计 %d 秒</string>
+
+<!-- export_file_size -->
+<string name="export_file_size">%s</string>
+
+<!-- export_status -->
+<string name="export_status">导出状态</string>
+
+<!-- fadcam_pro_column_label -->
+<string name="fadcam_pro_column_label">专业版</string>
+
+<!-- fadcam_pro_header_button -->
+<string name="fadcam_pro_header_button">专业版</string>
+
+<!-- fadcam_pro_plus_label -->
+<string name="fadcam_pro_plus_label">专业版</string>
+
+<!-- fadcam_pro_proplus_label -->
+<string name="fadcam_pro_proplus_label">Pro+</string>
+
+<!-- faditor_add_asset_image -->
+<string name="faditor_add_asset_image">图片（5秒静态）</string>
+
+<!-- faditor_add_asset_title -->
+<string name="faditor_add_asset_title">添加素材</string>
+
+<!-- faditor_add_asset_video -->
+<string name="faditor_add_asset_video">视频片段</string>
+
+<!-- faditor_asset_added -->
+<string name="faditor_asset_added">素材已添加到时间线</string>
+
+<!-- faditor_asset_error -->
+<string name="faditor_asset_error">无法添加素材</string>
+
+<!-- faditor_audio_added -->
+<string name="faditor_audio_added">音频已添加到时间线</string>
+
+<!-- faditor_audio_extract_current -->
+<string name="faditor_audio_extract_current">从视频提取</string>
+
+<!-- faditor_audio_extract_current_desc -->
+<string name="faditor_audio_extract_current_desc">从当前视频中提取音轨</string>
+
+<!-- faditor_audio_extract_failed -->
+<string name="faditor_audio_extract_failed">无法提取音频</string>
+
+<!-- faditor_audio_extracted -->
+<string name="faditor_audio_extracted">音频已提取并添加到时间线</string>
+
+<!-- faditor_audio_extracting -->
+<string name="faditor_audio_extracting">正在提取音频…</string>
+
+<!-- faditor_audio_no_track -->
+<string name="faditor_audio_no_track">此视频中未找到音轨</string>
+
+<!-- faditor_back_press_exit -->
+<string name="faditor_back_press_exit">再次按下以退出编辑器</string>
+
+<!-- faditor_browse_device -->
+<string name="faditor_browse_device">浏览设备</string>
+
+<!-- faditor_browse_device_desc -->
+<string name="faditor_browse_device_desc">从设备中选择任意视频</string>
+
+<!-- faditor_cancel -->
+<string name="faditor_cancel">取消</string>
+
+<!-- faditor_canvas_applied -->
+<string name="faditor_canvas_applied">画布已设置为 %s</string>
+
+<!-- faditor_canvas_title -->
+<string name="faditor_canvas_title">画布</string>
+
+<!-- faditor_capabilities_title -->
+<string name="faditor_capabilities_title">可执行的操作</string>
+
+<!-- faditor_close -->
+<string name="faditor_close">关闭编辑器</string>
+
+<!-- faditor_close_confirm_action -->
+<string name="faditor_close_confirm_action">关闭并保存</string>
+
+<!-- faditor_close_confirm_helper -->
+<string name="faditor_close_confirm_helper">您的项目将自动保存。您可以随时从最近项目中重新打开。</string>
+
+<!-- faditor_close_confirm_subtitle -->
+<string name="faditor_close_confirm_subtitle">保存项目并返回</string>
+
+<!-- faditor_close_confirm_title -->
+<string name="faditor_close_confirm_title">关闭编辑器？</string>
+
+<!-- faditor_crop_applied -->
+<string name="faditor_crop_applied">裁剪已应用</string>
+
+<!-- faditor_crop_cancelled -->
+<string name="faditor_crop_cancelled">裁剪已取消</string>
+
+<!-- faditor_crop_free -->
+<string name="faditor_crop_free">自由</string>
+
+<!-- faditor_crop_reset -->
+<string name="faditor_crop_reset">裁剪已重置</string>
+
+<!-- faditor_crop_title -->
+<string name="faditor_crop_title">裁剪宽高比</string>
+
+<!-- faditor_delete_confirm -->
+<string name="faditor_delete_confirm">删除</string>
+
+<!-- faditor_delete_last_segment -->
+<string name="faditor_delete_last_segment">无法删除唯一的片段</string>
+
+<!-- faditor_delete_projects_message -->
+<string name="faditor_delete_projects_message">删除 %1$d 个项目？此操作无法撤消。</string>
+
+<!-- faditor_delete_projects_title -->
+<string name="faditor_delete_projects_title">删除项目？</string>
+
+<!-- faditor_editor_title -->
+<string name="faditor_editor_title">Faditor Mini</string>
+
+<!-- faditor_empty_desc -->
+<string name="faditor_empty_desc">点击"开始新项目"选择视频并开始编辑</string>
+
+<!-- faditor_empty_title -->
+<string name="faditor_empty_title">暂无项目</string>
+
+<!-- faditor_error_no_video -->
+<string name="faditor_error_no_video">未选择视频</string>
+
+<!-- faditor_error_picker -->
+<string name="faditor_error_picker">无法打开文件选择器</string>
+
+<!-- faditor_export -->
+<string name="faditor_export">导出</string>
+
+<!-- faditor_export_back -->
+<string name="faditor_export_back">返回</string>
+
+<!-- faditor_export_back_confirm -->
+<string name="faditor_export_back_confirm">导出进行中。返回编辑器？</string>
+
+<!-- faditor_export_cancelled -->
+<string name="faditor_export_cancelled">导出已取消</string>
+
+<!-- faditor_export_complete_summary -->
+<string name="faditor_export_complete_summary">您的视频已保存到记录选项卡。</string>
+
+<!-- faditor_export_complete_title -->
+<string name="faditor_export_complete_title">导出完成</string>
+
+<!-- faditor_export_completed -->
+<string name="faditor_export_completed">导出完成</string>
+
+<!-- faditor_export_confirm_action -->
+<string name="faditor_export_confirm_action">立即导出</string>
+
+<!-- faditor_export_confirm_helper -->
+<string name="faditor_export_confirm_helper">%1$s • %2$d 个片段%3$s
+导出以后台服务运行 — 您可以关闭应用，导出将继续。</string>
+
+<!-- faditor_export_confirm_subtitle -->
+<string name="faditor_export_confirm_subtitle">导出将在后台继续</string>
+
+<!-- faditor_export_confirm_title -->
+<string name="faditor_export_confirm_title">导出视频</string>
+
+<!-- faditor_export_done -->
+<string name="faditor_export_done">完成</string>
+
+<!-- faditor_export_error -->
+<string name="faditor_export_error">导出失败：%1$s</string>
+
+<!-- faditor_export_eta -->
+<string name="faditor_export_eta">预计时间：%s</string>
+
+<!-- faditor_export_failed -->
+<string name="faditor_export_failed">导出失败</string>
+
+<!-- faditor_export_in_progress -->
+<string name="faditor_export_in_progress">导出已在进行中</string>
+
+<!-- faditor_export_info -->
+<string name="faditor_export_info">%1$s • %2$d 个片段%3$s • H.264 + AAC</string>
+
+<!-- faditor_export_notif_channel -->
+<string name="faditor_export_notif_channel">Faditor导出</string>
+
+<!-- faditor_export_notif_channel_desc -->
+<string name="faditor_export_notif_channel_desc">正在进行的视频导出的通知</string>
+
+<!-- faditor_export_notif_error_title -->
+<string name="faditor_export_notif_error_title">导出失败</string>
+
+<!-- faditor_export_notif_title -->
+<string name="faditor_export_notif_title">正在导出视频…</string>
+
+<!-- faditor_export_progress -->
+<string name="faditor_export_progress">正在导出…</string>
+
+<!-- faditor_export_success -->
+<string name="faditor_export_success">视频导出成功</string>
+
+<!-- faditor_exporting -->
+<string name="faditor_exporting">正在导出…</string>
+
+<!-- faditor_exporting_percent -->
+<string name="faditor_exporting_percent">正在导出… %1$d%%</string>
+
+<!-- faditor_fadcam_source -->
+<string name="faditor_fadcam_source">FadCam</string>
+
+<!-- faditor_fadrec_source -->
+<string name="faditor_fadrec_source">FadRec</string>
+
+<!-- faditor_feature_convert -->
+<string name="faditor_feature_convert">智能转换</string>
+
+<!-- faditor_feature_convert_desc -->
+<string name="faditor_feature_convert_desc">自动将防崩溃录制转换为可拖动的MP4，确保在各处流畅播放</string>
+
+<!-- faditor_feature_export -->
+<string name="faditor_feature_export">快速导出</string>
+
+<!-- faditor_feature_export_desc -->
+<string name="faditor_feature_export_desc">使用硬件加速编码导出为MP4</string>
+
+<!-- faditor_feature_preview -->
+<string name="faditor_feature_preview">实时预览</string>
+
+<!-- faditor_feature_preview_desc -->
+<string name="faditor_feature_preview_desc">即时播放您裁剪的片段</string>
+
+<!-- faditor_feature_privacy -->
+<string name="faditor_feature_privacy">完全离线</string>
+
+<!-- faditor_feature_privacy_desc -->
+<string name="faditor_feature_privacy_desc">所有编辑均在本地进行 — 无需上传，无需云</string>
+
+<!-- faditor_feature_trim -->
+<string name="faditor_feature_trim">精确裁剪</string>
+
+<!-- faditor_feature_trim_desc -->
+<string name="faditor_feature_trim_desc">将视频裁剪到您想要的精确帧</string>
+
+<!-- faditor_flip_title -->
+<string name="faditor_flip_title">翻转</string>
+
+<!-- faditor_home_tagline -->
+<string name="faditor_home_tagline">轻量级视频编辑器</string>
+
+<!-- faditor_info_convert_desc -->
+<string name="faditor_info_convert_desc">FadCam以防崩溃格式（称为分段MP4即fMP4）录制。与具有一个最终容器的标准MP4不同，fMP4将视频写入小的独立块。这意味着即使应用崩溃或录制突然停止，您的录像也能保持完整。
+
+然而，外部视频播放器、相册应用和文件管理器将无法拖动、预览或显示这些文件的正确时长。这不是一个缺陷 — 这是为提高可靠性而做出的有意的设计权衡。
+
+如果您计划将视频存储在FadCam之外（Google Drive、计算机或任何其他位置），必须先进行转换。否则文件将无法正常播放。
+
+转换方法：只需在此处（Faditor Mini）打开视频并点击导出。转换后的标准MP4将出现在您的记录选项卡中，即可保存到相册或分享到任何地方。该过程即时且无损 — 无需重新编码或降低质量。</string>
+
+<!-- faditor_info_convert_title -->
+<string name="faditor_info_convert_title">智能转换</string>
+
+<!-- faditor_info_export_desc -->
+<string name="faditor_info_export_desc">导出的视频将保存到您的活跃存储位置（与设置中配置的相同），前缀为"Faditor_"后跟时间戳。它们会出现在记录选项卡中，与原始录制文件并列。</string>
+
+<!-- faditor_info_export_title -->
+<string name="faditor_info_export_title">导出的文件</string>
+
+<!-- faditor_info_how_desc -->
+<string name="faditor_info_how_desc">从您的设备或FadCam录制中选择任意视频。使用时间线逐帧裁剪，然后导出。所有处理均在您的设备本地完成 — 没有任何内容上传。
+
+您的编辑进度每几秒自动保存一次，在离开编辑器时也会保存，因此即使应用意外关闭也不会丢失工作。</string>
+
+<!-- faditor_info_how_title -->
+<string name="faditor_info_how_title">工作原理</string>
+
+<!-- faditor_info_projects_desc -->
+<string name="faditor_info_projects_desc">您的所有编辑会话都会显示以便快速访问。每个项目以小型JSON文件的形式存储在您的设备上，包含视频URI、裁剪点和时间戳 — 不会复制您的视频。项目每几秒自动保存一次，因此进度永不丢失。
+
+您可以使用多选清单图标删除不再需要的项目。删除项目仅删除编辑会话数据；您的原始视频文件保持不变。</string>
+
+<!-- faditor_info_projects_title -->
+<string name="faditor_info_projects_title">最近项目</string>
+
+<!-- faditor_info_subtitle -->
+<string name="faditor_info_subtitle">关于内置编辑器您需要了解的一切</string>
+
+<!-- faditor_info_temp_desc -->
+<string name="faditor_info_temp_desc">当您加载fMP4视频进行编辑时，Faditor会检测文件是否需要"重新封装" — 一种无需重新编码即可添加拖放标记的快速转换。重新封装的文件会缓存在您的设备上，以便在您再次编辑同一视频时复用，节省时间和处理资源。
+
+您可以在每个项目旁看到其缓存大小（列在修改日期旁）。如果设备存储空间不足，您可以删除未使用的项目以清除其缓存的重新封装文件。
+
+这些临时缓存文件在您从此选项卡删除项目时会自动清理。</string>
+
+<!-- faditor_info_temp_title -->
+<string name="faditor_info_temp_title">临时文件和缓存</string>
+
+<!-- faditor_info_title -->
+<string name="faditor_info_title">关于Faditor Mini</string>
+
+<!-- faditor_mini_subtitle -->
+<string name="faditor_mini_subtitle">精确裁剪和导出您的视频</string>
+
+<!-- faditor_new_project -->
+<string name="faditor_new_project">新建项目</string>
+
+<!-- faditor_no_recordings -->
+<string name="faditor_no_recordings">尚未找到录制文件。开始使用FadCam录制即可在这里看到您的视频。</string>
+
+<!-- faditor_play_pause -->
+<string name="faditor_play_pause">播放或暂停</string>
+
+<!-- faditor_recent_projects -->
+<string name="faditor_recent_projects">最近项目</string>
+
+<!-- faditor_recordings_helper -->
+<string name="faditor_recordings_helper">从您的活跃存储位置使用FadCam录制的视频</string>
+
+<!-- faditor_redo -->
+<string name="faditor_redo">重做</string>
+
+<!-- faditor_remuxing -->
+<string name="faditor_remuxing">正在优化预览…</string>
+
+<!-- faditor_remuxing_percent -->
+<string name="faditor_remuxing_percent">正在优化… 已处理 %1$d秒</string>
+
+<!-- faditor_scanning -->
+<string name="faditor_scanning">正在扫描录制文件…</string>
+
+<!-- faditor_segment_deleted -->
+<string name="faditor_segment_deleted">片段已删除</string>
+
+<!-- faditor_segment_duplicated -->
+<string name="faditor_segment_duplicated">片段已复制</string>
+
+<!-- faditor_select_items -->
+<string name="faditor_select_items">选择项目</string>
+
+<!-- faditor_select_video -->
+<string name="faditor_select_video">选择视频</string>
+
+<!-- faditor_selected_count -->
+<string name="faditor_selected_count">已选 %1$d 项</string>
+
+<!-- faditor_source_chooser_desc -->
+<string name="faditor_source_chooser_desc">从相册选择视频或从FadCam录制中选择</string>
+
+<!-- faditor_speed_reset -->
+<string name="faditor_speed_reset">重置为1倍</string>
+
+<!-- faditor_speed_title -->
+<string name="faditor_speed_title">播放速度</string>
+
+<!-- faditor_split_error -->
+<string name="faditor_split_error">无法在此分割 — 太靠近边缘</string>
+
+<!-- faditor_split_success -->
+<string name="faditor_split_success">片段已一分为二</string>
+
+<!-- faditor_start_project -->
+<string name="faditor_start_project">开始新项目</string>
+
+<!-- faditor_tool_add -->
+<string name="faditor_tool_add">添加</string>
+
+<!-- faditor_tool_audio -->
+<string name="faditor_tool_audio">提取音频</string>
+
+<!-- faditor_tool_canvas -->
+<string name="faditor_tool_canvas">画布</string>
+
+<!-- faditor_tool_crop -->
+<string name="faditor_tool_crop">裁剪</string>
+
+<!-- faditor_tool_crop_free -->
+<string name="faditor_tool_crop_free">自由</string>
+
+<!-- faditor_tool_delete -->
+<string name="faditor_tool_delete">删除</string>
+
+<!-- faditor_tool_duplicate -->
+<string name="faditor_tool_duplicate">复制</string>
+
+<!-- faditor_tool_flip -->
+<string name="faditor_tool_flip">翻转</string>
+
+<!-- faditor_tool_muted -->
+<string name="faditor_tool_muted">已静音</string>
+
+<!-- faditor_tool_rotate -->
+<string name="faditor_tool_rotate">旋转</string>
+
+<!-- faditor_tool_sound -->
+<string name="faditor_tool_sound">声音</string>
+
+<!-- faditor_tool_speed -->
+<string name="faditor_tool_speed">1x</string>
+
+<!-- faditor_tool_split -->
+<string name="faditor_tool_split">分割</string>
+
+<!-- faditor_tool_trim -->
+<string name="faditor_tool_trim">裁剪</string>
+
+<!-- faditor_tool_volume -->
+<string name="faditor_tool_volume">音量</string>
+
+<!-- faditor_undo -->
+<string name="faditor_undo">撤销</string>
+
+<!-- faditor_version_info -->
+<string name="faditor_version_info">Faditor Mini · 第一阶段 · 裁剪 + 导出</string>
+
+<!-- faditor_video_count -->
+<string name="faditor_video_count">%1$d 个视频</string>
+
+<!-- faditor_volume_mute -->
+<string name="faditor_volume_mute">静音音频</string>
+
+<!-- faditor_volume_title -->
+<string name="faditor_volume_title">音量</string>
+
+<!-- faditor_volume_unmute -->
+<string name="faditor_volume_unmute">取消静音音频</string>
+
+<!-- faditor_volume_warning -->
+<string name="faditor_volume_warning">超过100%%可能会降低音频质量</string>
+
+<!-- faditor_your_recordings -->
+<string name="faditor_your_recordings">您的录制文件</string>
+
+<!-- fadrec_audio_source_choose -->
+<string name="fadrec_audio_source_choose">选择音频源</string>
+
+<!-- fadrec_audio_source_internal -->
+<string name="fadrec_audio_source_internal">设备音频（内部）</string>
+
+<!-- fadrec_audio_source_mic -->
+<string name="fadrec_audio_source_mic">麦克风</string>
+
+<!-- fadrec_audio_source_none -->
+<string name="fadrec_audio_source_none">无音频</string>
+
+<!-- fadrec_audio_source_title -->
+<string name="fadrec_audio_source_title">音频源</string>
+
+<!-- fadrec_mic_permission_needed_message -->
+<string name="fadrec_mic_permission_needed_message">FadRec无法访问您的麦克风。您可以静音录制 — 不会保存音频。</string>
+
+<!-- fadrec_mic_permission_needed_title -->
+<string name="fadrec_mic_permission_needed_title">需要麦克风权限</string>
+
+<!-- fadrec_mute_audio -->
+<string name="fadrec_mute_audio">静音录制音频</string>
+
+<!-- fadrec_preview_enable_hint -->
+<string name="fadrec_preview_enable_hint">长按显示预览</string>
+
+<!-- fadrec_preview_not_available -->
+<string name="fadrec_preview_not_available">实时屏幕预览尚未接入FadRec</string>
+
+<!-- fadrec_record_muted -->
+<string name="fadrec_record_muted">静音录制</string>
+
+<!-- fadrec_unmute_audio -->
+<string name="fadrec_unmute_audio">取消静音录制音频</string>
+
+<!-- forensic_intelligence_title -->
+<string name="forensic_intelligence_title">取证情报</string>
+
+<!-- forensics_clip_black -->
+<string name="forensics_clip_black">黑色夹子</string>
+
+<!-- forensics_clip_red -->
+<string name="forensics_clip_red">红色夹子</string>
+
+<!-- forensics_clip_style_helper -->
+<string name="forensics_clip_style_helper">为图库卡片选择剪辑颜色。</string>
+
+<!-- forensics_clip_style_title -->
+<string name="forensics_clip_style_title">活页夹样式</string>
+
+<!-- forensics_copy_done -->
+<string name="forensics_copy_done">证据详情已复制</string>
+
+<!-- forensics_delete_selected_helper -->
+<string name="forensics_delete_selected_helper">选中的证据将移至垃圾桶，可从最近删除中恢复。</string>
+
+<!-- forensics_delete_selected_title -->
+<string name="forensics_delete_selected_title">删除 %1$d 个选中的证据项？</string>
+
+<!-- forensics_detected_label -->
+<string name="forensics_detected_label">检测到：%1$s</string>
+
+<!-- forensics_event_proof_frame -->
+<string name="forensics_event_proof_frame">事件证明帧</string>
+
+<!-- forensics_events_empty -->
+<string name="forensics_events_empty">未找到符合所选筛选条件的事件。</string>
+
+<!-- forensics_events_subtitle -->
+<string name="forensics_events_subtitle">筛选检测结果并跳转到精确时刻。</string>
+
+<!-- forensics_events_title -->
+<string name="forensics_events_title">事件时间线</string>
+
+<!-- forensics_evidence_details -->
+<string name="forensics_evidence_details">证据详情</string>
+
+<!-- forensics_export_action -->
+<string name="forensics_export_action">导出证据包</string>
+
+<!-- forensics_export_done -->
+<string name="forensics_export_done">证据导出已保存到：%1$s</string>
+
+<!-- forensics_export_no_path -->
+<string name="forensics_export_no_path">尚未选择导出目标。</string>
+
+<!-- forensics_export_pick_path -->
+<string name="forensics_export_pick_path">选择导出目标</string>
+
+<!-- forensics_export_pick_path_first -->
+<string name="forensics_export_pick_path_first">请先选择导出目标。</string>
+
+<!-- forensics_export_running -->
+<string name="forensics_export_running">正在构建证据导出…</string>
+
+<!-- forensics_export_selected_path -->
+<string name="forensics_export_selected_path">目标：%1$s</string>
+
+<!-- forensics_export_source_warning -->
+<string name="forensics_export_source_warning">包含源视频链接以实现可追溯性。如果媒体从原始位置移动或删除，播放链接可能失效，快照将作为主要证据保留。</string>
+
+<!-- forensics_export_stats -->
+<string name="forensics_export_stats">准备导出：%1$d 个快照 • %2$s</string>
+
+<!-- forensics_export_subtitle -->
+<string name="forensics_export_subtitle">从保存的取证证据创建JSON元数据+快照包。</string>
+
+<!-- forensics_export_title -->
+<string name="forensics_export_title">导出中心</string>
+
+<!-- forensics_filter_all -->
+<string name="forensics_filter_all">全部</string>
+
+<!-- forensics_filter_all_subtypes -->
+<string name="forensics_filter_all_subtypes">所有子类型</string>
+
+<!-- forensics_filter_high_conf -->
+<string name="forensics_filter_high_conf">仅高置信度</string>
+
+<!-- forensics_filter_object -->
+<string name="forensics_filter_object">物体</string>
+
+<!-- forensics_filter_person -->
+<string name="forensics_filter_person">人员</string>
+
+<!-- forensics_filter_pet -->
+<string name="forensics_filter_pet">宠物</string>
+
+<!-- forensics_filter_vehicle -->
+<string name="forensics_filter_vehicle">车辆</string>
+
+<!-- forensics_filter_with_count -->
+<string name="forensics_filter_with_count">%1$s（%2$d）</string>
+
+<!-- forensics_frames_hint -->
+<string name="forensics_frames_hint">滑动帧以预览时刻</string>
+
+<!-- forensics_frames_hint_fallback -->
+<string name="forensics_frames_hint_fallback">回退预览（关键帧可能有所不同）</string>
+
+<!-- forensics_gallery_deleted_toast -->
+<string name="forensics_gallery_deleted_toast">%1$d 已移到垃圾桶 • %2$d 已移除</string>
+
+<!-- forensics_gallery_empty -->
+<string name="forensics_gallery_empty">当前筛选条件下无证据快照。</string>
+
+<!-- forensics_gallery_empty_subtitle_filtered -->
+<string name="forensics_gallery_empty_subtitle_filtered">没有证据匹配此筛选条件</string>
+
+<!-- forensics_gallery_empty_subtitle_no_data -->
+<string name="forensics_gallery_empty_subtitle_no_data">从您的录制中AI检测到的帧将出现在这里</string>
+
+<!-- forensics_gallery_empty_title -->
+<string name="forensics_gallery_empty_title">证据板为空</string>
+
+<!-- forensics_gallery_selected_count -->
+<string name="forensics_gallery_selected_count">已选 %1$d 项</string>
+
+<!-- forensics_gallery_selected_count_plural -->
+<plurals name="forensics_gallery_selected_count_plural">
+        <item quantity="one">已选 %1$d 项</item>
+        <item quantity="other">已选 %1$d 项</item>
+    </plurals>
+
+<!-- forensics_gallery_sort_event_type -->
+<string name="forensics_gallery_sort_event_type">事件类型</string>
+
+<!-- forensics_gallery_source_missing -->
+<string name="forensics_gallery_source_missing">视频缺失：仅有快照证据可用。</string>
+
+<!-- forensics_gallery_stats -->
+<string name="forensics_gallery_stats">项目：%1$d • 快照存储：%2$s</string>
+
+<!-- forensics_gallery_title -->
+<string name="forensics_gallery_title">证据库</string>
+
+<!-- forensics_grid_1 -->
+<string name="forensics_grid_1">1列</string>
+
+<!-- forensics_grid_2 -->
+<string name="forensics_grid_2">2列</string>
+
+<!-- forensics_grid_3 -->
+<string name="forensics_grid_3">3列</string>
+
+<!-- forensics_grid_4 -->
+<string name="forensics_grid_4">4列</string>
+
+<!-- forensics_grid_5 -->
+<string name="forensics_grid_5">5列</string>
+
+<!-- forensics_grid_helper -->
+<string name="forensics_grid_helper">选择图库中显示的列数。</string>
+
+<!-- forensics_grid_option -->
+<string name="forensics_grid_option">网格布局</string>
+
+<!-- forensics_heatmap_cd -->
+<string name="forensics_heatmap_cd">活动热力图</string>
+
+<!-- forensics_heatmap_legend -->
+<string name="forensics_heatmap_legend">亮点表示重复活动。暗点表示活动较少。</string>
+
+<!-- forensics_info_body -->
+<string name="forensics_info_body">证据库存储在活跃录制会话期间捕获的快照。
+
+快照是独立的证据文件，即使源视频被移动或删除，仍可查看。
+
+对于视频关联的项目，可查看证据详情中的照片查看器，在可用时跳转到源录像。</string>
+
+<!-- forensics_info_helper -->
+<string name="forensics_info_helper">录制期间捕获快照后，证据将立即出现在此处。</string>
+
+<!-- forensics_info_line_1 -->
+<string name="forensics_info_line_1">仅在原始视频链接存在时，才可使用源视频操作。</string>
+
+<!-- forensics_info_line_2 -->
+<string name="forensics_info_line_2">如果视频被修改或删除，快照仍可作为独立证据保留。</string>
+
+<!-- forensics_info_line_3 -->
+<string name="forensics_info_line_3">使用导出中心将快照和元数据打包为存档。</string>
+
+<!-- forensics_info_title -->
+<string name="forensics_info_title">证据信息</string>
+
+<!-- forensics_insights_subtitle -->
+<string name="forensics_insights_subtitle">24小时威胁分析和态势报告。</string>
+
+<!-- forensics_insights_title -->
+<string name="forensics_insights_title">情报简报</string>
+
+<!-- forensics_media_all -->
+<string name="forensics_media_all">所有来源</string>
+
+<!-- forensics_media_available -->
+<string name="forensics_media_available">视频可用</string>
+
+<!-- forensics_media_missing -->
+<string name="forensics_media_missing">原始媒体不可用。仅使用保存的证据。</string>
+
+<!-- forensics_media_missing_only -->
+<string name="forensics_media_missing_only">视频缺失</string>
+
+<!-- forensics_not_available -->
+<string name="forensics_not_available">不可用</string>
+
+<!-- forensics_open_source_video -->
+<string name="forensics_open_source_video">打开源视频</string>
+
+<!-- forensics_section_actions -->
+<string name="forensics_section_actions">操作</string>
+
+<!-- forensics_section_appearance -->
+<string name="forensics_section_appearance">外观</string>
+
+<!-- forensics_serial_strip -->
+<string name="forensics_serial_strip">证据</string>
+
+<!-- forensics_snapshot_only -->
+<string name="forensics_snapshot_only">仅快照</string>
+
+<!-- forensics_sort_confidence -->
+<string name="forensics_sort_confidence">最高置信度</string>
+
+<!-- forensics_sort_evidence_rich -->
+<string name="forensics_sort_evidence_rich">证据丰富</string>
+
+<!-- forensics_sort_label -->
+<string name="forensics_sort_label">排序：%1$s</string>
+
+<!-- forensics_sort_newest -->
+<string name="forensics_sort_newest">最新优先</string>
+
+<!-- forensics_source_label -->
+<string name="forensics_source_label">来源：%1$s</string>
+
+<!-- forensics_tape_classic -->
+<string name="forensics_tape_classic">经典胶带</string>
+
+<!-- forensics_tape_style_helper -->
+<string name="forensics_tape_style_helper">选择证据索引标签的胶带设计。</string>
+
+<!-- forensics_tape_style_title -->
+<string name="forensics_tape_style_title">胶带样式</string>
+
+<!-- forensics_tape_torn -->
+<string name="forensics_tape_torn">撕裂胶带</string>
+
+<!-- forensics_timeline_label -->
+<string name="forensics_timeline_label">时间线位置</string>
+
+<!-- forensics_unknown_source -->
+<string name="forensics_unknown_source">未知来源</string>
+
+<!-- forensics_unknown_time -->
+<string name="forensics_unknown_time">未知时间</string>
+
+<!-- forensics_video_linked -->
+<string name="forensics_video_linked">视频已关联</string>
+
+<!-- front_video_mirror_disable -->
+<string name="front_video_mirror_disable">禁用前置视频翻转</string>
+
+<!-- front_video_mirror_enable -->
+<string name="front_video_mirror_enable">启用前置视频翻转</string>
+
+<!-- fullscreen_camera_switch -->
+<string name="fullscreen_camera_switch">切换摄像头</string>
+
+<!-- fullscreen_focus_off -->
+<string name="fullscreen_focus_off">对焦：关</string>
+
+<!-- fullscreen_focus_on -->
+<string name="fullscreen_focus_on">对焦：开</string>
+
+<!-- fullscreen_focus_toggle -->
+<string name="fullscreen_focus_toggle">点击切换对焦</string>
+
+<!-- fullscreen_label_af -->
+<string name="fullscreen_label_af">自动对焦</string>
+
+<!-- fullscreen_label_exposure -->
+<string name="fullscreen_label_exposure">曝光</string>
+
+<!-- fullscreen_label_mirror -->
+<string name="fullscreen_label_mirror">翻转视频</string>
+
+<!-- fullscreen_label_shot -->
+<string name="fullscreen_label_shot">拍摄</string>
+
+<!-- fullscreen_label_switch -->
+<string name="fullscreen_label_switch">切换</string>
+
+<!-- fullscreen_label_torch -->
+<string name="fullscreen_label_torch">手电筒</string>
+
+<!-- fullscreen_label_zoom -->
+<string name="fullscreen_label_zoom">变焦</string>
+
+<!-- fullscreen_preview_close -->
+<string name="fullscreen_preview_close">关闭全屏</string>
+
+<!-- fullscreen_preview_enter -->
+<string name="fullscreen_preview_enter">FadCam预览</string>
+
+<!-- fullscreen_preview_not_recording -->
+<string name="fullscreen_preview_not_recording">请先开始录制以使用全屏预览</string>
+
+<!-- fullscreen_preview_tap_hint -->
+<string name="fullscreen_preview_tap_hint">点击屏幕切换控制</string>
+
+<!-- fullscreen_torch -->
+<string name="fullscreen_torch">手电筒</string>
+
+<!-- helper_location_format -->
+<string name="helper_location_format">选择位置在水印中的显示方式：精确坐标，或通过逆地理编码（缩放级别18，建筑物级精度）获取完整地址。</string>
+
+<!-- home_cards_fold_toggle -->
+<string name="home_cards_fold_toggle">切换首页卡片</string>
+
+<!-- home_clock_color_choice_desc -->
+<string name="home_clock_color_choice_desc">时钟颜色%1$s</string>
+
+<!-- home_clock_color_helper -->
+<string name="home_clock_color_helper">从首页调色板选择时钟卡片颜色。</string>
+
+<!-- home_clock_color_option -->
+<string name="home_clock_color_option">时钟颜色</string>
+
+<!-- home_clock_color_option_desc -->
+<string name="home_clock_color_option_desc">选择时钟卡片的强调/背景色</string>
+
+<!-- home_clock_customize_helper -->
+<string name="home_clock_customize_helper">更改时钟显示、颜色和小时制式。</string>
+
+<!-- home_clock_customize_title -->
+<string name="home_clock_customize_title">时钟外观</string>
+
+<!-- home_clock_display_english_desc -->
+<string name="home_clock_display_english_desc">显示时间和英文日期</string>
+
+<!-- home_clock_display_helper -->
+<string name="home_clock_display_helper">选择时钟卡片的布局。</string>
+
+<!-- home_clock_display_islamic_desc -->
+<string name="home_clock_display_islamic_desc">显示时间及英文和伊斯兰日历</string>
+
+<!-- home_clock_display_option -->
+<string name="home_clock_display_option">时钟显示</string>
+
+<!-- home_clock_display_option_desc -->
+<string name="home_clock_display_option_desc">选择时钟卡片中的日期和时间行</string>
+
+<!-- home_clock_display_timeonly_desc -->
+<string name="home_clock_display_timeonly_desc">仅显示主时间行</string>
+
+<!-- home_clock_hour_format_12 -->
+<string name="home_clock_hour_format_12">12小时制（默认）</string>
+
+<!-- home_clock_hour_format_12_desc -->
+<string name="home_clock_hour_format_12_desc">显示带上午/下午的时间</string>
+
+<!-- home_clock_hour_format_24 -->
+<string name="home_clock_hour_format_24">24小时制</string>
+
+<!-- home_clock_hour_format_24_desc -->
+<string name="home_clock_hour_format_24_desc">以24小时制显示时间，不带上/下午</string>
+
+<!-- home_clock_hour_format_helper -->
+<string name="home_clock_hour_format_helper">选择首页时钟的小时制式。</string>
+
+<!-- home_clock_hour_format_option -->
+<string name="home_clock_hour_format_option">小时制式</string>
+
+<!-- home_clock_hour_format_option_desc -->
+<string name="home_clock_hour_format_option_desc">选择12或24小时制</string>
+
+<!-- home_elapsed_align_center -->
+<string name="home_elapsed_align_center">居中（默认）</string>
+
+<!-- home_elapsed_align_center_desc -->
+<string name="home_elapsed_align_center_desc">保持已用时间居中</string>
+
+<!-- home_elapsed_align_left -->
+<string name="home_elapsed_align_left">左对齐</string>
+
+<!-- home_elapsed_align_left_desc -->
+<string name="home_elapsed_align_left_desc">将已用时间靠左对齐</string>
+
+<!-- home_elapsed_alignment_helper -->
+<string name="home_elapsed_alignment_helper">选择已用计时器的对齐方式。</string>
+
+<!-- home_elapsed_alignment_option -->
+<string name="home_elapsed_alignment_option">对齐方式</string>
+
+<!-- home_elapsed_alignment_option_desc -->
+<string name="home_elapsed_alignment_option_desc">选择已用时间在卡片中的位置</string>
+
+<!-- home_elapsed_background_black -->
+<string name="home_elapsed_background_black">黑色卡片（默认）</string>
+
+<!-- home_elapsed_background_black_desc -->
+<string name="home_elapsed_background_black_desc">纯黑卡片背景，视觉效果更强</string>
+
+<!-- home_elapsed_background_helper -->
+<string name="home_elapsed_background_helper">选择已用时间卡片的背景样式。</string>
+
+<!-- home_elapsed_background_option -->
+<string name="home_elapsed_background_option">背景</string>
+
+<!-- home_elapsed_background_option_desc -->
+<string name="home_elapsed_background_option_desc">选择黑色、白色或透明卡片背景</string>
+
+<!-- home_elapsed_background_transparent -->
+<string name="home_elapsed_background_transparent">透明</string>
+
+<!-- home_elapsed_background_transparent_desc -->
+<string name="home_elapsed_background_transparent_desc">保持卡片视觉轻盈通透</string>
+
+<!-- home_elapsed_background_white -->
+<string name="home_elapsed_background_white">白色卡片</string>
+
+<!-- home_elapsed_background_white_desc -->
+<string name="home_elapsed_background_white_desc">白色卡片搭配深色文字</string>
+
+<!-- home_elapsed_customize_helper -->
+<string name="home_elapsed_customize_helper">自定义已用时间显示、对齐、大小、字体、标志强调和背景。</string>
+
+<!-- home_elapsed_customize_title -->
+<string name="home_elapsed_customize_title">已用时间</string>
+
+<!-- home_elapsed_display_compact -->
+<string name="home_elapsed_display_compact">紧凑内联（默认）</string>
+
+<!-- home_elapsed_display_compact_desc -->
+<string name="home_elapsed_display_compact_desc">以5h 16m 23s紧凑格式显示已用时间</string>
+
+<!-- home_elapsed_display_digital -->
+<string name="home_elapsed_display_digital">数字时钟</string>
+
+<!-- home_elapsed_display_digital_desc -->
+<string name="home_elapsed_display_digital_desc">以00:00或01:05:23格式显示，无内联标签</string>
+
+<!-- home_elapsed_display_helper -->
+<string name="home_elapsed_display_helper">选择已用时间在卡片上的显示方式。</string>
+
+<!-- home_elapsed_display_option -->
+<string name="home_elapsed_display_option">显示格式</string>
+
+<!-- home_elapsed_display_option_desc -->
+<string name="home_elapsed_display_option_desc">在紧凑内联已用时间和数字时钟格式之间切换</string>
+
+<!-- home_elapsed_flag_helper -->
+<string name="home_elapsed_flag_helper">选择是否在已用时间后显示FadSec Lab标志。</string>
+
+<!-- home_elapsed_flag_hide -->
+<string name="home_elapsed_flag_hide">隐藏FadSec Lab标志</string>
+
+<!-- home_elapsed_flag_hide_desc -->
+<string name="home_elapsed_flag_hide_desc">保持已用计时器区域简洁，不带旗帜装饰</string>
+
+<!-- home_elapsed_flag_option -->
+<string name="home_elapsed_flag_option">标志强调</string>
+
+<!-- home_elapsed_flag_option_desc -->
+<string name="home_elapsed_flag_option_desc">显示或隐藏计时器后的FadSec Lab标志</string>
+
+<!-- home_elapsed_flag_show -->
+<string name="home_elapsed_flag_show">显示FadSec Lab标志（默认）</string>
+
+<!-- home_elapsed_flag_show_desc -->
+<string name="home_elapsed_flag_show_desc">在计时器后显示品牌旗帜装饰</string>
+
+<!-- home_elapsed_font_doto -->
+<string name="home_elapsed_font_doto">Doto</string>
+
+<!-- home_elapsed_font_doto_desc -->
+<string name="home_elapsed_font_doto_desc">使用Doto字体以获得更具特色的数字计时器外观</string>
+
+<!-- home_elapsed_font_helper -->
+<string name="home_elapsed_font_helper">选择已用时间数字的字体。</string>
+
+<!-- home_elapsed_font_monospace -->
+<string name="home_elapsed_font_monospace">等宽</string>
+
+<!-- home_elapsed_font_monospace_desc -->
+<string name="home_elapsed_font_monospace_desc">使用Android内置等宽字体，实现更清晰的固定宽度数字</string>
+
+<!-- home_elapsed_font_option -->
+<string name="home_elapsed_font_option">字体</string>
+
+<!-- home_elapsed_font_option_desc -->
+<string name="home_elapsed_font_option_desc">选择已用时间数值的字体</string>
+
+<!-- home_elapsed_font_ubuntu -->
+<string name="home_elapsed_font_ubuntu">Ubuntu（默认）</string>
+
+<!-- home_elapsed_font_ubuntu_desc -->
+<string name="home_elapsed_font_ubuntu_desc">使用应用的默认Ubuntu字体显示计时器</string>
+
+<!-- home_elapsed_size_helper -->
+<string name="home_elapsed_size_helper">选择已用时间的醒目程度。</string>
+
+<!-- home_elapsed_size_large -->
+<string name="home_elapsed_size_large">大</string>
+
+<!-- home_elapsed_size_large_desc -->
+<string name="home_elapsed_size_large_desc">最大计时器尺寸，用于最大程度强调</string>
+
+<!-- home_elapsed_size_medium -->
+<string name="home_elapsed_size_medium">中（默认）</string>
+
+<!-- home_elapsed_size_medium_desc -->
+<string name="home_elapsed_size_medium_desc">已用计时器的平衡默认尺寸</string>
+
+<!-- home_elapsed_size_option -->
+<string name="home_elapsed_size_option">大小</string>
+
+<!-- home_elapsed_size_option_desc -->
+<string name="home_elapsed_size_option_desc">在紧凑和较大的已用计时器预设之间切换</string>
+
+<!-- home_elapsed_size_small -->
+<string name="home_elapsed_size_small">小</string>
+
+<!-- home_elapsed_size_small_desc -->
+<string name="home_elapsed_size_small_desc">最紧凑的计时器尺寸，适用于更紧凑的卡片</string>
+
+<!-- home_sidebar_discord -->
+<string name="home_sidebar_discord">Discord</string>
+
+<!-- home_sidebar_discord_sub -->
+<string name="home_sidebar_discord_sub">加入社区</string>
+
+<!-- home_storage_customize_helper -->
+<string name="home_storage_customize_helper">自定义存储指示器样式和总存储可见性。</string>
+
+<!-- home_storage_customize_title -->
+<string name="home_storage_customize_title">存储显示</string>
+
+<!-- home_storage_indicator_bar -->
+<string name="home_storage_indicator_bar">微型药丸条</string>
+
+<!-- home_storage_indicator_bar_desc -->
+<string name="home_storage_indicator_bar_desc">以微型水平条显示可用空间</string>
+
+<!-- home_storage_indicator_helper -->
+<string name="home_storage_indicator_helper">选择可用存储的可视化样式。</string>
+
+<!-- home_storage_indicator_option -->
+<string name="home_storage_indicator_option">指示器样式</string>
+
+<!-- home_storage_indicator_option_desc -->
+<string name="home_storage_indicator_option_desc">选择可用存储在图标位的可视化方式</string>
+
+<!-- home_storage_indicator_ring -->
+<string name="home_storage_indicator_ring">圆环（默认）</string>
+
+<!-- home_storage_indicator_ring_desc -->
+<string name="home_storage_indicator_ring_desc">以紧凑圆环显示可用空间</string>
+
+<!-- home_storage_indicator_title -->
+<string name="home_storage_indicator_title">存储指示器</string>
+
+<!-- home_storage_indicator_vertical -->
+<string name="home_storage_indicator_vertical">垂直条</string>
+
+<!-- home_storage_indicator_vertical_desc -->
+<string name="home_storage_indicator_vertical_desc">以紧凑垂直填充条显示可用空间</string>
+
+<!-- home_storage_total_helper -->
+<string name="home_storage_total_helper">选择是否在可用空间旁显示总存储。</string>
+
+<!-- home_storage_total_hide -->
+<string name="home_storage_total_hide">隐藏总存储</string>
+
+<!-- home_storage_total_hide_desc -->
+<string name="home_storage_total_hide_desc">仅显示可用空间值</string>
+
+<!-- home_storage_total_option -->
+<string name="home_storage_total_option">总存储</string>
+
+<!-- home_storage_total_option_desc -->
+<string name="home_storage_total_option_desc">显示或隐藏斜线和总容量值</string>
+
+<!-- home_storage_total_show -->
+<string name="home_storage_total_show">显示总存储（默认）</string>
+
+<!-- home_storage_total_show_desc -->
+<string name="home_storage_total_show_desc">内联显示斜线和总容量</string>
+
+<!-- home_time_left_color_choice_desc -->
+<string name="home_time_left_color_choice_desc">强调色%1$s</string>
+
+<!-- home_time_left_color_helper -->
+<string name="home_time_left_color_helper">选择剩余时间的强调色。红色默认。</string>
+
+<!-- home_time_left_color_title -->
+<string name="home_time_left_color_title">剩余时间颜色</string>
+
+<!-- image_viewer_title -->
+<string name="image_viewer_title">照片查看器</string>
+
+<!-- intel_activity_timeline -->
+<string name="intel_activity_timeline">活动时间线</string>
+
+<!-- intel_animals -->
+<string name="intel_animals">动物</string>
+
+<!-- intel_detection_breakdown -->
+<string name="intel_detection_breakdown">检测分类</string>
+
+<!-- intel_key_observations -->
+<string name="intel_key_observations">关键观察</string>
+
+<!-- intel_no_data -->
+<string name="intel_no_data">没有可用的情报数据。
+资产监控处于活动状态。</string>
+
+<!-- intel_objects -->
+<string name="intel_objects">物体</string>
+
+<!-- intel_personnel -->
+<string name="intel_personnel">人员</string>
+
+<!-- intel_range_24h -->
+<string name="intel_range_24h">24小时</string>
+
+<!-- intel_range_30d -->
+<string name="intel_range_30d">30天</string>
+
+<!-- intel_range_7d -->
+<string name="intel_range_7d">7天</string>
+
+<!-- intel_range_all -->
+<string name="intel_range_all">全部时间</string>
+
+<!-- intel_range_summary_24h -->
+<string name="intel_range_summary_24h">最近24小时</string>
+
+<!-- intel_range_summary_30d -->
+<string name="intel_range_summary_30d">最近30天</string>
+
+<!-- intel_range_summary_7d -->
+<string name="intel_range_summary_7d">最近7天</string>
+
+<!-- intel_range_summary_all -->
+<string name="intel_range_summary_all">所有记录数据</string>
+
+<!-- intel_tap_bar_hint -->
+<string name="intel_tap_bar_hint">点击任意条形图查看小时细分</string>
+
+<!-- intel_threat_assessment -->
+<string name="intel_threat_assessment">威胁评估</string>
+
+<!-- intel_time_window -->
+<string name="intel_time_window">24小时监控窗口</string>
+
+<!-- intel_total_detections -->
+<string name="intel_total_detections">总检测数</string>
+
+<!-- intel_vehicles -->
+<string name="intel_vehicles">车辆</string>
+
+<!-- intel_zone_analysis -->
+<string name="intel_zone_analysis">区域分析</string>
+
+<!-- intel_zone_desc -->
+<string name="intel_zone_desc">摄像头画面区域活动分布</string>
+
+<!-- intel_zone_desc_v2 -->
+<string name="intel_zone_desc_v2">您的摄像头画面分为9个区域。越亮表示该区域检测到的活动越多。</string>
+
+<!-- lab_hide_thumbnails_redacted -->
+<string name="lab_hide_thumbnails_redacted">已编辑</string>
+
+<!-- lab_hide_thumbnails_title -->
+<string name="lab_hide_thumbnails_title">保密模式</string>
+
+<!-- lab_section_about -->
+<string name="lab_section_about">关于</string>
+
+<!-- location_format_address -->
+<string name="location_format_address">完整地址</string>
+
+<!-- location_format_coordinates -->
+<string name="location_format_coordinates">仅坐标</string>
+
+<!-- location_format_title -->
+<string name="location_format_title">位置格式</string>
+
+<!-- location_update_interval_helper -->
+<string name="location_update_interval_helper">水印中位置数据的更新频率。较长间隔更省电。</string>
+
+<!-- location_update_interval_title -->
+<string name="location_update_interval_title">位置更新频率</string>
+
+<!-- media_type_photo -->
+<string name="media_type_photo">拍照</string>
+
+<!-- media_type_photo_back -->
+<string name="media_type_photo_back">返回</string>
+
+<!-- media_type_photo_fadrec -->
+<string name="media_type_photo_fadrec">FadRec</string>
+
+<!-- media_type_photo_selfie -->
+<string name="media_type_photo_selfie">自拍</string>
+
+<!-- mini_app_clinometer_desc -->
+<string name="mini_app_clinometer_desc">使用陀螺仪测量角度和坡度</string>
+
+<!-- mini_app_clinometer_title -->
+<string name="mini_app_clinometer_title">倾斜计</string>
+
+<!-- mini_app_coming_soon -->
+<string name="mini_app_coming_soon">即将推出</string>
+
+<!-- mini_app_coming_soon_desc -->
+<string name="mini_app_coming_soon_desc">此功能将在未来推出</string>
+
+<!-- mini_app_compass_desc -->
+<string name="mini_app_compass_desc">带方位显示和导航功能的数字指南针</string>
+
+<!-- mini_app_compass_feature_bearing -->
+<string name="mini_app_compass_feature_bearing">实时方位角（0-360°）</string>
+
+<!-- mini_app_compass_feature_cardinal -->
+<string name="mini_app_compass_feature_cardinal">基本方向（北、南、东、西）</string>
+
+<!-- mini_app_compass_feature_mag_true -->
+<string name="mini_app_compass_feature_mag_true">地磁北极 vs 真北</string>
+
+<!-- mini_app_compass_title -->
+<string name="mini_app_compass_title">指南针</string>
+
+<!-- mini_app_metal_detector_desc -->
+<string name="mini_app_metal_detector_desc">使用磁力计检测金属物体</string>
+
+<!-- mini_app_metal_detector_title -->
+<string name="mini_app_metal_detector_title">金属探测器</string>
+
+<!-- mini_app_parking_marker_desc -->
+<string name="mini_app_parking_marker_desc">保存停车位置并使用GPS箭头导航返回</string>
+
+<!-- mini_app_parking_marker_title -->
+<string name="mini_app_parking_marker_title">停车标记</string>
+
+<!-- mini_app_pedometer_desc -->
+<string name="mini_app_pedometer_desc">使用内置计步传感器进行计步</string>
+
+<!-- mini_app_pedometer_title -->
+<string name="mini_app_pedometer_title">计步器</string>
+
+<!-- mini_app_qr_generator_desc -->
+<string name="mini_app_qr_generator_desc">从文本、URL和联系人创建二维码</string>
+
+<!-- mini_app_qr_generator_title -->
+<string name="mini_app_qr_generator_title">二维码生成器</string>
+
+<!-- mini_app_qr_scanner_desc -->
+<string name="mini_app_qr_scanner_desc">即时扫描二维码和条形码</string>
+
+<!-- mini_app_qr_scanner_title -->
+<string name="mini_app_qr_scanner_title">二维码扫描器</string>
+
+<!-- mini_app_sensor_dashboard_desc -->
+<string name="mini_app_sensor_dashboard_desc">查看加速度计、陀螺仪和传感器数据</string>
+
+<!-- mini_app_sensor_dashboard_feature_accel -->
+<string name="mini_app_sensor_dashboard_feature_accel">加速度计（X、Y、Z）</string>
+
+<!-- mini_app_sensor_dashboard_feature_gyro -->
+<string name="mini_app_sensor_dashboard_feature_gyro">陀螺仪（X、Y、Z）</string>
+
+<!-- mini_app_sensor_dashboard_feature_mag -->
+<string name="mini_app_sensor_dashboard_feature_mag">磁力计读数</string>
+
+<!-- mini_app_sensor_dashboard_title -->
+<string name="mini_app_sensor_dashboard_title">传感器仪表盘</string>
+
+<!-- mini_app_sound_meter_desc -->
+<string name="mini_app_sound_meter_desc">分贝（dB）环境噪音水平检测器</string>
+
+<!-- mini_app_sound_meter_feature_avg -->
+<string name="mini_app_sound_meter_feature_avg">平均噪音水平</string>
+
+<!-- mini_app_sound_meter_feature_peak -->
+<string name="mini_app_sound_meter_feature_peak">峰值噪音检测</string>
+
+<!-- mini_app_sound_meter_feature_realtime -->
+<string name="mini_app_sound_meter_feature_realtime">实时分贝测量值</string>
+
+<!-- mini_app_sound_meter_title -->
+<string name="mini_app_sound_meter_title">噪音计</string>
+
+<!-- mini_app_speedometer_desc -->
+<string name="mini_app_speedometer_desc">带GPS速度追踪的实时车速表</string>
+
+<!-- mini_app_speedometer_title -->
+<string name="mini_app_speedometer_title">速度计</string>
+
+<!-- mini_app_torch_desc -->
+<string name="mini_app_torch_desc">带模式的LED手电筒</string>
+
+<!-- mini_app_torch_feature_led -->
+<string name="mini_app_torch_feature_led">使用设备LED手电筒</string>
+
+<!-- mini_app_torch_feature_patterns -->
+<string name="mini_app_torch_feature_patterns">SOS和频闪模式</string>
+
+<!-- mini_app_torch_feature_screen -->
+<string name="mini_app_torch_feature_screen">屏幕亮度作为光源</string>
+
+<!-- mini_app_torch_led_desc -->
+<string name="mini_app_torch_led_desc">控制您设备的LED手电筒</string>
+
+<!-- mini_app_torch_led_title -->
+<string name="mini_app_torch_led_title">LED手电筒</string>
+
+<!-- mini_app_torch_patterns_title -->
+<string name="mini_app_torch_patterns_title">闪光模式</string>
+
+<!-- mini_app_torch_screen_desc -->
+<string name="mini_app_torch_screen_desc">使用全屏亮度作为光源</string>
+
+<!-- mini_app_torch_screen_title -->
+<string name="mini_app_torch_screen_title">屏幕灯光</string>
+
+<!-- mini_app_torch_title -->
+<string name="mini_app_torch_title">手电筒</string>
+
+<!-- mini_apps_planned_shortcuts_desc -->
+<string name="mini_apps_planned_shortcuts_desc">主屏幕快捷方式，无需先打开FadCam即可即时访问任何迷你应用。
+
+基于Intent的自动化支持（Tasker、MacroDroid等），用于以编程方式触发迷你应用 — 从自动化工作流中使用二维码扫描、手电筒等功能。</string>
+
+<!-- mini_apps_planned_shortcuts_title -->
+<string name="mini_apps_planned_shortcuts_title">计划中：快捷方式和自动化</string>
+
+<!-- mini_apps_subtitle -->
+<string name="mini_apps_subtitle">快捷实用工具</string>
+
+<!-- mini_apps_title -->
+<string name="mini_apps_title">迷你应用</string>
+
+<!-- motion_lab_analysis_2_desc -->
+<string name="motion_lab_analysis_2_desc">省电，响应较慢。</string>
+
+<!-- motion_lab_analysis_3_desc -->
+<string name="motion_lab_analysis_3_desc">平衡默认。</string>
+
+<!-- motion_lab_analysis_5_desc -->
+<string name="motion_lab_analysis_5_desc">响应更快，CPU占用更高。</string>
+
+<!-- motion_lab_analysis_fps -->
+<string name="motion_lab_analysis_fps">分析帧率</string>
+
+<!-- motion_lab_analysis_helper -->
+<string name="motion_lab_analysis_helper">AI每秒检查场景的频率。更多检查响应更快，但也更耗电并可能导致手机发热。对于EfficientDet多类检测，日常使用保持在6帧/秒左右（5-8是可靠区间）。</string>
+
+<!-- motion_lab_auto_torch -->
+<string name="motion_lab_auto_torch">运动时自动开启手电筒</string>
+
+<!-- motion_lab_auto_torch_helper -->
+<string name="motion_lab_auto_torch_helper">运动触发录制时开启手电筒，录制暂停时关闭。适用于黑暗房间。</string>
+
+<!-- motion_lab_debounce -->
+<string name="motion_lab_debounce">防抖延迟</string>
+
+<!-- motion_lab_debounce_hint -->
+<string name="motion_lab_debounce_hint">录制开始前的短暂确认延迟。可以理解为等待极短时间来确认运动是真实的。较低值启动更快，较高值可避免误启动。大多数房间保持在220毫秒左右。</string>
+
+<!-- motion_lab_debug_action_placeholder -->
+<string name="motion_lab_debug_action_placeholder">上次操作：-</string>
+
+<!-- motion_lab_debug_copy_done -->
+<string name="motion_lab_debug_copy_done">运动快照已复制</string>
+
+<!-- motion_lab_debug_copy_snapshot -->
+<string name="motion_lab_debug_copy_snapshot">复制监控快照</string>
+
+<!-- motion_lab_debug_frame -->
+<string name="motion_lab_debug_frame">实时分析器帧预览</string>
+
+<!-- motion_lab_debug_metrics_placeholder -->
+<string name="motion_lab_debug_metrics_placeholder">区域/强度/均值/背景/最大值/全局：-</string>
+
+<!-- motion_lab_debug_metrics_value -->
+<string name="motion_lab_debug_metrics_value">区域 %1$.3f，强度 %2$.3f，均值 %3$.3f，背景 %4$.3f，最大值 %5$.3f，全局 %6$s</string>
+
+<!-- motion_lab_debug_no_snapshot -->
+<string name="motion_lab_debug_no_snapshot">尚无运动快照可用。</string>
+
+<!-- motion_lab_debug_person_placeholder -->
+<string name="motion_lab_debug_person_placeholder">人员：-</string>
+
+<!-- motion_lab_debug_person_value -->
+<string name="motion_lab_debug_person_value">检测到：%1$s（%2$.3f）• 人员：%3$s（%4$.3f）</string>
+
+<!-- motion_lab_debug_score_placeholder -->
+<string name="motion_lab_debug_score_placeholder">原始/平滑分值：-</string>
+
+<!-- motion_lab_debug_score_value -->
+<string name="motion_lab_debug_score_value">原始/平滑分值：%1$.3f / %2$.3f</string>
+
+<!-- motion_lab_debug_state_placeholder -->
+<string name="motion_lab_debug_state_placeholder">状态：-</string>
+
+<!-- motion_lab_debug_threshold_placeholder -->
+<string name="motion_lab_debug_threshold_placeholder">阈值开始/停止：-</string>
+
+<!-- motion_lab_debug_threshold_value -->
+<string name="motion_lab_debug_threshold_value">阈值开始/停止：%1$.3f / %2$.3f</string>
+
+<!-- motion_lab_debug_title -->
+<string name="motion_lab_debug_title">实时运动监控</string>
+
+<!-- motion_lab_enable -->
+<string name="motion_lab_enable">启用运动录制</string>
+
+<!-- motion_lab_enable_sensor -->
+<string name="motion_lab_enable_sensor">启用运动传感器</string>
+
+<!-- motion_lab_footer -->
+<string name="motion_lab_footer">仅在需要特殊行为时自定义以上控件。对于大多数设置，默认值是最安全、最可靠的选择。</string>
+
+<!-- motion_lab_fps_value -->
+<string name="motion_lab_fps_value">%1$d 帧/秒</string>
+
+<!-- motion_lab_info_body -->
+<string name="motion_lab_info_body">这是FadCam的运动自动录制功能。
+
+简单来说的工作原理：
+- 您的摄像头保持活动状态，在设备上实时分析帧。
+- 设备上的机器学习和运动逻辑寻找移动。
+- 检测到有效运动时，录制开始/继续。
+- 在运动持续期间录制一直进行。
+- 运动停止后，延后录制继续录制您选择的额外秒数。
+- 然后录制暂停，等待下一次运动事件。
+
+录制暂停时，应用仍在内存中分析帧，但在再次检测到运动前不会写入新的视频数据。
+
+如何使用（大多数用户）：
+- 将所有选项保持为默认值。
+- 在此屏幕上开启运动传感器。
+- 前往主页选项卡并正常开始录制。
+- 基于运动的自动录制将自动运行。
+
+从远处轻松测试：
+- 在此屏幕上开启自动手电筒。
+- 从主页选项卡开始录制。
+- 将手机倾斜放在桌子或架子上，面向房间。
+- 离开房间，然后进入并走动。
+- 手电筒开启可帮助您从远处立即注意到录制已开始。
+- 录制将在运动停止后持续您选择的延后录制时长。
+
+提示：此功能持续运行，因此非常高的高级值会增加发热，并可能随时间降低设备健康度。对于长时间会话，除非有特殊原因，请保持默认值。</string>
+
+<!-- motion_lab_info_cd -->
+<string name="motion_lab_info_cd">Motion Lab信息</string>
+
+<!-- motion_lab_info_title -->
+<string name="motion_lab_info_title">运动自动录制</string>
+
+<!-- motion_lab_ms_value -->
+<string name="motion_lab_ms_value">%1$d 毫秒</string>
+
+<!-- motion_lab_percent_value -->
+<string name="motion_lab_percent_value">%1$d%%</string>
+
+<!-- motion_lab_post_roll -->
+<string name="motion_lab_post_roll">延后录制</string>
+
+<!-- motion_lab_post_roll_hint -->
+<string name="motion_lab_post_roll_hint">运动停止后录制持续的时间。例如：如果有人离开房间，此设置可继续录制，确保结尾不被截断。大多数房间保持在10秒左右。</string>
+
+<!-- motion_lab_pre_roll -->
+<string name="motion_lab_pre_roll">预录制</string>
+
+<!-- motion_lab_pre_roll_hint -->
+<string name="motion_lab_pre_roll_hint">在触发前尝试包含多少秒。例如：如果有人突然出现，预录制有助于包含进入前的瞬间。大多数房间保持在2秒左右。</string>
+
+<!-- motion_lab_row_subtitle -->
+<string name="motion_lab_row_subtitle">闭路电视式智能事件录制</string>
+
+<!-- motion_lab_seconds_value -->
+<string name="motion_lab_seconds_value">%1$d 秒</string>
+
+<!-- motion_lab_sensitivity -->
+<string name="motion_lab_sensitivity">灵敏度</string>
+
+<!-- motion_lab_sensitivity_hint -->
+<string name="motion_lab_sensitivity_hint">可将其理解为运动的"听觉"旋钮。较高值对较小运动更敏感（如手靠近边缘）。较低值忽略微小运动。大多数房间保持默认值80。</string>
+
+<!-- motion_lab_set_value_row_subtitle -->
+<string name="motion_lab_set_value_row_subtitle">当前值：%1$d</string>
+
+<!-- motion_lab_set_value_row_title -->
+<string name="motion_lab_set_value_row_title">设置值</string>
+
+<!-- motion_lab_status_disabled -->
+<string name="motion_lab_status_disabled">已禁用</string>
+
+<!-- motion_lab_status_enabled -->
+<string name="motion_lab_status_enabled">活跃（仅在需要时录制）</string>
+
+<!-- motion_lab_title -->
+<string name="motion_lab_title">运动实验室</string>
+
+<!-- motion_lab_trigger_any_motion -->
+<string name="motion_lab_trigger_any_motion">任意运动</string>
+
+<!-- motion_lab_trigger_any_motion_desc -->
+<string name="motion_lab_trigger_any_motion_desc">检测到移动时开始录制，如同普通CCTV运动摄像头。</string>
+
+<!-- motion_lab_trigger_mode -->
+<string name="motion_lab_trigger_mode">触发模式</string>
+
+<!-- motion_lab_trigger_mode_helper -->
+<string name="motion_lab_trigger_mode_helper">选择触发录制的内容。如果不确定，请保持任意运动。</string>
+
+<!-- motion_lab_trigger_person_confirmed -->
+<string name="motion_lab_trigger_person_confirmed">确认有人</string>
+
+<!-- motion_lab_trigger_person_confirmed_desc -->
+<string name="motion_lab_trigger_person_confirmed_desc">仅在移动看起来像人时开始录制。有助于减少风扇/阴影的误报。</string>
+
+<!-- nav_lab -->
+<string name="nav_lab">实验室</string>
+
+<!-- note_cam_dual_unsupported -->
+<string name="note_cam_dual_unsupported">您的设备不支持并发双摄像头录制。</string>
+
+<!-- notification_appearance_options -->
+<string-array name="notification_appearance_options">
+        <item>FadCam（默认）</item>
+        <item>系统更新</item>
+        <item>下载</item>
+        <item>同步</item>
+        <item>备份</item>
+        <item>自定义</item>
+    </string-array>
+
+<!-- onboarding_intro_line4 -->
+<string name="onboarding_intro_line4">开源。无广告。属于你。</string>
+
+<!-- pattern_morse_desc -->
+<string name="pattern_morse_desc">用于高级信号传输的摩斯电码模式</string>
+
+<!-- pattern_sos_desc -->
+<string name="pattern_sos_desc">SOS摩斯电码模式：3短+3长+3短闪烁</string>
+
+<!-- pattern_steady_desc -->
+<string name="pattern_steady_desc">正常手电筒使用的持续稳定光</string>
+
+<!-- pattern_strobe_desc -->
+<string name="pattern_strobe_desc">用于紧急信号传输的快速开关闪烁模式</string>
+
+<!-- photo_capture_failed -->
+<string name="photo_capture_failed">无法拍摄照片</string>
+
+<!-- photo_capture_preview_unavailable -->
+<string name="photo_capture_preview_unavailable">预览不可用</string>
+
+<!-- photo_capture_saved -->
+<string name="photo_capture_saved">照片已保存</string>
+
+<!-- preview_dual_not_supported -->
+<string name="preview_dual_not_supported">预览仅适用于前置/后置摄像头</string>
+
+<!-- preview_enable_hint -->
+<string name="preview_enable_hint">长按唤醒摄像头</string>
+
+<!-- preview_quick_actions_state_always -->
+<string name="preview_quick_actions_state_always">始终可见（空闲+录制）</string>
+
+<!-- preview_quick_actions_state_recording_only -->
+<string name="preview_quick_actions_state_recording_only">仅在录制时可见</string>
+
+<!-- preview_quick_actions_sub -->
+<string name="preview_quick_actions_sub">即使在录制空闲时也显示FadShot和全屏图标。</string>
+
+<!-- preview_quick_actions_title -->
+<string name="preview_quick_actions_title">预览快捷操作</string>
+
+<!-- preview_starting -->
+<string name="preview_starting">正在启动实时预览…</string>
+
+<!-- privacy_black_enable_needed_hint -->
+<string name="privacy_black_enable_needed_hint">请先在安全设置中启用隐私黑屏</string>
+
+<!-- privacy_black_gesture_long -->
+<string name="privacy_black_gesture_long">长按退出</string>
+
+<!-- privacy_black_gesture_swipe -->
+<string name="privacy_black_gesture_swipe">上滑退出</string>
+
+<!-- privacy_black_gesture_triple -->
+<string name="privacy_black_gesture_triple">三次点击退出</string>
+
+<!-- privacy_black_gestures_helper -->
+<string name="privacy_black_gestures_helper">选择可用于退出隐私黑屏模式的手势。
+
+注意：应至少保留一种退出方式以避免卡死！</string>
+
+<!-- privacy_black_gestures_title -->
+<string name="privacy_black_gestures_title">退出方式</string>
+
+<!-- privacy_black_min_one_method -->
+<string name="privacy_black_min_one_method">必须至少保留一种退出方式已启用。</string>
+
+<!-- privacy_black_mode_disabled_toast -->
+<string name="privacy_black_mode_disabled_toast">隐私模式已禁用</string>
+
+<!-- privacy_black_mode_enable_title -->
+<string name="privacy_black_mode_enable_title">启用隐私黑屏模式</string>
+
+<!-- privacy_black_mode_enabled_toast -->
+<string name="privacy_black_mode_enabled_toast">隐私模式已启用</string>
+
+<!-- privacy_black_mode_helper -->
+<string name="privacy_black_mode_helper">如果您的设备在后台杀死了应用，您可以使用此功能保持应用在前台运行。
+
+会出现一个黑色屏幕叠加层，使屏幕看起来像关闭了一样，同时录制仍在继续。
+
+点击主页选项卡顶部标题中的FadCam图标即可激活。</string>
+
+<!-- privacy_black_mode_title -->
+<string name="privacy_black_mode_title">隐私黑屏</string>
+
+<!-- qr_info_banner_text -->
+<string name="qr_info_banner_text">扫描的代码会自动保存到记录选项卡</string>
+
+<!-- qr_result_scanned_label -->
+<string name="qr_result_scanned_label">已扫描</string>
+
+<!-- recording_elapsed_time -->
+<string name="recording_elapsed_time">已用时间</string>
+
+<!-- recording_estimated_time -->
+<string name="recording_estimated_time">预计时间</string>
+
+<!-- recording_remaining_time -->
+<string name="recording_remaining_time">剩余时间</string>
+
+<!-- recording_time_left -->
+<string name="recording_time_left">剩余时间</string>
+
+<!-- records_batch_actions_title -->
+<string name="records_batch_actions_title">批处理操作</string>
+
+<!-- records_batch_coming_soon -->
+<string name="records_batch_coming_soon">此批处理操作将在后续添加。</string>
+
+<!-- records_batch_completed -->
+<string name="records_batch_completed">批量操作已完成。</string>
+
+<!-- records_batch_custom_export_done -->
+<string name="records_batch_custom_export_done">导出完成。成功：%1$d • 失败：%2$d</string>
+
+<!-- records_batch_custom_export_invalid_folder -->
+<string name="records_batch_custom_export_invalid_folder">所选文件夹不可写入。</string>
+
+<!-- records_batch_custom_export_started -->
+<string name="records_batch_custom_export_started">正在导出%1$d个视频到所选文件夹…</string>
+
+<!-- records_batch_delete -->
+<string name="records_batch_delete">删除</string>
+
+<!-- records_batch_delete_desc -->
+<string name="records_batch_delete_desc">将所选视频移到回收站。</string>
+
+<!-- records_batch_deselect_all -->
+<string name="records_batch_deselect_all">取消全选</string>
+
+<!-- records_batch_export_done_title -->
+<string name="records_batch_export_done_title">标准MP4导出已完成</string>
+
+<!-- records_batch_fab_label -->
+<string name="records_batch_fab_label">批处理</string>
+
+<!-- records_batch_faditor -->
+<string name="records_batch_faditor">Faditor自动化</string>
+
+<!-- records_batch_faditor_desc -->
+<string name="records_batch_faditor_desc">在不打开Faditor标签的情况下运行后台自动化。</string>
+
+<!-- records_batch_faditor_export_standard -->
+<string name="records_batch_faditor_export_standard">导出为标准MP4</string>
+
+<!-- records_batch_faditor_export_standard_desc -->
+<string name="records_batch_faditor_export_standard_desc">将分片MP4转换为标准可拖动MP4，适用于外部播放器。</string>
+
+<!-- records_batch_faditor_first_only -->
+<string name="records_batch_faditor_first_only">已打开第一个视频。已选%1$d个；多编辑队列即将推出。</string>
+
+<!-- records_batch_faditor_merge -->
+<string name="records_batch_faditor_merge">合并所选视频</string>
+
+<!-- records_batch_faditor_merge_desc -->
+<string name="records_batch_faditor_merge_desc">在后台将所选片段合并为一个视频。</string>
+
+<!-- records_batch_faditor_queued -->
+<string name="records_batch_faditor_queued">%1$d 个批量项目已在后台排队。</string>
+
+<!-- records_batch_faditor_sheet_title -->
+<string name="records_batch_faditor_sheet_title">批处理Faditor操作</string>
+
+<!-- records_batch_merge_done_title -->
+<string name="records_batch_merge_done_title">批量合并已完成</string>
+
+<!-- records_batch_notif_channel_desc -->
+<string name="records_batch_notif_channel_desc">记录批量保存和Faditor自动化任务的进度和结果。</string>
+
+<!-- records_batch_notif_channel_name -->
+<string name="records_batch_notif_channel_name">批量媒体操作</string>
+
+<!-- records_batch_progress_counts -->
+<string name="records_batch_progress_counts">已完成 %1$d • 已跳过 %2$d • 已失败 %3$d</string>
+
+<!-- records_batch_progress_item -->
+<string name="records_batch_progress_item">正在处理 %1$d/%2$d</string>
+
+<!-- records_batch_save -->
+<string name="records_batch_save">保存到图库</string>
+
+<!-- records_batch_save_copy_helper -->
+<string name="records_batch_save_copy_helper">保留原文件；将副本保存到%1$s。</string>
+
+<!-- records_batch_save_custom_location -->
+<string name="records_batch_save_custom_location">导出到新位置</string>
+
+<!-- records_batch_save_custom_location_desc -->
+<string name="records_batch_save_custom_location_desc">为此运行中所有选定的视频选择一个文件夹。</string>
+
+<!-- records_batch_save_desc -->
+<string name="records_batch_save_desc">复制、移动或导出所选视频到另一个文件夹。</string>
+
+<!-- records_batch_save_move_helper -->
+<string name="records_batch_save_move_helper">将所选视频移到%1$s，保存成功后删除原文件。</string>
+
+<!-- records_batch_save_queued -->
+<string name="records_batch_save_queued">%1$d 个保存任务已加入队列。</string>
+
+<!-- records_batch_select_all -->
+<string name="records_batch_select_all">全选</string>
+
+<!-- records_batch_select_all_desc -->
+<string name="records_batch_select_all_desc">选择或清除当前筛选器中的所有视频。</string>
+
+<!-- records_batch_select_items_first -->
+<string name="records_batch_select_items_first">请先选择一个或多个视频。</string>
+
+<!-- records_batch_starting -->
+<string name="records_batch_starting">正在准备批量操作…</string>
+
+<!-- records_batch_summary -->
+<string name="records_batch_summary">批量已完成。完成：%1$d • 跳过：%2$d • 失败：%3$d</string>
+
+<!-- records_delete_error_failed_item -->
+<string name="records_delete_error_failed_item">无法删除 %1$s。</string>
+
+<!-- records_delete_error_invalid_item -->
+<string name="records_delete_error_invalid_item">无法删除所选项目之一。</string>
+
+<!-- records_delete_header_action_cancel -->
+<string name="records_delete_header_action_cancel">取消</string>
+
+<!-- records_delete_header_action_ok -->
+<string name="records_delete_header_action_ok">确定</string>
+
+<!-- records_delete_header_default_title -->
+<string name="records_delete_header_default_title">正在删除录制文件</string>
+
+<!-- records_delete_header_dismiss_hint -->
+<string name="records_delete_header_dismiss_hint">点击确定关闭</string>
+
+<!-- records_delete_header_done_body_failed -->
+<string name="records_delete_header_done_body_failed">%1$d 个项目失败。</string>
+
+<!-- records_delete_header_done_body_partial -->
+<string name="records_delete_header_done_body_partial">%1$d 已删除 • %2$d 失败。</string>
+
+<!-- records_delete_header_done_body_success -->
+<string name="records_delete_header_done_body_success">%1$d 个项目已删除。</string>
+
+<!-- records_delete_header_done_failed -->
+<string name="records_delete_header_done_failed">删除失败</string>
+
+<!-- records_delete_header_done_partial -->
+<string name="records_delete_header_done_partial">删除完成但存在问题</string>
+
+<!-- records_delete_header_done_success -->
+<string name="records_delete_header_done_success">删除完成</string>
+
+<!-- records_delete_header_eta_minutes -->
+<string name="records_delete_header_eta_minutes">预计 %1$d分 %2$02d秒</string>
+
+<!-- records_delete_header_eta_seconds -->
+<string name="records_delete_header_eta_seconds">预计 %1$d秒</string>
+
+<!-- records_delete_header_finishing -->
+<string name="records_delete_header_finishing">即将完成…</string>
+
+<!-- records_delete_header_issue_prefix -->
+<string name="records_delete_header_issue_prefix">问题：%1$s</string>
+
+<!-- records_delete_header_preparing -->
+<string name="records_delete_header_preparing">正在准备删除…</string>
+
+<!-- records_delete_header_progress_title -->
+<plurals name="records_delete_header_progress_title">
+        <item quantity="one">正在删除第%1$d个（共%2$d个）</item>
+        <item quantity="other">正在删除第%1$d个（共%2$d个）</item>
+    </plurals>
+
+<!-- records_delete_header_running_summary -->
+<string name="records_delete_header_running_summary">%1$d 已完成 • %2$d 失败</string>
+
+<!-- records_delete_header_running_title -->
+<plurals name="records_delete_header_running_title">
+        <item quantity="one">正在删除%d个项目</item>
+        <item quantity="other">正在删除%d个项目</item>
+    </plurals>
+
+<!-- records_delete_header_summary -->
+<string name="records_delete_header_summary">%1$d/%2$d 已完成 • %3$d 失败</string>
+
+<!-- records_delete_header_working -->
+<string name="records_delete_header_working">工作中…</string>
+
+<!-- records_delete_notification_cancel -->
+<string name="records_delete_notification_cancel">取消</string>
+
+<!-- records_delete_notification_cancelled -->
+<string name="records_delete_notification_cancelled">删除已取消</string>
+
+<!-- records_delete_notification_channel_desc -->
+<string name="records_delete_notification_channel_desc">记录中后台删除的进度和结果。</string>
+
+<!-- records_delete_notification_channel_name -->
+<string name="records_delete_notification_channel_name">删除进度</string>
+
+<!-- records_delete_notification_complete_failed -->
+<string name="records_delete_notification_complete_failed">删除失败</string>
+
+<!-- records_delete_notification_complete_partial -->
+<string name="records_delete_notification_complete_partial">删除完成但存在问题</string>
+
+<!-- records_delete_notification_complete_success -->
+<string name="records_delete_notification_complete_success">删除完成</string>
+
+<!-- records_delete_notification_progress_text -->
+<string name="records_delete_notification_progress_text">%1$d/%2$d 已完成 • %3$s</string>
+
+<!-- records_delete_notification_summary_text -->
+<string name="records_delete_notification_summary_text">已删除 %1$d • 失败 %2$d</string>
+
+<!-- records_delete_notification_title -->
+<string name="records_delete_notification_title">正在删除录制文件</string>
+
+<!-- records_delete_queued_toast -->
+<plurals name="records_delete_queued_toast">
+        <item quantity="one">正在后台删除1个项目。</item>
+        <item quantity="other">正在后台删除%d个项目。</item>
+    </plurals>
+
+<!-- records_filter_all -->
+<string name="records_filter_all">全部</string>
+
+<!-- records_filter_camera -->
+<string name="records_filter_camera">FadCam</string>
+
+<!-- records_filter_camera_all -->
+<string name="records_filter_camera_all">全部</string>
+
+<!-- records_filter_camera_back -->
+<string name="records_filter_camera_back">返回</string>
+
+<!-- records_filter_camera_dual -->
+<string name="records_filter_camera_dual">双摄</string>
+
+<!-- records_filter_camera_front -->
+<string name="records_filter_camera_front">前置</string>
+
+<!-- records_filter_checklist_desc -->
+<string name="records_filter_checklist_desc">切换选择模式</string>
+
+<!-- records_filter_dual -->
+<string name="records_filter_dual">双摄</string>
+
+<!-- records_filter_faditor -->
+<string name="records_filter_faditor">Faditor</string>
+
+<!-- records_filter_faditor_all -->
+<string name="records_filter_faditor_all">全部</string>
+
+<!-- records_filter_faditor_converted -->
+<string name="records_filter_faditor_converted">已转换</string>
+
+<!-- records_filter_faditor_merge -->
+<string name="records_filter_faditor_merge">合并</string>
+
+<!-- records_filter_helper_camera_all -->
+<string name="records_filter_helper_camera_all">摄像头录制（后置、前置、双摄）</string>
+
+<!-- records_filter_helper_camera_back -->
+<string name="records_filter_helper_camera_back">使用后置摄像头拍摄</string>
+
+<!-- records_filter_helper_camera_dual -->
+<string name="records_filter_helper_camera_dual">使用双摄像头模式拍摄</string>
+
+<!-- records_filter_helper_camera_front -->
+<string name="records_filter_helper_camera_front">使用前置摄像头拍摄（自拍）</string>
+
+<!-- records_filter_helper_dual -->
+<string name="records_filter_helper_dual">双摄像头录制</string>
+
+<!-- records_filter_helper_faditor -->
+<string name="records_filter_helper_faditor">已编辑/导出的视频（Faditor）</string>
+
+<!-- records_filter_helper_faditor_all -->
+<string name="records_filter_helper_faditor_all">所有Faditor输出及相关文件。</string>
+
+<!-- records_filter_helper_faditor_converted -->
+<string name="records_filter_helper_faditor_converted">将分片MP4转换为标准可拖动MP4，适用于外部播放器。</string>
+
+<!-- records_filter_helper_faditor_merge -->
+<string name="records_filter_helper_faditor_merge">将多个片段合并为一个输出视频。</string>
+
+<!-- records_filter_helper_screen -->
+<string name="records_filter_helper_screen">屏幕录制（FadRec）</string>
+
+<!-- records_filter_helper_shot_all -->
+<string name="records_filter_helper_shot_all">拍摄的照片和截图</string>
+
+<!-- records_filter_helper_shot_back -->
+<string name="records_filter_helper_shot_back">使用后置摄像头拍摄的照片</string>
+
+<!-- records_filter_helper_shot_fadrec -->
+<string name="records_filter_helper_shot_fadrec">拍摄的截图（FadRec）</string>
+
+<!-- records_filter_helper_shot_selfie -->
+<string name="records_filter_helper_shot_selfie">使用前置摄像头拍摄的照片（自拍）</string>
+
+<!-- records_filter_helper_stream -->
+<string name="records_filter_helper_stream">已保存的直播录制</string>
+
+<!-- records_filter_miniapps_all -->
+<string name="records_filter_miniapps_all">全部</string>
+
+<!-- records_filter_screen -->
+<string name="records_filter_screen">FadRec</string>
+
+<!-- records_filter_shot -->
+<string name="records_filter_shot">FadShot</string>
+
+<!-- records_filter_shot_all -->
+<string name="records_filter_shot_all">全部</string>
+
+<!-- records_filter_shot_back -->
+<string name="records_filter_shot_back">返回</string>
+
+<!-- records_filter_shot_fadrec -->
+<string name="records_filter_shot_fadrec">FadRec</string>
+
+<!-- records_filter_shot_selfie -->
+<string name="records_filter_shot_selfie">自拍</string>
+
+<!-- records_filter_stream -->
+<string name="records_filter_stream">直播</string>
+
+<!-- records_grid_1 -->
+<string name="records_grid_1">1列</string>
+
+<!-- records_grid_2 -->
+<string name="records_grid_2">2列</string>
+
+<!-- records_grid_3 -->
+<string name="records_grid_3">3列</string>
+
+<!-- records_grid_4 -->
+<string name="records_grid_4">4列</string>
+
+<!-- records_grid_5 -->
+<string name="records_grid_5">5列</string>
+
+<!-- records_grid_helper -->
+<string name="records_grid_helper">选择图库中显示的列数。</string>
+
+<!-- records_grid_option -->
+<string name="records_grid_option">网格布局</string>
+
+<!-- records_location_format -->
+<string name="records_location_format">位置：%1$s/%2$s</string>
+
+<!-- records_save_copy_header_progress_title -->
+<plurals name="records_save_copy_header_progress_title">
+        <item quantity="one">正在保存第%1$d个（共%2$d个）</item>
+        <item quantity="other">正在保存第%1$d个（共%2$d个）</item>
+    </plurals>
+
+<!-- records_save_error_create_destination -->
+<string name="records_save_error_create_destination">无法创建目标文件夹。</string>
+
+<!-- records_save_error_delete_original -->
+<string name="records_save_error_delete_original">已复制，但无法删除原始文件。</string>
+
+<!-- records_save_error_failed_item -->
+<string name="records_save_error_failed_item">无法保存 %1$s。</string>
+
+<!-- records_save_error_open_source -->
+<string name="records_save_error_open_source">无法读取源文件。</string>
+
+<!-- records_save_export_header_progress_title -->
+<plurals name="records_save_export_header_progress_title">
+        <item quantity="one">正在导出第%1$d个（共%2$d个）</item>
+        <item quantity="other">正在导出第%1$d个（共%2$d个）</item>
+    </plurals>
+
+<!-- records_save_header_done_body_failed -->
+<string name="records_save_header_done_body_failed">%1$d 个项目失败。</string>
+
+<!-- records_save_header_done_body_partial -->
+<string name="records_save_header_done_body_partial">%1$d 已完成 • %2$d 失败。</string>
+
+<!-- records_save_header_done_body_success_copy -->
+<string name="records_save_header_done_body_success_copy">%1$d 个项目已保存到相册。</string>
+
+<!-- records_save_header_done_body_success_export -->
+<string name="records_save_header_done_body_success_export">%1$d 个项目已导出。</string>
+
+<!-- records_save_header_done_body_success_move -->
+<string name="records_save_header_done_body_success_move">%1$d 个项目已移动到相册。</string>
+
+<!-- records_save_header_done_failed -->
+<string name="records_save_header_done_failed">保存失败</string>
+
+<!-- records_save_header_done_partial -->
+<string name="records_save_header_done_partial">保存完成但存在问题</string>
+
+<!-- records_save_header_done_success_copy -->
+<string name="records_save_header_done_success_copy">保存完成</string>
+
+<!-- records_save_header_done_success_export -->
+<string name="records_save_header_done_success_export">导出完成</string>
+
+<!-- records_save_header_done_success_move -->
+<string name="records_save_header_done_success_move">移动完成</string>
+
+<!-- records_save_header_preparing_copy -->
+<string name="records_save_header_preparing_copy">正在准备保存…</string>
+
+<!-- records_save_header_preparing_export -->
+<string name="records_save_header_preparing_export">正在准备导出…</string>
+
+<!-- records_save_header_preparing_move -->
+<string name="records_save_header_preparing_move">正在准备移动…</string>
+
+<!-- records_save_move_header_progress_title -->
+<plurals name="records_save_move_header_progress_title">
+        <item quantity="one">正在移动第%1$d个（共%2$d个）</item>
+        <item quantity="other">正在移动第%1$d个（共%2$d个）</item>
+    </plurals>
+
+<!-- records_save_notification_cancelled -->
+<string name="records_save_notification_cancelled">保存已取消</string>
+
+<!-- records_save_notification_complete_failed -->
+<string name="records_save_notification_complete_failed">保存失败</string>
+
+<!-- records_save_notification_complete_partial -->
+<string name="records_save_notification_complete_partial">保存完成但存在问题</string>
+
+<!-- records_save_notification_complete_success_copy -->
+<string name="records_save_notification_complete_success_copy">保存完成</string>
+
+<!-- records_save_notification_complete_success_export -->
+<string name="records_save_notification_complete_success_export">导出完成</string>
+
+<!-- records_save_notification_complete_success_move -->
+<string name="records_save_notification_complete_success_move">移动完成</string>
+
+<!-- records_save_notification_summary_text_copy -->
+<string name="records_save_notification_summary_text_copy">已保存 %1$d • 失败 %2$d</string>
+
+<!-- records_save_notification_summary_text_export -->
+<string name="records_save_notification_summary_text_export">已导出 %1$d • 失败 %2$d</string>
+
+<!-- records_save_notification_summary_text_move -->
+<string name="records_save_notification_summary_text_move">已移动 %1$d • 失败 %2$d</string>
+
+<!-- records_save_notification_title_copy -->
+<string name="records_save_notification_title_copy">正在保存到相册</string>
+
+<!-- records_save_notification_title_export -->
+<string name="records_save_notification_title_export">正在导出</string>
+
+<!-- records_save_notification_title_move -->
+<string name="records_save_notification_title_move">正在移动到相册</string>
+
+<!-- remote_security_auto_lock_never -->
+<string name="remote_security_auto_lock_never">从不</string>
+
+<!-- screen_rec_bitrate -->
+<string name="screen_rec_bitrate">比特率</string>
+
+<!-- screen_rec_bitrate_helper -->
+<string name="screen_rec_bitrate_helper">VBR根据内容复杂程度自适应。CBR使用固定目标比特率。</string>
+
+<!-- screen_rec_bitrate_high_hint -->
+<string name="screen_rec_bitrate_high_hint">更高的值可提高画质</string>
+
+<!-- screen_rec_bitrate_low_hint -->
+<string name="screen_rec_bitrate_low_hint">更低的值可节省存储</string>
+
+<!-- screen_rec_bitrate_mode_auto -->
+<string name="screen_rec_bitrate_mode_auto">自动（VBR）</string>
+
+<!-- screen_rec_bitrate_mode_manual -->
+<string name="screen_rec_bitrate_mode_manual">手动（CBR）</string>
+
+<!-- screen_rec_bitrate_range -->
+<string name="screen_rec_bitrate_range">1 – 50 Mbps</string>
+
+<!-- screen_rec_framerate -->
+<string name="screen_rec_framerate">帧率</string>
+
+<!-- screen_rec_orientation -->
+<string name="screen_rec_orientation">方向</string>
+
+<!-- screen_rec_orientation_landscape -->
+<string name="screen_rec_orientation_landscape">横屏</string>
+
+<!-- screen_rec_orientation_portrait -->
+<string name="screen_rec_orientation_portrait">竖屏</string>
+
+<!-- screen_rec_resolution -->
+<string name="screen_rec_resolution">分辨率</string>
+
+<!-- screen_rec_settings_subtitle -->
+<string name="screen_rec_settings_subtitle">画质、音频和输出设置</string>
+
+<!-- screen_rec_settings_title -->
+<string name="screen_rec_settings_title">屏幕录制</string>
+
+<!-- screenshot_accessibility_enable_needed -->
+<string name="screenshot_accessibility_enable_needed">在无障碍中启用"FadRec截图"以在无录制提示的情况下使用此快捷方式。</string>
+
+<!-- screenshot_accessibility_service_desc -->
+<string name="screenshot_accessibility_service_desc">为FadRec快捷方式捕获截图并保存到FadCam/FadShot。</string>
+
+<!-- screenshot_capture_failed -->
+<string name="screenshot_capture_failed">无法捕获截图</string>
+
+<!-- screenshot_capture_saved -->
+<string name="screenshot_capture_saved">截图已保存</string>
+
+<!-- screenshot_capture_system_saved -->
+<string name="screenshot_capture_system_saved">截图由系统捕获。保存在系统截图中。</string>
+
+<!-- setting_eye_color_desc -->
+<string name="setting_eye_color_desc">选择头像眼睛发光颜色</string>
+
+<!-- setting_eye_color_title -->
+<string name="setting_eye_color_title">眼睛颜色</string>
+
+<!-- setting_header_logo_desc -->
+<string name="setting_header_logo_desc">选择顶部标志样式</string>
+
+<!-- setting_header_logo_title -->
+<string name="setting_header_logo_title">顶部标志</string>
+
+<!-- settings_advanced_subtitle -->
+<string name="settings_advanced_subtitle">Motion Lab和高级用户控制</string>
+
+<!-- shortcut_purpose_photo -->
+<string name="shortcut_purpose_photo">此快捷方式捕获后置摄像头照片并保存到FadCam/FadShot位置。</string>
+
+<!-- shortcut_purpose_photo_front -->
+<string name="shortcut_purpose_photo_front">此快捷方式捕获前置摄像头照片并保存到FadCam/FadShot位置。</string>
+
+<!-- shortcut_purpose_screenshot -->
+<string name="shortcut_purpose_screenshot">此快捷方式捕获屏幕截图并保存到FadCam/FadShot位置（请在设置 > 隐私 > 无障碍中启用无障碍权限）。</string>
+
+<!-- shortcut_purpose_start_current -->
+<string name="shortcut_purpose_start_current">此快捷方式使用当前选择的摄像头模式开始录制。</string>
+
+<!-- shortcut_purpose_start_dual -->
+<string name="shortcut_purpose_start_dual">此快捷方式启动双摄像头录制（画中画）。</string>
+
+<!-- shortcut_purpose_start_front -->
+<string name="shortcut_purpose_start_front">此快捷方式使用前置摄像头开始录制。</string>
+
+<!-- shortcut_start_back -->
+<string name="shortcut_start_back">后置开始</string>
+
+<!-- shortcut_start_current -->
+<string name="shortcut_start_current">当前开始</string>
+
+<!-- shortcut_start_dual -->
+<string name="shortcut_start_dual">双摄开始</string>
+
+<!-- shortcut_start_front -->
+<string name="shortcut_start_front">前置开始</string>
+
+<!-- shortcut_take_photo -->
+<string name="shortcut_take_photo">拍照</string>
+
+<!-- shortcut_take_photo_front -->
+<string name="shortcut_take_photo_front">自拍</string>
+
+<!-- shortcut_take_screenshot -->
+<string name="shortcut_take_screenshot">FadRec</string>
+
+<!-- shortcuts_picture_category -->
+<string name="shortcuts_picture_category">拍照</string>
+
+<!-- shortcuts_video_category -->
+<string name="shortcuts_video_category">视频录制</string>
+
+<!-- stats_label_used -->
+<string name="stats_label_used">已用：</string>
+
+<!-- stats_label_videos -->
+<string name="stats_label_videos">视频：</string>
+
+<!-- storage_available_space -->
+<string name="storage_available_space">可用空间</string>
+
+<!-- stream_and_save_desc -->
+<string name="stream_and_save_desc">直播并保存录制到存储</string>
+
+<!-- stream_battery_label -->
+<string name="stream_battery_label">电池</string>
+
+<!-- stream_clients_label -->
+<string name="stream_clients_label">客户端</string>
+
+<!-- stream_data_sent_label -->
+<string name="stream_data_sent_label">已发送数据</string>
+
+<!-- stream_memory_label -->
+<string name="stream_memory_label">内存</string>
+
+<!-- stream_network_label -->
+<string name="stream_network_label">网络</string>
+
+<!-- stream_notes_android14_screen -->
+<string name="stream_notes_android14_screen">⚠️ Android 14+：系统限制阻止了屏幕关闭时的录制。解决方法：（1）在设置→安全中启用"黑屏模式"，或（2）禁用屏幕锁定（无PIN码/密码/指纹）。两者均可实现无缝远程录制。</string>
+
+<!-- stream_notes_cellular -->
+<string name="stream_notes_cellular">⚠️ 仅WiFi限制：蜂窝网络阻止传入连接。要从此应用停止运行的位置继续无缝直播，请升级至FadCam Pro+。从任何网络（WiFi、LTE、任何地方）进行直播。</string>
+
+<!-- stream_only_desc -->
+<string name="stream_only_desc">直播但不保存到存储</string>
+
+<!-- stream_segments_label -->
+<string name="stream_segments_label">片段</string>
+
+<!-- stream_server_room_label -->
+<string name="stream_server_room_label">服务器房间</string>
+
+<!-- stream_server_url_label -->
+<string name="stream_server_url_label">服务器URL</string>
+
+<!-- stream_storage_label -->
+<string name="stream_storage_label">存储</string>
+
+<!-- stream_stream_quality_label -->
+<string name="stream_stream_quality_label">流画质</string>
+
+<!-- stream_uptime_label -->
+<string name="stream_uptime_label">运行时间</string>
+
+<!-- stream_view_all_endpoints_desc -->
+<string name="stream_view_all_endpoints_desc">查看所有API端点（GET/POST）</string>
+
+<!-- streaming_mode_cloud -->
+<string name="streaming_mode_cloud">FadSec Cloud</string>
+
+<!-- streaming_mode_cloud_desc -->
+<string name="streaming_mode_cloud_desc">通过互联网随时随地进行直播</string>
+
+<!-- streaming_mode_cloud_featured -->
+<string name="streaming_mode_cloud_featured">推荐</string>
+
+<!-- streaming_mode_helper -->
+<string name="streaming_mode_helper">选择您想要如何直播摄像头</string>
+
+<!-- streaming_mode_link_required -->
+<string name="streaming_mode_link_required">关联设备以启用</string>
+
+<!-- streaming_mode_local -->
+<string name="streaming_mode_local">本地网络</string>
+
+<!-- streaming_mode_local_desc -->
+<string name="streaming_mode_local_desc">在同一WiFi下直播到设备</string>
+
+<!-- streaming_mode_stream_url -->
+<string name="streaming_mode_stream_url">直播URL</string>
+
+<!-- streaming_mode_title -->
+<string name="streaming_mode_title">直播目标</string>
+
+<!-- torch_brightness -->
+<string name="torch_brightness">亮度</string>
+
+<!-- torch_color -->
+<string name="torch_color">颜色</string>
+
+<!-- torch_error_messages -->
+<string-array name="torch_error_messages">
+        <item>手电筒正在编译……请勿等待 🖥️</item>
+        <item>相机说：今天没有闪光灯 🚦</item>
+        <item>手电筒.exe 无响应 🔦</item>
+        <item>修复延迟……开发者遇到了精神断点 lol 🧠</item>
+        <item>补丁即将推出™……开发者正在调试人生 🐛</item>
+    </string-array>
+<!-- torch_pattern_morse -->
+<string name="torch_pattern_morse">摩斯电码</string>
+
+<!-- torch_pattern_sos -->
+<string name="torch_pattern_sos">SOS</string>
+
+<!-- torch_pattern_steady -->
+<string name="torch_pattern_steady">常亮</string>
+
+<!-- torch_pattern_strobe -->
+<string name="torch_pattern_strobe">频闪</string>
+
+<!-- torch_patterns -->
+<string name="torch_patterns">模式</string>
+
+<!-- torch_screen_light_desc -->
+<string name="torch_screen_light_desc">全屏白色叠加层</string>
+
+<!-- torch_screen_light_label -->
+<string name="torch_screen_light_label">屏幕灯光</string>
+
+<!-- torch_status_off -->
+<string name="torch_status_off">关</string>
+
+<!-- torch_status_on -->
+<string name="torch_status_on">开</string>
+
+<!-- torch_tap_to_enable -->
+<string name="torch_tap_to_enable">点击开启</string>
+
+<!-- torch_timer_10m -->
+<string name="torch_timer_10m">10分钟</string>
+
+<!-- torch_timer_15m -->
+<string name="torch_timer_15m">15分钟</string>
+
+<!-- torch_timer_1h -->
+<string name="torch_timer_1h">1小时</string>
+
+<!-- torch_timer_1m -->
+<string name="torch_timer_1m">1分钟</string>
+
+<!-- torch_timer_2m -->
+<string name="torch_timer_2m">2分钟</string>
+
+<!-- torch_timer_30m -->
+<string name="torch_timer_30m">30分钟</string>
+
+<!-- torch_timer_30s -->
+<string name="torch_timer_30s">30秒</string>
+
+<!-- torch_timer_5m -->
+<string name="torch_timer_5m">5分钟</string>
+
+<!-- torch_timer_cancel -->
+<string name="torch_timer_cancel">取消定时器</string>
+
+<!-- torch_timer_custom_apply -->
+<string name="torch_timer_custom_apply">应用</string>
+
+<!-- torch_timer_custom_error_invalid -->
+<string name="torch_timer_custom_error_invalid">无效数字</string>
+<string name="torch_timer_custom_duration">自定义时长</string>
+<string name="torch_custom_unit_seconds">秒</string>
+<string name="torch_custom_unit_minutes">分钟</string>
+<string name="torch_custom_unit_hours">小时</string>
+<string name="torch_notification_channel_name">手电筒已开启</string>
+<string name="torch_notification_channel_desc">手电筒开启时显示的通知</string>
+<string name="torch_notification_title">手电筒已开启</string>
+<string name="torch_notification_text">点击关闭</string>
+<string name="qr_scanner_format_badge">二维码</string>
+<string name="qr_scanner_hint">将相机对准二维码或条形码</string>
+<string name="qr_scanner_camera_permission_required">需要相机权限</string>
+<string name="qr_scanner_copied">已复制到剪贴板</string>
+<string name="qr_scanner_could_not_load">无法加载图片</string>
+<string name="qr_scanner_no_barcode">未在图片中找到条形码</string>
+<string name="qr_scanner_failed_process">处理图片失败</string>
+
+<!-- torch_timer_custom_error_positive -->
+<string name="torch_timer_custom_error_positive">时长必须大于0</string>
+
+<!-- torch_timer_custom_hint -->
+<string name="torch_timer_custom_hint">输入时长</string>
+
+<!-- torch_timer_custom_hours_example -->
+<string name="torch_timer_custom_hours_example">例如 2 表示2小时</string>
+
+<!-- torch_timer_custom_minutes_example -->
+<string name="torch_timer_custom_minutes_example">例如 5 表示5分钟</string>
+
+<!-- torch_timer_custom_title -->
+<string name="torch_timer_custom_title">设置自定义定时器</string>
+
+<!-- torch_timer_custom_unit_helper -->
+<string name="torch_timer_custom_unit_helper">选择时间单位</string>
+
+<!-- torch_timer_desc -->
+<string name="torch_timer_desc">手电筒在设定时间后自动关闭</string>
+
+<!-- torch_timer_label -->
+<string name="torch_timer_label">自动关闭定时器</string>
+
+<!-- torch_timer_off -->
+<string name="torch_timer_off">关</string>
+
+<!-- torch_timer_picker_helper -->
+<string name="torch_timer_picker_helper">定时器仅在手电筒开启时启动</string>
+
+<!-- torch_unavailable -->
+<string name="torch_unavailable">此摄像头不支持手电筒</string>
+
+<!-- trash_item_thumbnail_desc -->
+<string name="trash_item_thumbnail_desc">已删除项目的缩略图</string>
+
+<!-- universal_disabled -->
+<string name="universal_disabled">已禁用</string>
+
+<!-- universal_enabled -->
+<string name="universal_enabled">已启用</string>
+
+<!-- video_moved_to_trash -->
+<string name="video_moved_to_trash">视频已移到垃圾桶</string>
+
+<!-- video_resolutions_keys -->
+<string-array name="video_resolutions_keys">
+        <item>7680x4320</item>        <!-- 8K -->
+        <item>3840x2160</item>        <!-- 4K -->
+        <item>2560x1440</item>        <!-- 2K -->
+        <item>1920x1080</item>        <!-- FHD -->
+        <item>1280x720</item>        <!-- HD -->
+        <item>640x480</item>        <!-- SD -->
+        <item>720x480</item>        <!-- SD -->
+        <item>480x360</item>        <!-- SD -->
+    </string-array>
+    <string-array name="video_resolutions_values">
+        <item>8K</item>        <!-- 8K -->
+        <item>4K</item>        <!-- 4K -->
+        <item>2K</item>        <!-- 2K -->
+        <item>FHD</item>        <!-- Full HD -->
+        <item>HD</item>        <!-- High Definition -->
+        <item>SD</item>        <!-- Standard Definition -->
+        <item>SD</item>        <!-- Standard Definition -->
+        <item>SD</item>        <!-- Standard Definition -->
+    </string-array>
+    <integer-array name="video_framerate_array">
+        <item name="24">24</item>
+        <item name="30">30</item>
+        <item name="60">60</item>
+        <item name="90">90</item>
+    </integer-array>
+
+<!-- watch_audio_label -->
+<string name="watch_audio_label">音频</string>
+
+<!-- watch_audio_muted -->
+<string name="watch_audio_muted">已静音</string>
+
+<!-- watch_audio_on -->
+<string name="watch_audio_on">麦克风开</string>
+
+<!-- watch_audio_toggle_desc -->
+<string name="watch_audio_toggle_desc">切换音频录制</string>
+
+<!-- watch_back_desc -->
+<string name="watch_back_desc">返回</string>
+
+<!-- watch_cam_back -->
+<string name="watch_cam_back">返回</string>
+
+<!-- watch_cam_flip_desc -->
+<string name="watch_cam_flip_desc">翻转摄像头</string>
+
+<!-- watch_cam_front -->
+<string name="watch_cam_front">前置</string>
+
+<!-- watch_cam_label -->
+<string name="watch_cam_label">相机</string>
+
+<!-- watch_delete_confirm_action -->
+<string name="watch_delete_confirm_action">移到回收站</string>
+
+<!-- watch_delete_confirm_msg -->
+<string name="watch_delete_confirm_msg">“%s”将被移到回收站。</string>
+
+<!-- watch_delete_confirm_title -->
+<string name="watch_delete_confirm_title">移到回收站？</string>
+
+<!-- watch_fadshot_desc -->
+<string name="watch_fadshot_desc">拍照</string>
+
+<!-- watch_fadshot_label -->
+<string name="watch_fadshot_label">拍摄</string>
+
+<!-- watch_fullscreen_desc -->
+<string name="watch_fullscreen_desc">全屏</string>
+
+<!-- watch_fullscreen_hint -->
+<string name="watch_fullscreen_hint">摄像头正在录制</string>
+
+<!-- watch_fullscreen_label -->
+<string name="watch_fullscreen_label">查看</string>
+
+<!-- watch_fullscreen_not_recording -->
+<string name="watch_fullscreen_not_recording">未录制</string>
+
+<!-- watch_hamburger_desc -->
+<string name="watch_hamburger_desc">打开菜单</string>
+
+<!-- watch_pause_desc -->
+<string name="watch_pause_desc">暂停或继续录制</string>
+
+<!-- watch_pause_label -->
+<string name="watch_pause_label">暂停</string>
+
+<!-- watch_perm_delete_action -->
+<string name="watch_perm_delete_action">永久删除</string>
+
+<!-- watch_perm_delete_all_msg -->
+<string name="watch_perm_delete_all_msg">回收站中所有%d个项目将被永久删除且无法恢复。</string>
+
+<!-- watch_perm_delete_all_title -->
+<string name="watch_perm_delete_all_title">全部删除？</string>
+
+<!-- watch_perm_delete_msg -->
+<string name="watch_perm_delete_msg">“%s”将被永久删除且无法恢复。</string>
+
+<!-- watch_perm_delete_title -->
+<string name="watch_perm_delete_title">永久删除？</string>
+
+<!-- watch_recording_hardware_not_supported -->
+<string name="watch_recording_hardware_not_supported">此设备没有视频录制所需的摄像头/麦克风硬件。</string>
+
+<!-- watch_records_empty -->
+<string name="watch_records_empty">暂无录制文件</string>
+
+<!-- watch_records_title -->
+<string name="watch_records_title">录制文件</string>
+
+<!-- watch_remote_stream_off -->
+<string name="watch_remote_stream_off">点击直播</string>
+
+<!-- watch_remote_stream_on -->
+<string name="watch_remote_stream_on">直播中</string>
+
+<!-- watch_remote_title -->
+<string name="watch_remote_title">远程</string>
+
+<!-- watch_resume_label -->
+<string name="watch_resume_label">继续</string>
+
+<!-- watch_settings_audio -->
+<string name="watch_settings_audio">音频</string>
+
+<!-- watch_settings_camera -->
+<string name="watch_settings_camera">相机</string>
+
+<!-- watch_settings_security -->
+<string name="watch_settings_security">安全</string>
+
+<!-- watch_settings_title -->
+<string name="watch_settings_title">设置</string>
+
+<!-- watch_settings_video -->
+<string name="watch_settings_video">视频</string>
+
+<!-- watch_status_paused -->
+<string name="watch_status_paused">⏸ 已暂停</string>
+
+<!-- watch_status_recording -->
+<string name="watch_status_recording">● 录制中</string>
+
+<!-- watch_storage_desc -->
+<string name="watch_storage_desc">存储</string>
+
+<!-- watch_trash_delete_all -->
+<string name="watch_trash_delete_all">删除全部</string>
+
+<!-- watch_trash_delete_one -->
+<string name="watch_trash_delete_one">永久删除</string>
+
+<!-- watch_trash_empty -->
+<string name="watch_trash_empty">未删除任何内容</string>
+
+<!-- watch_trash_title -->
+<string name="watch_trash_title">最近删除</string>
+
+<!-- watch_video_menu_desc -->
+<string name="watch_video_menu_desc">视频选项</string>
+
+<!-- watch_video_saved_toast -->
+<string name="watch_video_saved_toast">已保存到下载s/FadCam</string>
+
+<!-- watermark_accuracy_off -->
+<string name="watermark_accuracy_off">关</string>
+
+<!-- watermark_accuracy_on -->
+<string name="watermark_accuracy_on">开 — 来自GPS卫星的水平精度</string>
+
+<!-- watermark_accuracy_title -->
+<string name="watermark_accuracy_title">GPS精度（m）</string>
+
+<!-- watermark_altitude_off -->
+<string name="watermark_altitude_off">关</string>
+
+<!-- watermark_altitude_on -->
+<string name="watermark_altitude_on">开 — 来自GPS卫星的海拔</string>
+
+<!-- watermark_altitude_title -->
+<string name="watermark_altitude_title">海拔（m）</string>
+
+<!-- watermark_audio_permission_required -->
+<string name="watermark_audio_permission_required">噪音监控需要麦克风权限</string>
+
+<!-- watermark_compass_no_sensor -->
+<string name="watermark_compass_no_sensor">无指南针传感器 — 仅通过GPS移动获取方向（移动时有效）</string>
+
+<!-- watermark_compass_off -->
+<string name="watermark_compass_off">关</string>
+
+<!-- watermark_compass_on_sensor -->
+<string name="watermark_compass_on_sensor">开 — 来自设备指南针传感器的方向</string>
+
+<!-- watermark_compass_title -->
+<string name="watermark_compass_title">指南针方向</string>
+
+<!-- watermark_gps_disabled_banner_message -->
+<string name="watermark_gps_disabled_banner_message">依赖位置的水印功能在设备定位开启前不会显示</string>
+
+<!-- watermark_gps_disabled_home_toast -->
+<string name="watermark_gps_disabled_home_toast">依赖位置的水印功能已启用但GPS已关闭。请开启设备定位以使其生效。</string>
+
+<!-- watermark_gps_disabled_warning -->
+<string name="watermark_gps_disabled_warning">⚠ GPS已关闭 — 请开启设备定位以使用此功能</string>
+
+<!-- watermark_network_warning_enable -->
+<string name="watermark_network_warning_enable">启用</string>
+
+<!-- watermark_network_warning_message -->
+<string name="watermark_network_warning_message">此功能需要网络请求，可能会被追踪。如需完全匿名请禁用。是否继续？</string>
+
+<!-- watermark_network_warning_title -->
+<string name="watermark_network_warning_title">网络警告</string>
+
+<!-- watermark_noise_off -->
+<string name="watermark_noise_off">关</string>
+
+<!-- watermark_noise_on -->
+<string name="watermark_noise_on">开 — 来自麦克风的环境声音水平</string>
+
+<!-- watermark_noise_title -->
+<string name="watermark_noise_title">噪音水平（dB）</string>
+
+<!-- watermark_speed_off -->
+<string name="watermark_speed_off">关</string>
+
+<!-- watermark_speed_on -->
+<string name="watermark_speed_on">开 — 来自GPS卫星数据的速度</string>
+
+<!-- watermark_speed_title -->
+<string name="watermark_speed_title">速度（km/h）</string>
+
+<!-- watermark_timezone_format_gmt_name -->
+<string name="watermark_timezone_format_gmt_name">GMT偏移+名称</string>
+
+<!-- watermark_timezone_format_gmt_only -->
+<string name="watermark_timezone_format_gmt_only">仅GMT偏移</string>
+
+<!-- watermark_timezone_format_title -->
+<string name="watermark_timezone_format_title">时区格式</string>
+
+<!-- watermark_timezone_off -->
+<string name="watermark_timezone_off">关</string>
+
+<!-- watermark_timezone_on_gmt -->
+<string name="watermark_timezone_on_gmt">开 — 水印中显示GMT偏移</string>
+
+<!-- watermark_timezone_title -->
+<string name="watermark_timezone_title">时区</string>
+
+<!-- watermark_utm_helper -->
+<string name="watermark_utm_helper">UTM将地球分为60个区域，并将经纬度转换为以米为单位的东向和北向坐标。用于军事、测绘和地形图以进行精确网格定位。
+
+如何读取："42区 — 372,684m东, 3,512,334m北" = 北半球42区，东向372,684米，北向3,512,334米。</string>
+
+<!-- watermark_utm_off -->
+<string name="watermark_utm_off">关</string>
+
+<!-- watermark_utm_on -->
+<string name="watermark_utm_on">开 — 通用横轴墨卡托网格坐标</string>
+
+<!-- watermark_utm_title -->
+<string name="watermark_utm_title">UTM坐标</string>
+
+<!-- watermark_weather_off -->
+<string name="watermark_weather_off">关</string>
+
+<!-- watermark_weather_on -->
+<string name="watermark_weather_on">开 — 天气来自Open-Meteo API（需要网络）</string>
+
+<!-- watermark_weather_title -->
+<string name="watermark_weather_title">天气</string>
+    <string name="export_center">导出中心</string>
+    <string name="remote_server_status">服务器状态</string>
+    <string name="remote_server_endpoints">服务器端点</string>
+    <string name="remote_get_requests">GET 请求</string>
+    <string name="remote_post_requests">POST 请求</string>
+    <string name="remote_server_root">服务器根目录</string>
+    <string name="remote_live_stream">实时流</string>
+    <string name="remote_status_api">状态 API</string>
+    <string name="remote_init_segment">初始片段</string>
+    <string name="remote_torch_toggle">手电筒开关</string>
+    <string name="remote_post_requests_remote_control">POST 请求（远程控制）</string>
+    <string name="remote_network_health">网络健康</string>
+    <string name="remote_status">状态</string>
+    <string name="remote_excellent">极佳</string>
+    <string name="remote_test_now">立即测试</string>
+    <string name="remote_speed_metrics">速度指标</string>
+    <string name="remote_download">下载</string>
+    <string name="remote_upload">上传</string>
+    <string name="remote_signal_strength">信号强度</string>
+    <string name="remote_latency_ping">延迟（Ping）</string>
+    <string name="remote_last_tested">上次测试：%s</string>
+    <string name="remote_connected_clients">已连接的客户端</string>
+    <string name="remote_client_data_usage">客户端数据使用量</string>
+    <string name="remote_total_served">总服务量</string>
+    <string name="remote_active_clients">活跃客户端</string>
+    <string name="remote_per_client_breakdown">各客户端明细</string>
+    <string name="remote_no_clients">没有客户端连接</string>
+    <string name="remote_battery_info">电池信息</string>
+    <string name="remote_current_level">当前电量</string>
+    <string name="remote_battery_consumed">电池消耗（直播）</string>
+    <string name="remote_charging_status">充电状态</string>
+    <string name="remote_not_charging">未在充电</string>
+    <string name="remote_low_battery_threshold">低电量警告阈值</string>
+    <string name="remote_set">设置</string>
+    <string name="remote_device_battery_capacity">设备电池容量</string>
+    <string name="remote_save">保存</string>
+    <string name="remote_estimates_for_device">您的设备估计值：</string>
+    <string name="remote_uptime_details">运行时间详情</string>
+    <string name="remote_server_uptime">服务器运行时间</string>
+    <string name="remote_session_started_at">会话开始时间</string>
+    <string name="remote_video_segments">视频片段</string>
+    <string name="remote_buffered">已缓冲</string>
+    <string name="remote_buffer_size">缓冲区大小</string>
+    <string name="remote_sequence_range">序列范围</string>
+    <string name="remote_oldest">最旧</string>
+    <string name="remote_latest">最新</string>
+    <string name="remote_what_are_segments">什么是片段？</string>
+    <string name="remote_stream_orientation">直播方向</string>
+    <string name="remote_choose_orientation">仅为直播选择方向</string>
+    <string name="remote_portrait">竖屏</string>
+    <string name="remote_vertical_orientation">竖屏方向（9:16）</string>
+    <string name="remote_landscape">横屏</string>
+    <string name="remote_horizontal_orientation">横屏方向（16:9）</string>
+    <string name="remote_auto_default">自动（默认）</string>
+    <string name="remote_follow_recording_orientation">跟随应用录制方向</string>
+    <string name="remote_quality_low">低</string>
+    <string name="remote_quality_medium">中</string>
+    <string name="remote_quality_high">高</string>
+    <string name="remote_quality_ultra">超高</string>
+    <string name="remote_event_logs">事件日志</string>
+    <string name="remote_client_events">客户端事件</string>
+    <string name="remote_pages">页面</string>
+    <string name="remote_layers">图层</string>
+    <string name="remote_access_endpoints_desc">通过以下 HTTP 端点访问您的流媒体服务器</string>
+    <string name="remote_control_via_api_desc">通过 API 调用远程控制 FadCam</string>
+    <string name="remote_buffered_segments_desc">已缓冲的片段，准备进行流式传输</string>
+    <string name="remote_battery_low_warning">⚠️ 电量不足 - 请立即连接充电器</string>
+    <string name="remote_enter_percentage_hint">输入百分比</string>
+    <string name="remote_enter_mah_hint">输入毫安时（1000-10000）</string>
+    <string name="sidebar_profiles">配置文件</string>
+    <string name="sidebar_profiles_desc">即时保存和加载录制预设</string>
+    <string name="sidebar_update_available">有可用更新</string>
+    <string name="sidebar_stable_release">稳定版</string>
+    <string name="sidebar_beta_release">测试版</string>
+    <string name="sidebar_fadcam_pro">FadCam Pro</string>
+    <string name="badge_new">新</string>
+    <string name="update_pro_title">FadCam Pro 更新</string>
+    <string name="update_pro_desc">新版本的 FadCam Pro 已可用。\n\n对于免费用户，稳定版将在约 60 天后发布。Pro 用户可立即收到更新。</string>
+    <string name="update_get_pro">获取 FadCam Pro</string>
+    <string name="update_maybe_later">稍后再说</string>
+    <string name="update_beta_title">测试版更新可用</string>
+    <string name="update_beta_desc">FadCam 测试版是一款独立应用，可与稳定版同时安装。它不会影响您的稳定版应用或其数据。\n\n安装测试版，在功能到达稳定版之前抢先体验。</string>
+    <string name="update_get_beta">获取测试版</string>
+    <string name="mini_apps_about_title">关于迷你应用</string>
+    <string name="mini_apps_current_tools">当前工具</string>
+    <string name="mini_apps_qr_scanner_reference">二维码扫描器参考</string>
+    <string name="screen_recording_title">屏幕录制</string>
+    <string name="screen_recording_notif_title">FadRec - 屏幕录制</string>
+    <string name="screen_recording_saved">屏幕录制已保存</string>
+    <string name="screen_recording_tap_to_view">点击查看您的录制内容</string>
+    <string name="notification_action_stop">停止</string>
+    <string name="fadmic_coming_soon">FadMic（麦克风录制）即将推出！</string>
+    <string name="toast_stream_server_starting">流媒体服务器正在启动...</string>
+    <string name="toast_stream_server_stopped">流媒体服务器已停止</string>
+    <string name="toast_no_cloud_viewers">没有连接的云观众</string>
+    <string name="toast_no_clients">没有客户端连接</string>
+    <string name="toast_device_id_copied">设备 ID 已复制</string>
+    <string name="toast_endpoint_copied">已复制：%s</string>
+    <string name="toast_battery_set_threshold">电池警告阈值已设置为 %s</string>
+    <string name="toast_battery_set_capacity">电池容量已设置为 %s</string>
+    <string name="toast_orientation_set">方向已设置为 %s</string>
+    <string name="toast_quality_set">质量已设置为 %s</string>
+    <!-- Remote Recording Mode -->
+    <string name="remote_recording_mode">录制模式</string>
+    <string name="remote_mode_stream_only">仅流式传输</string>
+    <string name="remote_mode_stream_only_desc">流式传输，不保存到存储</string>
+    <string name="remote_mode_stream_save">流式传输并保存</string>
+    <string name="remote_mode_stream_save_desc">流式传输并保存录制到存储</string>
+    <string name="remote_not_started">未开始</string>
+    <string name="remote_uptime_seconds_label">秒</string>
+    <string name="remote_uptime_unix_prefix">Unix:</string>
+
+    <!-- Battery Info Sheet -->
+    <string name="battery_threshold_desc">当电池电量降至或低于此百分比时，将显示警告</string>
+    <string name="battery_capacity_desc">请查看设备手册或设置以获取准确容量。这将调整电池估算计算。</string>
+    <string name="battery_charging">充电中</string>
+    <string name="battery_discharging">放电中</string>
+    <string name="battery_rate_per_hour">速率：~%.1f%%/小时</string>
+    <string name="battery_hours_remaining">~%.1f小时剩余</string>
+    <string name="battery_hours_plus_remaining">~%d小时+剩余</string>
+    <string name="battery_unable_to_calculate">无法计算</string>
+    <string name="battery_unable_to_parse">无法解析电池信息</string>
+    <string name="battery_enter_percentage">请输入百分比</string>
+    <string name="battery_percentage_range">百分比必须在5到100之间</string>
+    <string name="battery_invalid_number">无效数字</string>
+    <string name="battery_enter_mah">请输入电池容量（mAh）</string>
+    <string name="battery_mah_range">容量必须在1000到10000 mAh之间</string>
+    <string name="battery_threshold_set">电池警告阈值已设置为 %d%%</string>
+    <string name="battery_failed_threshold">设置阈值失败：%s</string>
+    <string name="battery_capacity_set">电池容量已设置为 %d mAh</string>
+    <string name="battery_failed_capacity">设置容量失败：%s</string>
+    <string name="battery_current_threshold">当前阈值：%d%%</string>
+    <string name="battery_current_capacity">当前容量：%d mAh</string>
+    <string name="battery_estimate_per_hour">\u2022 每小时消耗：~%.1f%%</string>
+    <string name="battery_estimate_at_100">\u2022 100%%电量时：~%.1f小时</string>
+
+    <!-- Home screen camera info -->
+    <string name="home_fps_format">%dfps</string>
+    <string name="home_orientation_portrait">竖屏</string>
+    <string name="home_orientation_landscape">横屏</string>
+    <string name="home_storage_format">%.2f GB</string>
+
+    <!-- Appearance Settings -->
+    <string name="settings_appearance_title">外观</string>
+    <string name="setting_theme">主题</string>
+    <string name="setting_language">语言</string>
+    <string name="setting_app_icon">应用图标</string>
+
+    <!-- Audio Settings -->
+    <string name="setting_enabled">已启用</string>
+    <string name="setting_disabled">已禁用</string>
+    <string name="setting_no_mic_headphones">（无麦克风耳机）</string>
+    <string name="setting_audio_advanced_summary">%d kbps @ %d Hz</string>
+    <string name="audio_device_type_wired_headphones">Wired Headphones</string>
+    <string name="audio_device_type_ble_broadcast">BLE Broadcast</string>
+    <string name="audio_device_type_ble_speaker">BLE Speaker</string>
+    <string name="audio_device_type_builtin_mic">Built-in Mic</string>
 </resources>
