@@ -242,7 +242,18 @@ public class AnnotationService extends Service {
                 case "ACTION_TERMINATE_SERVICE":
                     terminateService();
                     break;
+                default:
+                    // Unknown action - treat as implicit start and send ready broadcast
+                    sendReadyBroadcast();
+                    break;
             }
+        } else {
+            // Implicit service start (startForegroundService without action, or system restart)
+            // Send ready broadcast to dismiss any loading dialog.
+            // This is critical for the case where service is already running and
+            // onCreate() won't fire again - the broadcast must be re-sent so that
+            // newly registered receivers in the fragment can dismiss the loading dialog.
+            sendReadyBroadcast();
         }
         return START_STICKY;
     }
@@ -438,16 +449,19 @@ public class AnnotationService extends Service {
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(themedContext);
 
         androidx.appcompat.app.AlertDialog deleteAllDialog = builder
-                .setTitle("Delete All Projects?")
+                .setTitle(getString(R.string.annotation_delete_all_title))
                 .setMessage("This will permanently delete ALL projects. This action cannot be undone!")
-                .setPositiveButton("Delete All", (dialog, which) -> {
+                .setPositiveButton(getString(R.string.annotation_delete_all_btn), (dialog, which) -> {
                     File[] projects = projectFileManager.listProjects();
                     if (projects != null) {
+                        FLog.w(TAG, "🗑️ DELETE ALL: Deleting " + projects.length + " projects");
                         for (File project : projects) {
                             projectFileManager.deleteProject(project.getName());
                         }
-                        Toast.makeText(this, "All projects deleted", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.annotation_all_deleted), Toast.LENGTH_SHORT).show();
                         parentDialog.dismiss();
+                        // Reset current project to prevent re-saving the just-deleted state
+                        currentProjectName = null;
                         // Create a new project
                         createNewProject();
                     }
@@ -665,9 +679,12 @@ public class AnnotationService extends Service {
 
     private void createNewProject() {
         // Save current project before creating new one (if exists)
+        // Note: currentProjectName is null after "Delete All" to prevent re-saving deleted state
         if (currentProjectName != null) {
             FLog.d(TAG, "Saving current project before creating new: " + currentProjectName);
             saveCurrentState();
+        } else {
+            FLog.d(TAG, "No current project to save — starting fresh");
         }
 
         // Generate new project name with timestamp - using FadRec prefix
@@ -726,26 +743,31 @@ public class AnnotationService extends Service {
 
             // Switch back to main thread for UI operations
             new Handler(Looper.getMainLooper()).post(() -> {
-                setupAnnotationCanvas();
-                setupToolbar();
-                // Removed: setupInlineTextEditor(); - Now using TextEditorActivity
+                try {
+                    setupAnnotationCanvas();
+                    setupToolbar();
+                    // Removed: setupInlineTextEditor(); - Now using TextEditorActivity
 
-                // Load last saved project automatically
-                loadLastProject();
+                    // Load last saved project automatically
+                    loadLastProject();
 
-                startAutoSave();
-                registerMenuActionReceiver();
-                registerRecordingStateReceiver();
-                registerColorPickerReceiver();
-                registerProjectNamingReceiver();
-                registerProjectSelectionReceiver();
-                registerTextEditorResultReceiver(); // Handle results from TextEditorActivity
+                    startAutoSave();
+                    registerMenuActionReceiver();
+                    registerRecordingStateReceiver();
+                    registerColorPickerReceiver();
+                    registerProjectNamingReceiver();
+                    registerProjectSelectionReceiver();
+                    registerTextEditorResultReceiver(); // Handle results from TextEditorActivity
+                } catch (Exception e) {
+                    FLog.e(TAG, "❌ Error during AnnotationService onCreate initialization", e);
+                } finally {
+                    // Broadcast that service is ready (dismiss loading dialog)
+                    // In finally block to ensure loading dialog is ALWAYS dismissed
+                    // even if initialization throws an exception
+                    sendReadyBroadcast();
 
-                // Broadcast that service is ready (dismiss loading dialog)
-                Intent readyIntent = new Intent("com.fadcam.fadrec.ANNOTATION_SERVICE_READY");
-                sendBroadcast(readyIntent);
-
-                FLog.d(TAG, "============ AnnotationService onCreate COMPLETE ============");
+                    FLog.d(TAG, "============ AnnotationService onCreate COMPLETE ============");
+                }
             });
         }).start();
     }
@@ -789,7 +811,7 @@ public class AnnotationService extends Service {
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(themedContext);
 
         androidx.appcompat.app.AlertDialog startupDialog = builder
-                .setTitle("Welcome Back!")
+                .setTitle(getString(R.string.annotation_welcome_back))
                 .setMessage("Continue with your last saved project \"" + sanitizedName + "\" or start a new one?")
                 .setPositiveButton("Continue", (dialog, which) -> {
                     dialog.dismiss();
@@ -891,6 +913,16 @@ public class AnnotationService extends Service {
         updateUndoRedoButtons();
         updatePageLayerInfo();
         updateProjectNameDisplay();
+    }
+
+    /**
+     * Send ANNOTATION_SERVICE_READY broadcast to dismiss loading dialog in FadRecHomeFragment.
+     * Called from onCreate (in finally block) and onStartCommand (for implicit starts).
+     */
+    private void sendReadyBroadcast() {
+        Intent readyIntent = new Intent("com.fadcam.fadrec.ANNOTATION_SERVICE_READY");
+        sendBroadcast(readyIntent);
+        FLog.d(TAG, "ANNOTATION_SERVICE_READY broadcast sent");
     }
 
     private void setupAnnotationCanvas() {
@@ -2958,6 +2990,7 @@ public class AnnotationService extends Service {
      * 
      * @deprecated Use showPageTabBar() for professional UI
      */
+    @Deprecated
     private void cycleToNextPage() {
         if (annotationView != null) {
             AnnotationState state = annotationView.getState();
@@ -3581,7 +3614,7 @@ public class AnnotationService extends Service {
                     FLog.d(TAG, "Auto-collapsed menu after text creation");
                 }
             } else {
-                Toast.makeText(this, "Layer is locked", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.annotation_layer_locked), Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -4007,14 +4040,14 @@ public class AnnotationService extends Service {
             // Annotation ENABLED - ready to draw
             iconAnnotation.setText("edit");
             iconAnnotation.setTextColor(getResources().getColor(android.R.color.holo_green_light));
-            labelAnnotation.setText("Disable Annotation");
-            descAnnotation.setText("Disable to use screen normally");
+            labelAnnotation.setText(getString(R.string.annotation_disable));
+            descAnnotation.setText(getString(R.string.annotation_disable_desc));
             Toast.makeText(this, "✏️ Annotation Enabled - Draw freely", Toast.LENGTH_SHORT).show();
         } else {
             // Annotation DISABLED - can use phone normally
             iconAnnotation.setText("edit_off");
             iconAnnotation.setTextColor(getResources().getColor(android.R.color.darker_gray));
-            labelAnnotation.setText("Enable Annotation");
+            labelAnnotation.setText(getString(R.string.annotation_enable));
             descAnnotation.setText("Enable to use annotation tools");
             Toast.makeText(this, "📱 Annotation Disabled - Use phone normally", Toast.LENGTH_SHORT).show();
         }
@@ -4055,8 +4088,8 @@ public class AnnotationService extends Service {
             // Canvas VISIBLE - all layers shown
             iconCanvas.setText("visibility");
             iconCanvas.setTextColor(getResources().getColor(android.R.color.holo_blue_light));
-            labelCanvas.setText("Hide Canvas");
-            descCanvas.setText("Hide all drawings (pinned layers stay)");
+            labelCanvas.setText(getString(R.string.annotation_hide_canvas));
+            descCanvas.setText(getString(R.string.annotation_hide_canvas_desc));
             Toast.makeText(this, "👁️ Canvas Visible", Toast.LENGTH_SHORT).show();
         } else {
             // Canvas HIDDEN - only pinned layers shown
@@ -4517,9 +4550,9 @@ public class AnnotationService extends Service {
                     activeLayer.addObject(shapeObject);
                     annotationView.invalidate();
                     saveCurrentState();
-                    Toast.makeText(this, "📐 Shape added!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.annotation_shape_added), Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(this, "Layer is locked", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.annotation_layer_locked), Toast.LENGTH_SHORT).show();
                 }
             }
         });
