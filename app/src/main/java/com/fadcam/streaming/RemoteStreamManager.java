@@ -31,7 +31,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * maintaining a circular buffer of recent fMP4 fragments for HLS streaming.
  * 
  * Architecture:
- * - Circular buffer with 5 fragment slots (~10 seconds of video at 2s/fragment)
+ * - Circular buffer with 15 fragment slots (~30 seconds of video at 2s/fragment)
  * - Thread-safe read/write access via ReadWriteLock
  * - Supports both stream-only and stream-and-save modes
  * - Stores initialization segment (ftyp + moov) separately
@@ -39,7 +39,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class RemoteStreamManager {
     private static final String TAG = "RemoteStreamManager";
-    private static final int BUFFER_SIZE = 15; // Keep last 15 fragments (~15 seconds, balanced for memory)
+    private static final int BUFFER_SIZE = 15; // Keep last 15 fragments (~30 seconds at 2s/fragment)
     
     private static RemoteStreamManager instance;
     
@@ -96,7 +96,8 @@ public class RemoteStreamManager {
     // PRIVACY: We only track count and aggregate bytes, never individual IPs
     private int cloudViewerCount = 0;
     private long cloudViewerCountUpdatedAt = 0; // Timestamp of last update
-    private long cloudBytesServed = 0; // Total bytes served by relay to all cloud viewers
+    private long cloudBytesServed = 0; // Cumulative bytes served by relay since its persisted counter began
+    private boolean cloudViewerTelemetryAvailable = false;
 
     // Tracks the timestamp of the last successfully uploaded segment to the cloud relay.
     // Used by the dashboard to detect when the relay stream has gone stale/dead.
@@ -118,16 +119,22 @@ public class RemoteStreamManager {
         public final byte[] data; // moof + mdat bytes
         public final long timestamp;
         public final int sizeBytes;
+        public final long durationMs;
         
         public FragmentData(int sequenceNumber, byte[] data) {
+            this(sequenceNumber, data, 2000);
+        }
+
+        public FragmentData(int sequenceNumber, byte[] data, long durationMs) {
             this.sequenceNumber = sequenceNumber;
             this.data = data;
             this.timestamp = System.currentTimeMillis();
             this.sizeBytes = data.length;
+            this.durationMs = durationMs > 0 ? durationMs : 2000;
         }
         
         public double getDurationSeconds() {
-            return 1.0; // Fragments are configured for 1 second
+            return durationMs / 1000.0;
         }
     }
     
@@ -440,6 +447,16 @@ public class RemoteStreamManager {
      * @param fragmentData Complete moof+mdat bytes
      */
     public void onFragmentComplete(int sequenceNumber, byte[] fragmentData) {
+        onFragmentComplete(sequenceNumber, fragmentData, 2000);
+    }
+
+    /**
+     * Called by FragmentedMp4MuxerWrapper when a fragment is complete.
+     * @param sequenceNumber Fragment sequence number (1-based)
+     * @param fragmentData Complete moof+mdat bytes
+     * @param durationMs Fragment duration reported by Media3 muxer
+     */
+    public void onFragmentComplete(int sequenceNumber, byte[] fragmentData, long durationMs) {
         if (!streamingEnabled) {
             return;
         }
@@ -459,7 +476,7 @@ public class RemoteStreamManager {
             }
             
             // Create fragment object
-            FragmentData fragment = new FragmentData(sequenceNumber, fragmentData);
+            FragmentData fragment = new FragmentData(sequenceNumber, fragmentData, durationMs);
             
             // Add to circular buffer (overwrites old slot)
             fragmentBuffer[bufferHead] = fragment;
@@ -692,7 +709,7 @@ public class RemoteStreamManager {
             m3u8.append("#EXTM3U\n");
             m3u8.append("#EXT-X-VERSION:7\n"); // fMP4 requires version 7
             m3u8.append("#EXT-X-INDEPENDENT-SEGMENTS\n");
-            m3u8.append("#EXT-X-TARGETDURATION:4\n"); // 4-second max fragment duration (2s actual, with margin)
+            m3u8.append("#EXT-X-TARGETDURATION:").append(getTargetDurationSeconds(liveEdge)).append("\n");
             m3u8.append("#EXT-X-MEDIA-SEQUENCE:").append(liveEdge.get(0).sequenceNumber).append("\n");
             
             // Init segment - relative path for cloud (same directory)
@@ -708,6 +725,14 @@ public class RemoteStreamManager {
         } finally {
             bufferLock.readLock().unlock();
         }
+    }
+
+    public static int getTargetDurationSeconds(@NonNull List<FragmentData> fragments) {
+        double maxDurationSeconds = 0;
+        for (FragmentData fragment : fragments) {
+            maxDurationSeconds = Math.max(maxDurationSeconds, fragment.getDurationSeconds());
+        }
+        return Math.max(1, (int) Math.ceil(maxDurationSeconds));
     }
     
     /**
@@ -904,7 +929,7 @@ public class RemoteStreamManager {
                 "\"lastUpdated\": %d, \"serverVersion\": %s, " +
                 "\"isRecording\": %s, \"isPaused\": %s, \"fragmentsBuffered\": %d, \"bufferSizeMb\": %.2f, " +
                 "\"latestSequence\": %d, \"oldestSequence\": %d, \"activeConnections\": %d, " +
-                "\"cloudViewers\": %d, " +
+                "\"cloudViewers\": %d, \"cloudViewerTelemetryAvailable\": %s, " +
                 "\"hasInitSegment\": %s, \"uptimeSeconds\": %d, " +
                 "\"batteryDetails\": %s, " +
                 "\"uptimeDetails\": %s, " +
@@ -939,6 +964,7 @@ public class RemoteStreamManager {
                 oldestSequence,
                 isCloudMode ? cloudViewerCount : getAllClientMetrics().size(), // activeConnections: cloud viewers or local clients
                 cloudViewerCount,
+                cloudViewerTelemetryAvailable,
                 hasInit,
                 uptimeSeconds,
                 batteryDetailsJson,
@@ -1364,17 +1390,22 @@ public class RemoteStreamManager {
     }
     
     /**
-     * Set cloud viewer count and bytes served (fetched from relay server by CloudStatusManager).
+     * Set cloud viewer count and cumulative bytes served (fetched from relay server by CloudStatusManager).
      * Cloud viewers connect to the relay, not directly to the phone.
-     * PRIVACY: bytesServed is aggregate total, not per-viewer.
+     * PRIVACY: bytesServed is aggregate cumulative egress, not per-viewer.
      * @param count Number of unique cloud viewers
-     * @param bytesServed Total bytes served by relay to all cloud viewers
+     * @param bytesServed Cumulative bytes served by relay since its persisted counter began
      */
     public void setCloudViewerCount(int count, long bytesServed) {
         this.cloudViewerCount = count;
         this.cloudBytesServed = bytesServed;
+        this.cloudViewerTelemetryAvailable = true;
         this.cloudViewerCountUpdatedAt = System.currentTimeMillis();
         FLog.d(TAG, "☁️ Cloud viewer count updated: " + count + " (bytes served: " + bytesServed + ")");
+    }
+
+    public void markCloudViewerTelemetryUnavailable() {
+        this.cloudViewerTelemetryAvailable = false;
     }
     
     /**
@@ -1386,9 +1417,9 @@ public class RemoteStreamManager {
     }
     
     /**
-     * Get total bytes served by relay to cloud viewers.
-     * PRIVACY: This is aggregate total, not per-viewer.
-     * @return Total bytes served, or 0 if not tracked
+     * Get cumulative bytes served by relay to cloud viewers.
+     * PRIVACY: This is aggregate cumulative egress, not per-viewer.
+     * @return Cumulative bytes served, or 0 if not tracked
      */
     public long getCloudBytesServed() {
         return cloudBytesServed;
@@ -1897,15 +1928,14 @@ public class RemoteStreamManager {
     
     /**
      * Get total data transferred to clients (persistent across session).
-     * In cloud mode, this includes data uploaded to the relay server.
+     * In cloud mode, this is relay egress delivered to viewers.
      */
     public long getTotalDataTransferred() {
-        // Include cloud uploads if cloud mode is active
+        // Phone-to-relay uploads are ingress and do not represent data served to viewers.
         if (context != null) {
             CloudStreamUploader uploader = CloudStreamUploader.getInstance(context);
             if (uploader != null && uploader.isEnabled()) {
-                // In cloud mode, return cloud upload data (that's what viewers are receiving)
-                return uploader.getTotalBytesUploaded();
+                return cloudBytesServed;
             }
         }
         // In local mode, return locally served data

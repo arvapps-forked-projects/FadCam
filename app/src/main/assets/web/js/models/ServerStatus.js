@@ -108,12 +108,14 @@ class ServerStatus {
         this.activeConnections = data.activeConnections || 0;
         this.clientIps = data.clients ? data.clients.map(c => c.ip) : [];
 
-        // Cloud viewers (viewers connected via relay, not directly to phone)
-        // This is separate from activeConnections which counts direct connections
+        // Cloud viewers connect through relay. In cloud mode activeConnections already
+        // represents this same value, so do not add it twice.
         this.cloudViewers = data.cloudViewers || 0;
+        this.cloudViewerTelemetryAvailable = data.cloudViewerTelemetryAvailable === true;
 
-        // Total viewers = local clients + cloud viewers
-        this.totalConnectedClients = this.activeConnections + this.cloudViewers;
+        this.totalConnectedClients = data.cloudMode
+            ? this.activeConnections
+            : this.activeConnections + this.cloudViewers;
 
         // Store full clients array for modal display
         this.clients = data.clients || [];
@@ -400,23 +402,39 @@ class ServerStatus {
     }
 
     /**
-     * Get staleness state for UI indicators
+     * Get staleness state for UI indicators.
+     * In cloud mode, the relay IS the source of truth — if it returns a status,
+     * the phone was recently connected. Never mark cloud status as offline.
+     * Local mode uses aggressive thresholds because a missed poll means the
+     * phone HTTP server is unreachable.
      * @returns {'fresh'|'delayed'|'stale'|'offline'}
      */
     getStalenessState() {
         const age = this.getStatusAge();
         const t = ServerStatus.STALENESS_THRESHOLDS;
 
+        if (this.cloudMode) {
+            // Cloud mode: relay is the source of truth.
+            // Age up to 60s = fresh (accounts for relay write + poll latency).
+            // Beyond 60s = delayed (phone may be temporarily disconnected).
+            // The relay data is never considered offline — it's the latest known state.
+            if (age < 60000) return 'fresh';
+            return 'delayed';
+        }
+
+        // Local mode: phone is directly connected, aggressive thresholds
         if (age < t.FRESH) return 'fresh';
         if (age < t.DELAYED) return 'delayed';
-        return 'offline'; // >= OFFLINE threshold — clear UI immediately
+        return 'offline';
     }
 
     /**
-     * Check if status is stale (older than OFFLINE threshold)
+     * Check if status is stale (older than OFFLINE threshold).
+     * Cloud mode is never stale — relay data is always the best known state.
      * @returns {boolean}
      */
     isStale() {
+        if (this.cloudMode) return false;
         return this.getStatusAge() >= ServerStatus.STALENESS_THRESHOLDS.OFFLINE;
     }
 
@@ -425,6 +443,7 @@ class ServerStatus {
      * @returns {boolean}
      */
     isOnline() {
+        if (this.cloudMode) return true;
         return !this.isStale();
     }
 

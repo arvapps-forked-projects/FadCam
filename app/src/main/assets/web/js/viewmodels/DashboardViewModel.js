@@ -16,6 +16,7 @@ class DashboardViewModel {
         this.statusModel = new ServerStatus();
         this.pollInterval = null;
         this.isPolling = false;
+        this.pollingAllowed = false;
         
         // Multi-tab coordination (Step 6.11.5.4)
         this.tabId = Math.random().toString(36).substring(2, 10);
@@ -136,19 +137,48 @@ class DashboardViewModel {
     async initialize() {
         console.log('[DashboardViewModel] Initializing...');
         
+        // Detect cloud handoff flow: if the URL has a 'token' parameter, the user
+        // is opening a cloud stream (not connecting to a local phone server).
+        // Skip local-mode status polling — wait for the handoff token exchange
+        // to complete and cloud mode to activate.
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasHandoffToken = urlParams.has('token');
+        const hasStreamDevice = typeof FadCamRemote !== 'undefined' &&
+            typeof FadCamRemote.isWebAccess === 'function' &&
+            FadCamRemote.isWebAccess() &&
+            typeof FadCamRemote.getStreamDeviceId === 'function' &&
+            !!FadCamRemote.getStreamDeviceId();
+        const isCloudStreamPage = hasHandoffToken || hasStreamDevice;
+        
         // Listen for cloud mode ready event (FadCamRemote sets up stream context)
         if (typeof eventBus !== 'undefined') {
             eventBus.on('cloud-mode-ready', (ctx) => {
                 console.log('[DashboardViewModel] ☁️ Cloud mode ready, reinitializing...', ctx);
-                this.updateStatus(); // Force refresh with updated context
+                this.pollingAllowed = true;
+                // Start polling if this is the first activation (handoff flow)
+                if (!this.isPolling) {
+                    this.startPolling();
+                }
+                this.updateStatus(); // Fetch fresh status with cloud context
             });
         }
         
-        // Initial fetch
-        await this.updateStatus();
-        
-        // Start polling
-        this.startPolling();
+        if (typeof FadCamRemote !== 'undefined' &&
+            typeof FadCamRemote.isCloudMode === 'function' &&
+            FadCamRemote.isCloudMode()) {
+            this.pollingAllowed = true;
+            await this.updateStatus();
+            this.startPolling();
+        } else if (isCloudStreamPage) {
+            // Cloud stream flow — don't poll local server (will 404).
+            // Wait for cloud-mode-ready event to trigger first update and start polling.
+            console.log('[DashboardViewModel] ☁️ Cloud stream detected — waiting for cloud session...');
+        } else {
+            // Local mode or already-initialized cloud — poll immediately
+            this.pollingAllowed = true;
+            await this.updateStatus();
+            this.startPolling();
+        }
     }
     
     /**
@@ -199,6 +229,11 @@ class DashboardViewModel {
      */
     startPolling() {
         if (this.isPolling) return;
+
+        if (!this.pollingAllowed) {
+            console.log('[DashboardViewModel] Polling not enabled yet - waiting for initialization');
+            return;
+        }
         
         // Only poll if we're the leader tab (Step 6.11.5.4)
         if (!this.isLeaderTab) {
