@@ -22,7 +22,15 @@
   
   // Configuration (renamed to avoid conflict with global CONFIG)
   const CLOUD_CONFIG = {
-    LAB_URL: 'https://id.fadseclab.com/lab',
+    // Lab dashboard URL — read from ?return= query param set by the id dashboard.
+    // No hardcoded ports or localhost URLs. Falls back to production only if param missing.
+    get LAB_URL() {
+      const params = new URLSearchParams(window.location.search);
+      const returnUrl = params.get('return');
+      if (returnUrl) return decodeURIComponent(returnUrl);
+      // Direct stream access without id dashboard — use production.
+      return 'https://id.fadseclab.com/lab';
+    },
     SUPABASE_URL: 'https://vfhehknmxxedvesdvpew.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmaGVoa25teHhlZHZlc2R2cGV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc3NDI2ODIsImV4cCI6MjA1MzMxODY4Mn0.1F8NF0IwBE-GYmR8Yrq4FKfFGKBRIUhWs0_fzFqF0gc',
     // Domains where cloud features should show
@@ -163,26 +171,9 @@
   }
 
   function viewerLimitCopy(maxViewers) {
-    if (maxViewers === 3) {
-      return {
-        title: 'Viewer Limit Reached',
-        message: 'Lab allows 3 concurrent viewers. Close one of the active streams or keep watching from a single client on this tier.',
-        actionLabel: 'Open Lab'
-      };
-    }
-
-    if (maxViewers === 1) {
-      return {
-        title: 'Viewer Limit Reached',
-        message: 'Pro Plus allows 1 concurrent viewer. Close the other active stream or upgrade to Lab to watch from more clients.',
-        actionLabel: 'Open Lab'
-      };
-    }
-
     return {
       title: 'Viewer Limit Reached',
-      message: 'Your current tier has reached its concurrent viewer limit. Close one active stream or upgrade to watch from more clients.',
-      actionLabel: 'Open Lab'
+      message: `Your tier allows ${maxViewers || 1} concurrent viewer${maxViewers === 1 ? '' : 's'}.<br>Close an active stream or upgrade to watch from more clients.<br>Contact us on Discord for assistance.`
     };
   }
 
@@ -623,6 +614,9 @@
       
       console.log('[FadCamRemote] Stream context ready:', streamContext);
 
+      // Add Open Lab menu item to profile dropdown
+      addCloudMenuItem();
+
       // Show E2E unlock modal if verify_tag is present but key is not in IndexedDB
       await checkAndShowE2EUnlock();
       
@@ -640,8 +634,10 @@
           copy.title,
           copy.message,
           {
-            actionLabel: copy.actionLabel,
-            actionHref: CLOUD_CONFIG.LAB_URL
+            actions: [
+              { label: 'Back to Lab', href: CLOUD_CONFIG.LAB_URL, icon: 'fa-solid fa-flask' },
+              { label: 'Contact on Discord', href: 'https://discord.gg/kvAZvdkuuN', icon: 'fab fa-discord', newTab: true }
+            ]
           }
         );
         return;
@@ -668,7 +664,8 @@
     return isWebAccess() && streamContext !== null;
   }
   
-  // Show overlay on stream page
+  // Show overlay on stream page.
+  // Supports both legacy { actionLabel, actionHref } and new { actions: [{ label, href, icon }] }
   function showStreamOverlay(title, message, options = {}) {
     let overlay = document.getElementById('stream-overlay');
     if (!overlay) {
@@ -689,32 +686,37 @@
       `;
       document.body.appendChild(overlay);
     }
-    
+
+    // Build actions: support both legacy single-action and new multi-action array
+    const actions = options.actions || (options.actionLabel ? [{ label: options.actionLabel, href: options.actionHref || CLOUD_CONFIG.LAB_URL }] : null);
+    const buttonsHtml = actions ? `
+      <div style="margin-top: 24px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+        ${actions.map(a => `
+          <a href="${a.href || '#'}" ${a.newTab ? 'target="_blank" rel="noopener"' : ''} style="
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 18px;
+            border-radius: 10px;
+            background: #dc2626;
+            color: #fff;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+          ">${a.icon ? `<i class="${a.icon}"></i>` : ''}${a.label}</a>
+        `).join('')}
+      </div>
+    ` : `
+      <div style="margin-top: 20px;">
+        <div style="width: 40px; height: 40px; border: 3px solid #333; border-top-color: #ff4444; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+      </div>
+    `;
+
     overlay.innerHTML = `
       <div style="max-width: 420px;">
         <div style="font-size: 24px; font-weight: bold; margin-bottom: 12px;">${title}</div>
         <div style="font-size: 14px; color: #b0b0b0; line-height: 1.6;">${message}</div>
-        ${options.actionLabel ? `
-          <div style="margin-top: 24px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <a href="${options.actionHref || CLOUD_CONFIG.LAB_URL}" style="
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              min-width: 140px;
-              padding: 11px 16px;
-              border-radius: 10px;
-              background: #dc2626;
-              color: #fff;
-              text-decoration: none;
-              font-size: 14px;
-              font-weight: 700;
-            ">${options.actionLabel}</a>
-          </div>
-        ` : `
-          <div style="margin-top: 20px;">
-            <div style="width: 40px; height: 40px; border: 3px solid #333; border-top-color: #ff4444; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-          </div>
-        `}
+        ${buttonsHtml}
       </div>
       <style>
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -735,7 +737,7 @@
   // Show device banner at top
   // NOTE: Device banner removed - logo in header always links to Lab (set in HTML)
   
-  // Add FadCam Remote menu item to profile dropdown
+  // Add Open Lab menu item to profile dropdown
   function addCloudMenuItem() {
     const dropdown = document.getElementById('profileDropdown');
     if (!dropdown) {
@@ -743,19 +745,19 @@
       return;
     }
     
-    // Create the menu item - always shows "My Account" link to Lab
+    if (!CLOUD_CONFIG.LAB_URL) return;
+    
     const menuItem = document.createElement('div');
-    menuItem.className = 'profile-item fadcam-remote-item';
-    menuItem.style.cssText = 'border-top: 1px solid rgba(255,255,255,0.1); margin-top: 4px; padding-top: 12px;';
+    menuItem.className = 'profile-item';
     
     menuItem.innerHTML = `
-      <i class="fas fa-cloud" style="color: #00d4ff;"></i> 
-      <span>FadCam Remote</span>
+      <i class="fas fa-flask" style="color: #dc2626;"></i> 
+      <span>Open Lab</span>
     `;
-    menuItem.onclick = () => window.open(CLOUD_CONFIG.LAB_URL, '_blank');
+    menuItem.onclick = () => { window.location.href = CLOUD_CONFIG.LAB_URL; };
     
-    // Insert before the last item (Logout)
-    const logoutItem = dropdown.querySelector('.profile-item:last-child');
+    // Insert before the logout item
+    const logoutItem = document.getElementById('profileLogoutItem');
     if (logoutItem) {
       dropdown.insertBefore(menuItem, logoutItem);
     } else {

@@ -225,7 +225,7 @@
                     <div class="card-clickable">
                         <i class="fas fa-arrow-down" style="font-size: 10px; color: #f85149; width: 12px; height: 12px; flex-shrink: 0;"></i>
                         <div class="card-sm-content">
-                            <div class="card-label-sm">Data Received</div>
+                            <div class="card-label-sm">Usage</div>
                             <div class="card-value-sm" id="dataTransferValue">—</div>
                         </div>
                         <i class="fas fa-chevron-right card-arrow-sm"></i>
@@ -632,7 +632,7 @@
     <div class="modal" id="dataTransferModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Client Data Usage</h2>
+                <h2>Monthly Usage</h2>
                 <button class="modal-close" onclick="hideDataTransferModal()">✕</button>
             </div>
             <div class="modal-body" id="dataTransferContent"></div>
@@ -1334,23 +1334,26 @@
         };
 
         /**
-         * Detect WebP support and load appropriate hero background image
+         * Detect WebP support and load appropriate hero background image.
+         * Uses an actual image decoding test — Safari can display WebP but
+         * cannot encode it via canvas.toDataURL, so a canvas test is wrong.
          */
         function detectWebPAndLoadHero() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1;
-            canvas.height = 1;
-            const ctx = canvas.getContext('2d');
-            if (ctx && ctx.fillStyle) {
-                ctx.fillStyle = 'rgba(0,0,0,0)';
-                ctx.fillRect(0, 0, 1, 1);
-                const supportsWebP = canvas.toDataURL('image/webp').indexOf('image/webp') === 5;
-                const heroElement = document.getElementById('heroBackground');
-                if (heroElement && !supportsWebP) {
-                    heroElement.classList.add('no-webp');
-                    console.log('[Image] WebP not supported, using PNG fallback');
-                }
-            }
+            const heroElement = document.getElementById('heroBackground');
+            if (!heroElement) return;
+
+            // Test WebP decoding support via actual image loading
+            const img = new Image();
+            img.onload = function() {
+                // WebP supported — keep default .webp, no fallback needed
+            };
+            img.onerror = function() {
+                // WebP not supported — use PNG fallback
+                heroElement.classList.add('no-webp');
+                console.log('[Image] WebP not supported, using PNG fallback');
+            };
+            // Tiny 1x1 lossy WebP (valid, decodes on any browser with WebP support)
+            img.src = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoCAAEAAQAcJaQAA3AA/v3AgAA=';
         }
 
         // Detect WebP support on page load
@@ -2033,129 +2036,80 @@
             closeModalAnimated('networkModal');
         }
 
-        function showDataTransferModal() {
+        async function showDataTransferModal() {
             if (!currentStatus) return;
-            const dataTransferred = currentStatus.dataTransferredMb || 0;
-            // Check if we're in cloud mode
             const isCloudMode = currentStatus.cloudMode;
-            const displayValue = isCloudMode && !currentStatus.cloudViewerTelemetryAvailable
-                ? 'Unavailable'
-                : dataTransferred > 1000 ? (dataTransferred / 1024).toFixed(2) + ' GB' : dataTransferred.toFixed(1) + ' MB';
-            
-            let content = '';
-            
-            if (isCloudMode) {
-                // CLOUD MODE: Only show aggregate stats (per-viewer details not available)
-                const cloudViewers = currentStatus.cloudViewers || 0;
-                
-                content = `
-                    <div class="modal-section">
-                        <div class="modal-rows-group">
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Relay Total Served</div>
-                                <div class="modal-row-value">${displayValue}</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Cloud Viewers</div>
-                                <div class="modal-row-value">${cloudViewers}</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="modal-info-box" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
-                        <div class="modal-info-text" style="line-height: 1.5;">
-                            🔒 <strong>Zero-Log Policy</strong><br>
-                            Per-viewer breakdown is not available in cloud mode to protect viewer privacy. 
-                            Relay Total Served is cumulative since the relay counter began. Monthly usage in FadSec ID counts current-month relay data delivered to viewers; phone uploads are not counted.
-                        </div>
-                    </div>
-                `;
-            } else {
-                // LOCAL MODE: Show full per-client breakdown
-                const activeClientsCount = currentStatus.clients ? currentStatus.clients.length : 0;
-                
-                let clientsHtml = '';
-                if (currentStatus.clients && currentStatus.clients.length > 0) {
-                    clientsHtml = currentStatus.clients.map(client => {
-                        // Calculate duration display
-                        let durationDisplay = '0m';
-                        if (client.sessionDurationSeconds) {
-                            const seconds = client.sessionDurationSeconds;
-                            if (seconds < 60) {
-                                durationDisplay = seconds + 's';
-                            } else if (seconds < 3600) {
-                                durationDisplay = Math.floor(seconds / 60) + 'm';
-                            } else {
-                                const hours = Math.floor(seconds / 3600);
-                                const mins = Math.floor((seconds % 3600) / 60);
-                                durationDisplay = hours + 'h ' + mins + 'm';
-                            }
-                        }
-                        
-                        // Get data served
-                        const dataMb = client.mbServed || 0;
-                        const fragments = client.fragmentsServed || 0;
-                        const isActive = client.isActive !== false;
-                        
-                        return `
-                            <div class="modal-rows-group" style="margin-bottom: 12px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #24272d;">
-                                    <div style="font-size: 13px; font-weight: 700; color: #e6edf3; font-family: monospace;">${client.ip || 'Unknown'}</div>
-                                    <div style="font-size: 11px; font-weight: 700; color: #ffffff; background: ${isActive ? '#3fb950' : '#6e7681'}; padding: 4px 8px; border-radius: 4px;">${isActive ? 'Active' : 'Inactive'}</div>
-                                </div>
-                                <div class="modal-row-container">
-                                    <div class="modal-row-label">Data Served</div>
-                                    <div class="modal-row-value">${dataMb.toFixed(1)} MB</div>
-                                </div>
-                                <div class="modal-row-container">
-                                    <div class="modal-row-label">Duration</div>
-                                    <div class="modal-row-value">${durationDisplay}</div>
-                                </div>
-                                <div class="modal-row-container">
-                                    <div class="modal-row-label">Fragments</div>
-                                    <div class="modal-row-value">${fragments}</div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                } else {
-                    clientsHtml = '<div style="text-align: center; padding: 16px; color: #8b949e; font-size: 12px;">No clients connected</div>';
+
+            // Show loading overlay immediately
+            showDataTransferContent('<div style="padding:32px;text-align:center;color:#6e7681;"><div style="width:28px;height:28px;border:2px solid #24272d;border-top-color:#f85149;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div>Loading usage history…</div>');
+
+            // Fetch monthly usage history from relay
+            let currentMb = 0;
+            let historyHtml = '<div style="padding:16px;text-align:center;color:#6e7681;">Could not load history</div>';
+            try {
+                const streamToken = typeof FadCamRemote !== 'undefined' ? FadCamRemote.getStreamToken() : null;
+                const userId = typeof FadCamRemote !== 'undefined' && FadCamRemote.streamContext ? FadCamRemote.streamContext().userId : null;
+                if (streamToken && userId) {
+                    const relayBase = 'https://live.fadseclab.com:8443';
+                    const histRes = await fetch(`${relayBase}/api/usage-history?user_id=${userId}`, {
+                        headers: { Authorization: `Bearer ${streamToken}` }
+                    });
+                    if (histRes.ok) {
+                        const hist = await histRes.json();
+                        currentMb = hist.current_month_mb || 0;
+                        const rows = (hist.history || []).map(r => {
+                            // r.month is a full date string like "2026-07-05" — parse safely
+                            const d = new Date(r.month + 'T00:00:00Z');
+                            const monthLabel = isNaN(d.getTime()) ? r.month : d.toLocaleDateString('en-US', { year:'numeric', month:'short' });
+                            const thisMonth = new Date().toISOString().slice(0, 7);
+                            const isCurrent = r.month.startsWith(thisMonth);
+                            return `<div class="modal-row-container">
+                                <div class="modal-row-label">${monthLabel}${isCurrent ? ' (current)' : ''}</div>
+                                <div class="modal-row-value">${r.mb > 1000 ? (r.mb/1024).toFixed(2)+' GB' : r.mb.toFixed(1)+' MB'}</div>
+                            </div>`;
+                        });
+                        historyHtml = rows.length > 0 ? rows.join('') : '<div style="padding:16px;text-align:center;color:#6e7681;">No history yet</div>';
+                    }
                 }
-                
-                content = `
-                    <div class="modal-section">
-                        <div class="modal-rows-group">
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Total Served</div>
-                                <div class="modal-row-value">${displayValue}</div>
-                            </div>
-                            <div class="modal-row-container">
-                                <div class="modal-row-label">Active Clients</div>
-                                <div class="modal-row-value">${activeClientsCount}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-section">
-                        <div class="modal-section-title">Per-Client Breakdown</div>
-                        <div style="margin-top: 8px;">
-                            ${clientsHtml}
-                        </div>
-                    </div>
-                    
-                    <div class="modal-info-box">
-                        <div class="modal-info-text">
-                            ℹ️ Shows detailed data transmission metrics for each connected client.
-                        </div>
-                    </div>
-                `;
+            } catch (e) {
+                historyHtml = '<div style="padding:16px;text-align:center;color:#6e7681;">Could not load history</div>';
             }
-            
+
+            const displayCurrent = currentMb > 1000 ? (currentMb/1024).toFixed(2) + ' GB' : currentMb.toFixed(1) + ' MB';
+
+            let content = `
+                <div class="modal-section">
+                    <div class="modal-rows-group">
+                        <div class="modal-row-container">
+                            <div class="modal-row-label" style="font-weight:700;">This Month</div>
+                            <div class="modal-row-value" style="color:#f85149;">${displayCurrent}</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #24272d;">
+                        <div style="font-size:11px;color:#6e7681;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">History</div>
+                        ${historyHtml}
+                    </div>
+                </div>
+                <div class="modal-info-box" style="background: rgba(255,255,255,0.05); border-radius: 8px;margin-top:12px;">
+                    <div class="modal-info-text" style="line-height: 1.5;">
+                        ${isCloudMode ? '☁️ Only data streamed to viewers counts toward your limit. Uploading is always free.' : '📡 Data served to LAN viewers.'}
+                    </div>
+                </div>
+            `;
+
+            showDataTransferContent(content);
+        }
+
+
+
+        function showDataTransferContent(content) {
             document.getElementById('dataTransferContent').innerHTML = content;
             document.getElementById('dataTransferModal').classList.add('visible');
         }
         function hideDataTransferModal() {
             closeModalAnimated('dataTransferModal');
         }
+
 
         function showSegmentsModal() {
             if (!currentStatus) return;
