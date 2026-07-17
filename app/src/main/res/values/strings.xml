@@ -2139,6 +2139,28 @@ For the smoothest playback experience, you can use an external player like VLC. 
     <!-- Motion Lab -->
     <string name="motion_lab_title">Motion Lab</string>
     <string name="motion_lab_row_subtitle">Smart event recording for CCTV-style use</string>
+
+    <!-- Automation - coming soon -->
+    <string name="automation_title">Automation</string>
+    <string name="automation_row_subtitle">Button mapping, Bluetooth remotes, volume keys</string>
+
+    <!-- Tutorials - coming soon -->
+    <string name="tutorials_title">Tutorial Videos</string>
+    <string name="tutorials_subtitle">We\'re planning to create short guides covering everything from basics to pro techniques. Subscribe and hit the bell so you\'ll be notified when they drop!</string>
+    <string name="tutorials_youtube_cta">Subscribe on YouTube</string>
+
+    <!-- iOS Promo -->
+    <string name="ios_promo_title">FadCam is now on iOS!</string>
+    <string name="ios_promo_subtitle">The same privacy-first camera app you love, now available for iPhone</string>
+
+    <!-- Trash section in Settings -->
+    <string name="trash_settings_title">Trash</string>
+    <string name="trash_settings_subtitle">Recover deleted recordings and files</string>
+    <string name="trash_settings_info">This feature was already available — just hidden behind a long-press on the FadCam logo in the top bar of the home screen. We\'ve surfaced it here so it\'s easier to discover.</string>
+    <string name="trash_settings_hide_button">Hide this section</string>
+    <string name="trash_settings_hide_dialog_title">Hide Trash section?</string>
+    <string name="trash_settings_hide_dialog_message">The Trash section will disappear from Settings. To bring it back, open Trash by long-pressing the FadCam logo in the top bar of the home screen, then turn on \"Show Trash in Settings\" inside.</string>
+    <string name="trash_settings_hide_dialog_confirm">Hide</string>
     <string name="motion_lab_enable">Enable Motion Recording</string>
     <string name="motion_lab_enable_sensor">Enable Motion Sensor</string>
     <string name="motion_lab_status_enabled">Active (records only when needed)</string>

@@ -413,6 +413,40 @@ public class GLWatermarkRenderer {
         renderToEncoderInternal(true);
     }
 
+    /**
+     * Consumes the latest frame from the SurfaceTexture without rendering it
+     * to the encoder.  This MUST be called from the GL thread (the same thread
+     * that owns the EGL context) whenever a new frame is signalled via
+     * {@code onFrameAvailable} but the caller chooses to drop the frame for
+     * FPS throttling.
+     *
+     * <p>Simply skipping the frame without calling {@code updateTexImage()}
+     * will fill up the SurfaceTexture's internal buffer queue (only 1-2 slots
+     * in async mode).  Once the queue is full the VirtualDisplay producer
+     * blocks on {@code dequeueBuffer()}, deadlocking the entire capture
+     * pipeline.  This method releases the buffer so the producer can continue.
+     */
+    public void consumeLatestFrame() {
+        synchronized (renderLock) {
+            if (released || !initialized || cameraSurfaceTexture == null) {
+                return;
+            }
+            synchronized (frameSyncObject) {
+                if (!frameAvailable) {
+                    return; // nothing to consume
+                }
+                frameAvailable = false;
+            }
+            try {
+                cameraSurfaceTexture.updateTexImage();
+                cameraSurfaceTexture.getTransformMatrix(latestTexMatrix);
+                hasLatestTexMatrix = true;
+            } catch (Exception e) {
+                FLog.w(TAG, "consumeLatestFrame failed", e);
+            }
+        }
+    }
+
     public void setSuppressWatermarkForSnapshot(boolean suppress) {
         suppressWatermarkForSnapshot = suppress;
     }
@@ -1165,11 +1199,23 @@ public class GLWatermarkRenderer {
         // Ensures icons are visible while maintaining proper line spacing.
         float iconLineH = dynamicTextSize * 2.7f;
         
-        // Use standard line height for spacing between rows (no extra buffer)
-        float effectiveLineHeight = lineHeight;
-
         String[] lines = text.split("\n");
         watermarkLineCount = lines.length;
+
+        // Effective per-line height must account for icons, which are taller
+        // than the text glyphs at higher resolutions (e.g. 77.8 px icon vs
+        // 38.5 px lineHeight at 1440p).  Without this the watermark bitmap is
+        // too short and icon bottoms get truncated.
+        int linesWithIcons = 0;
+        for (String l : lines) {
+            if (l != null && (l.contains("<ICON>") || l.contains("<FADCAM_ICON>"))) {
+                linesWithIcons++;
+            }
+        }
+        float effectiveLineHeight = linesWithIcons > 0
+                ? Math.max(lineHeight, iconLineH)
+                : lineHeight;
+
         float maxLineWidth = 0f;
         for (String line : lines) {
             if (line == null) continue;
