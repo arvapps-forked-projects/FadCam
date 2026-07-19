@@ -545,7 +545,6 @@ public class GLRecordingPipeline {
     public void swapCameras() {
         if (glRenderer != null) {
             glRenderer.swapCameras();
-            FLog.d(TAG, "Camera rendering swapped");
         }
     }
 
@@ -565,7 +564,6 @@ public class GLRecordingPipeline {
         this.dualCameraConfig = newConfig;
         if (glRenderer != null) {
             glRenderer.updatePipConfig(newConfig);
-            FLog.d(TAG, "PiP config updated: " + newConfig);
         }
     }
 
@@ -601,7 +599,6 @@ public class GLRecordingPipeline {
             }
 
             if (glRenderer == null) {
-                // FLog.d(TAG, "Creating GLWatermarkRenderer with dimensions " + videoWidth + "x" + videoHeight);
                 glRenderer = new GLWatermarkRenderer(context, encoderInputSurface, orientation, sensorOrientation,
                         videoWidth, videoHeight, false);
                 glRenderer.setUserOrientationSetting(orientation);
@@ -639,7 +636,6 @@ public class GLRecordingPipeline {
                         }
 
                         if (previewSurface != null && previewSurface.isValid()) {
-                            // FLog.d(TAG, "Setting preview surface during prepareSurfaces (GL thread)");
                             glRenderer.setPreviewSurface(previewSurface);
                         } else {
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -715,7 +711,6 @@ public class GLRecordingPipeline {
                     FLog.w(TAG, "Failed to apply initial watermark", e);
                 }
 
-                // FLog.d(TAG, "GLWatermarkRenderer setup complete");
             }
         } catch (Exception e) {
             FLog.e(TAG, "Error preparing surfaces", e);
@@ -743,9 +738,17 @@ public class GLRecordingPipeline {
                 } catch (Throwable ignore) {
                 }
                 
-                // Reset timestamp tracking at recording start
-                recordingStartTimeNanos = -1;  // Will be initialized on first VIDEO frame
-                recordingStartSystemTimeNanos = System.nanoTime(); // Initialize for AUDIO thread reference NOW
+                // Reset timestamp tracking at recording start — only on the very
+                // first start.  During a camera-switch reconfiguration,
+                // startRecording() may be called again while isRecording is
+                // temporarily false, but the timestamp base must NOT change
+                // or audio/video PTS values will jump by hours.
+                recordingStartTimeNanos = -1;
+                synchronized (timestampLock) {
+                    if (recordingStartSystemTimeNanos == -1) {
+                        recordingStartSystemTimeNanos = System.nanoTime();
+                    }
+                }
 
                 // Make sure we have a valid renderer and surfaces
                 if (glRenderer == null || encoderInputSurface == null) {
@@ -813,7 +816,6 @@ public class GLRecordingPipeline {
                                                 mediaMuxer.start();
                                                 muxerStarted = true;
                                                 flushPreMuxerVideoBuffer();
-                                                FLog.d(TAG, "Muxer started via safety fallback (video-only mode)");
                                             }
                                         } catch (Exception e) {
                                             FLog.e(TAG, "Failed to start muxer via safety fallback", e);
@@ -970,7 +972,6 @@ public class GLRecordingPipeline {
             } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 // Handle format change (should have happened during recording)
                 MediaFormat newFormat = videoEncoder.getOutputFormat();
-                FLog.d(TAG, "Video format changed during drain: " + newFormat);
                 if (!muxerStarted && videoTrackIndex == -1) {
                     cachedVideoFormat = newFormat;
                     videoTrackIndex = mediaMuxer.addTrack(newFormat);
@@ -1035,7 +1036,6 @@ public class GLRecordingPipeline {
                 return false; // No buffer available, need to try again
             } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 MediaFormat newFormat = audioEncoder.getOutputFormat();
-                FLog.d(TAG, "Audio format changed during drain: " + newFormat);
                 if (!muxerStarted && audioTrackIndex == -1) {
                     cachedAudioFormat = newFormat;
                     audioTrackIndex = mediaMuxer.addTrack(newFormat);
@@ -1116,11 +1116,9 @@ public class GLRecordingPipeline {
         // Strategy 2: Force stop with small delay (if normal failed)
         if (!muxerStopped) {
             try {
-                FLog.d(TAG, "Attempting force muxer stop with delay");
                 Thread.sleep(50); // Small delay to let pending operations complete
                 mediaMuxer.stop();
                 muxerStopped = true;
-                FLog.d(TAG, "Force muxer stop successful");
             } catch (Exception e) {
                 FLog.w(TAG, "Force muxer stop failed, trying final strategy", e);
             }
@@ -1189,9 +1187,7 @@ public class GLRecordingPipeline {
         try {
             // This helps ensure the encoder produces constant framerate output
             format.setFloat(MediaFormat.KEY_CAPTURE_RATE, (float) videoFramerate);
-            // FLog.d(TAG, "Set MediaFormat.KEY_CAPTURE_RATE to " + videoFramerate + " for constant framerate");
         } catch (Exception e) {
-            // FLog.d(TAG, "KEY_CAPTURE_RATE not supported on this device");
         }
 
         // ESSENTIAL: Real-time priority for smooth recording (API 23+)
@@ -1203,7 +1199,6 @@ public class GLRecordingPipeline {
             }
         }
 
-        // FLog.d(TAG, "Applied basic encoder configuration: " +
         //     "bitrate=" + videoBitrate + ", framerate=" + videoFramerate + ", vbr=enabled, priority=realtime");
     }
 
@@ -1233,9 +1228,7 @@ public class GLRecordingPipeline {
         // ESSENTIAL: For constant framerate recording, especially on Samsung devices
         try {
             format.setFloat(MediaFormat.KEY_CAPTURE_RATE, (float) videoFramerate);
-            // FLog.d(TAG, "Set MediaFormat.KEY_CAPTURE_RATE to " + videoFramerate + " for constant framerate");
         } catch (Exception e) {
-            // FLog.d(TAG, "KEY_CAPTURE_RATE not supported on this device");
         }
 
         // Industry Standard: Enhanced encoder configuration for reliability
@@ -1280,7 +1273,6 @@ public class GLRecordingPipeline {
             }
         }
 
-        // FLog.d(TAG, "Applied industry-standard encoder configuration with user settings: " +
         //     "codec=" + videoCodec + ", bitrate=" + videoBitrate + ", framerate=" + videoFramerate);
     }
 
@@ -1302,8 +1294,6 @@ public class GLRecordingPipeline {
         encoderWidth = needsSwap ? videoHeight : videoWidth;
         encoderHeight = needsSwap ? videoWidth : videoHeight;
 
-        FLog.d("FAD-ENCODER", "Orientation: " + orientation + " | res: " + originalWidth + "x" + originalHeight + " -> encoder: " + encoderWidth + "x" + encoderHeight);
-
         // Industry Standard: Try encoder configurations with progressive fallbacks
         boolean encoderConfigured = false;
         String originalMimeType = videoCodec.getMimeType();
@@ -1311,7 +1301,6 @@ public class GLRecordingPipeline {
 
         // Strategy 1: Try user's preferred codec with minimal settings
         try {
-            // FLog.d(TAG, "Attempting " + currentMimeType + " encoder with minimal settings");
             MediaFormat format = MediaFormat.createVideoFormat(currentMimeType, encoderWidth, encoderHeight);
             configureBasicEncoder(format);
 
@@ -1369,8 +1358,6 @@ public class GLRecordingPipeline {
 
         // DEBUG: Log MediaCodec surface dimensions
         try {
-            FLog.d("DEBUG_RECORDING", "MediaCodec configured for: " + originalWidth + "x" + originalHeight);
-            FLog.d("MEDIACODEC_VERIFY", "Encoder dimensions: " + encoderWidth + "x" + encoderHeight);
         } catch (Exception e) {
             FLog.e(TAG, "Error logging MediaCodec dimensions", e);
         }
@@ -1395,7 +1382,6 @@ public class GLRecordingPipeline {
             mediaMuxer = new FragmentedMp4MuxerWrapper(currentOutputFd);
         } else {
             mediaMuxer = new FragmentedMp4MuxerWrapper(currentOutputFilePath);
-            // FLog.d(TAG, "Created FragmentedMp4Muxer with path: " + currentOutputFilePath + " (fMP4 for streaming)");
         }
 
         // Set location metadata if available
@@ -1488,7 +1474,6 @@ public class GLRecordingPipeline {
             }
             drainEncoder();
             if (shouldSplitSegment()) {
-                FLog.d(TAG, "Size limit reached, rolling over segment");
                 // Stop writing to old muxer; handle I/O asynchronously so the
                 // drain loop keeps consuming encoder output.
                 muxerStarted = false;
@@ -1543,7 +1528,6 @@ public class GLRecordingPipeline {
                 rolloverRequestedByDrain = false;
                 return;
             }
-            FLog.i(TAG, "Completing rollover to segment " + segmentNumber);
 
             if (mediaMuxer != null) {
                 try {
@@ -1577,7 +1561,6 @@ public class GLRecordingPipeline {
                 muxerStarted = true;
             }
 
-            FLog.i(TAG, "Started new segment: " + segmentNumber);
         } catch (Exception e) {
             FLog.e(TAG, "Error during async rollover muxer setup", e);
         } finally {
@@ -2398,14 +2381,12 @@ public class GLRecordingPipeline {
             try {
                 if (audioRecord.getRecordingState() == android.media.AudioRecord.RECORDSTATE_RECORDING) {
                     audioRecord.stop();
-                    FLog.d(TAG, "Audio recording paused");
                 }
             } catch (Exception e) {
                 FLog.e(TAG, "Error pausing audio recording", e);
             }
         }
 
-        FLog.d(TAG, "Recording paused successfully");
     }
     
     /**
@@ -2430,8 +2411,6 @@ public class GLRecordingPipeline {
             FLog.w(TAG, "Cannot resume recording - recording is either already active or has been stopped");
             return;
         }
-
-        FLog.d(TAG, "Resuming recording");
 
         FLog.i(TAG, "========== RESUME RECORDING ===========");
         
@@ -2458,7 +2437,6 @@ public class GLRecordingPipeline {
             try {
                 if (audioRecord.getRecordingState() != android.media.AudioRecord.RECORDSTATE_RECORDING) {
                     audioRecord.startRecording();
-                    FLog.d(TAG, "Audio recording resumed");
                 }
             } catch (Exception e) {
                 FLog.e(TAG, "Error resuming audio recording", e);
@@ -2467,6 +2445,16 @@ public class GLRecordingPipeline {
 
         // Set recording flag to true to resume encoding frames
         isRecording = true;
+
+        // CRITICAL: Restart the drain loop.  During pause the DrainRunnable
+        // stops re-posting itself (line 1489: !isRecording → return without
+        // postDelayed).  Without this, audio/video encoder output buffers
+        // back up, the audio encoder stops accepting input, and all new audio
+        // data after resume is silently lost — the recorded file has audio
+        // only up to the pause point.
+        if (drainHandler != null) {
+            startDrainLoop();
+        }
 
         // Force an IDR (keyframe) on the very next video frame so that ExoPlayer
         // can seek into the post-resume segment without showing a still frame.
@@ -2490,14 +2478,12 @@ public class GLRecordingPipeline {
             handler.post(() -> {
                 try {
                     glRenderer.renderFrame();
-                    FLog.d(TAG, "Forced a frame render after resuming");
                 } catch (Exception e) {
                     FLog.e(TAG, "Error rendering frame after resume", e);
                 }
             });
         }
 
-        FLog.d(TAG, "Recording resumed successfully");
     }
 
     /**
@@ -2566,7 +2552,6 @@ public class GLRecordingPipeline {
         // flood the GL handler with redundant operations.
         if (this.previewSurface == surface) return;
         this.previewSurface = surface;
-        FLog.d(TAG, "setPreviewSurfaceImmediate: " + (surface != null && surface.isValid() ? "VALID" : "NULL"));
         
         if (glRenderer != null) {
             synchronized (previewApplyLock) {
@@ -2588,10 +2573,8 @@ public class GLRecordingPipeline {
                         FLog.d(TAG, "Releasing preview EGL (immediate)");
                         glRenderer.releasePreviewEGL();
                     } else {
-                        FLog.d(TAG, "Setting preview surface to glRenderer (immediate)");
                         glRenderer.setPreviewSurface(s);
                         // Force a re-render by requesting next frame
-                        FLog.d(TAG, "Preview surface applied immediately - forcing render");
                     }
                 } catch (Throwable t) {
                     FLog.e(TAG, "Immediate preview apply failed", t);
@@ -2730,35 +2713,6 @@ public class GLRecordingPipeline {
 
             // Debug aspect ratio information
             float recordingAspectRatio = (float) videoWidth / videoHeight;
-            FLog.d("DEBUG_ASPECT", "Recording dimensions: " + videoWidth + "x" + videoHeight);
-            FLog.d("DEBUG_ASPECT", "Recording aspect ratio: " + recordingAspectRatio);
-            FLog.d("DEBUG_ASPECT", "Forcing fixed dimensions: " + videoWidth + "x" + videoHeight +
-                    " with aspect ratio " + targetAspectRatio);
-
-            // Compare with the target aspect ratio
-            if (Math.abs(recordingAspectRatio - targetAspectRatio) > 0.01f) {
-                FLog.w("DEBUG_ASPECT", "Recording aspect ratio doesn't match target aspect ratio!");
-            }
-        }
-    }
-
-    /**
-     * Debug method to compare preview and recording dimensions and aspect ratios.
-     */
-    private void debugPreviewVsRecording() {
-        FLog.d("DEBUG_COMPARISON", "Preview surface: " + mSurfaceWidth + "x" + mSurfaceHeight);
-        FLog.d("DEBUG_COMPARISON", "Recording surface: " + videoWidth + "x" + videoHeight);
-
-        float previewAspectRatio = (float) mSurfaceWidth / mSurfaceHeight;
-        float recordingAspectRatio = (float) videoWidth / videoHeight;
-
-        FLog.d("DEBUG_COMPARISON", "Preview aspect ratio: " + previewAspectRatio);
-        FLog.d("DEBUG_COMPARISON", "Recording aspect ratio: " + recordingAspectRatio);
-
-        if (Math.abs(previewAspectRatio - recordingAspectRatio) > 0.01f) {
-            FLog.w("DEBUG_COMPARISON", "Preview and recording aspect ratios don't match!");
-        } else {
-            FLog.d("DEBUG_COMPARISON", "Preview and recording aspect ratios match.");
         }
     }
 

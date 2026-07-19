@@ -379,11 +379,6 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         final boolean allowGeneralInteractions = !isProcessing;
         final boolean allowMenuClick = allowGeneralInteractions && !this.isSelectionModeActive;
 
-        // Only log for debugging specific positions to reduce spam
-        if (position < 3 || position % 20 == 0) {
-            FLog.v(TAG, "onBindViewHolder Pos " + position + ": Name=" + displayName);
-        }
-
         // --- 3. Bind Standard Data, optimized for fewer UI operations ---
         if (holder.textViewSerialNumber != null)
             holder.textViewSerialNumber.setText(String.valueOf(entry.serialNumber));
@@ -435,7 +430,6 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     materialCardView.setStrokeWidth(dpToPx(1));
                 }
 
-                FLog.d(TAG, "Setting Home rail card background for records at position " + position);
             }
 
             if (holder.menuButton != null) {
@@ -1024,7 +1018,6 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 if (bitmap != null) {
                     holder.imageViewThumbnail.setImageBitmap(bitmap);
                     holder.imageViewThumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                    FLog.v(TAG, "Loaded thumbnail from cache for: " + uriString);
                     return;
                 }
             } catch (Exception e) {
@@ -1080,7 +1073,6 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                                 com.fadcam.utils.VideoSessionCache.saveThumbnailToDisk(context, uriString,
                                         thumbnailData);
 
-                                FLog.v(TAG, "Cached new thumbnail for: " + uriString);
                             } catch (Exception e) {
                                 FLog.w(TAG, "Error caching thumbnail", e);
                             }
@@ -1230,7 +1222,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 }
             }
         }
-        FLog.v(TAG, "URI not found in adapter entries: " + uri); // Use v for verbose logs
+        // URI not found in adapter entries
         return -1; // Not found
     }
 
@@ -2516,11 +2508,9 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
         
         if (safeMediaProbeMode) {
-            FLog.d(TAG, "probe_mode=safe_mmr uri=" + videoUri);
             return getVideoDurationWithMmr(videoUri, "safe_mmr");
         }
 
-        FLog.d(TAG, "probe_mode=ffprobe uri=" + videoUri);
         // Get file path for FFprobe - try multiple approaches for content:// URIs
         String filePath = getFFprobePathForUri(videoUri);
         
@@ -3064,7 +3054,7 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             holder.menuButtonContainer.setOnClickListener(null);
         }
 
-        FLog.v(TAG, "Professional shimmer skeleton bound at position " + position);
+
 
     }
 
@@ -3112,8 +3102,6 @@ public class RecordsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         // Step 7: Restore normal item appearance
         holder.itemView.setAlpha(1.0f);
-
-        FLog.v(TAG, "Skeleton effects cleared for data binding");
 
     }
 

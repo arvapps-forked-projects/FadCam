@@ -60,7 +60,6 @@ public class VideoSessionCache {
      */
     private static synchronized void initializeCacheIfNeeded(com.fadcam.SharedPreferencesManager sharedPrefs) {
         if (sCacheInitialized) {
-            FLog.v(TAG, "Cache already initialized, skipping");
             return;
         }
         
@@ -90,11 +89,7 @@ public class VideoSessionCache {
      * @return true if cache exists and should be used
      */
     public static synchronized boolean isSessionCacheValid() {
-        boolean valid = sSessionCachedVideos != null && !sForceRefreshOnNextAccess;
-        FLog.v(TAG, "CACHE CHECK: isSessionCacheValid=" + valid + 
-                   " (videos=" + (sSessionCachedVideos != null ? sSessionCachedVideos.size() : "null") + 
-                   ", forceRefresh=" + sForceRefreshOnNextAccess + ")");
-        return valid;
+        return sSessionCachedVideos != null && !sForceRefreshOnNextAccess;
     }
     
     /**
@@ -103,10 +98,7 @@ public class VideoSessionCache {
      */
     public static synchronized boolean hasCachedData(com.fadcam.SharedPreferencesManager sharedPrefs) {
         initializeCacheIfNeeded(sharedPrefs);
-        boolean hasData = sCachedVideoCount > 0 && !sForceRefreshOnNextAccess;
-        FLog.v(TAG, "CACHE CHECK: hasCachedData=" + hasData + 
-                   " (count=" + sCachedVideoCount + ", forceRefresh=" + sForceRefreshOnNextAccess + ")");
-        return hasData;
+        return sCachedVideoCount > 0 && !sForceRefreshOnNextAccess;
     }
     
     /**
@@ -125,7 +117,6 @@ public class VideoSessionCache {
     public static synchronized List<VideoItem> getSessionCachedVideos() {
         // Try to load from disk if session cache is empty but we have cached count
         if (sSessionCachedVideos == null && !sForceRefreshOnNextAccess && sCachedVideoCount > 0) {
-            FLog.d(TAG, "Session cache empty but have cached count, attempting disk load");
             // We'll need context for this, so return empty for now and let caller handle
             return new ArrayList<>();
         }
@@ -134,7 +125,6 @@ public class VideoSessionCache {
             FLog.d(TAG, "Session cache invalid or needs refresh");
             return new ArrayList<>();
         }
-        FLog.d(TAG, "Using cached videos: " + sSessionCachedVideos.size() + " items");
         return new ArrayList<>(sSessionCachedVideos);
     }
     
@@ -144,7 +134,6 @@ public class VideoSessionCache {
     public static synchronized List<VideoItem> getSessionCachedVideos(Context context) {
         // Try to load from disk if session cache is empty but we have cached count
         if (sSessionCachedVideos == null && !sForceRefreshOnNextAccess && sCachedVideoCount > 0) {
-            FLog.d(TAG, "Session cache empty but have cached count, loading from disk");
             List<VideoItem> diskCache = loadCacheFromDisk(context);
             if (!diskCache.isEmpty()) {
                 sSessionCachedVideos = diskCache;
@@ -156,7 +145,6 @@ public class VideoSessionCache {
             FLog.d(TAG, "Session cache invalid or needs refresh");
             return new ArrayList<>();
         }
-        FLog.d(TAG, "Using cached videos: " + sSessionCachedVideos.size() + " items");
         return new ArrayList<>(sSessionCachedVideos);
     }
     
@@ -168,7 +156,6 @@ public class VideoSessionCache {
         sSessionCachedVideos = new ArrayList<>(videos);
         sSessionCacheTimestamp = System.currentTimeMillis();
         sForceRefreshOnNextAccess = false; // Reset invalidation flag
-        FLog.d(TAG, "Session cache updated with " + videos.size() + " videos");
     }
     
     /**
@@ -180,7 +167,6 @@ public class VideoSessionCache {
         sSessionCachedVideos = new ArrayList<>(videos);
         sSessionCacheTimestamp = System.currentTimeMillis();
         sForceRefreshOnNextAccess = false; // Reset invalidation flag
-        FLog.d(TAG, "Session cache updated with " + videos.size() + " videos");
         
         // Save to disk asynchronously for persistence across app restarts
         saveCacheToDisk(videos, context);
@@ -208,7 +194,6 @@ public class VideoSessionCache {
                          ObjectOutputStream oos = new ObjectOutputStream(fos)) {
                         oos.writeObject(serializableVideos);
                         oos.flush();
-                        FLog.d(TAG, "Successfully saved " + serializableVideos.size() + " videos to disk cache");
                     }
                 } catch (Exception e) {
                     FLog.e(TAG, "Error saving cache to disk", e);
@@ -227,7 +212,6 @@ public class VideoSessionCache {
         try {
             File cacheFile = new File(context.getCacheDir(), CACHE_FILE_NAME);
             if (!cacheFile.exists()) {
-                FLog.d(TAG, "No disk cache file found");
                 return new ArrayList<>();
             }
             
@@ -241,7 +225,6 @@ public class VideoSessionCache {
                     videos.add(item.toVideoItem());
                 }
                 
-                FLog.d(TAG, "Successfully loaded " + videos.size() + " videos from disk cache");
                 return videos;
             }
         } catch (Exception e) {
@@ -374,7 +357,6 @@ public class VideoSessionCache {
         sSessionCacheTimestamp = 0;
         sForceRefreshOnNextAccess = false;
         clearThumbnailCache();
-        FLog.d(TAG, "Session cache cleared");
     }
     
     /**
@@ -383,7 +365,6 @@ public class VideoSessionCache {
      */
     public static synchronized void invalidateOnNextAccess() {
         sForceRefreshOnNextAccess = true;
-        FLog.d(TAG, "Session cache marked for refresh on next access");
     }
     
     /**
@@ -398,7 +379,6 @@ public class VideoSessionCache {
                 .putBoolean(PREF_CACHE_INVALIDATED, true)
                 .apply();
             
-            FLog.d(TAG, "Session cache invalidated and persisted");
         } catch (Exception e) {
             FLog.e(TAG, "Error persisting cache invalidation", e);
         }
@@ -469,7 +449,6 @@ public class VideoSessionCache {
         if (uriString == null || thumbnailData == null) return;
         
         getThumbnailCache().put(uriString, thumbnailData);
-        FLog.v(TAG, "Cached thumbnail for: " + uriString + " (" + thumbnailData.length + " bytes)");
     }
     
     /**
@@ -477,12 +456,7 @@ public class VideoSessionCache {
      */
     public static byte[] getCachedThumbnail(String uriString) {
         if (uriString == null) return null;
-        
-        byte[] thumbnail = getThumbnailCache().get(uriString);
-        if (thumbnail != null) {
-            FLog.v(TAG, "Thumbnail cache hit for: " + uriString);
-        }
-        return thumbnail;
+        return getThumbnailCache().get(uriString);
     }
     
     /**
@@ -490,7 +464,6 @@ public class VideoSessionCache {
      */
     public static void clearThumbnailCache() {
         getThumbnailCache().evictAll();
-        FLog.d(TAG, "Thumbnail cache cleared");
     }
     
     /**
@@ -513,7 +486,6 @@ public class VideoSessionCache {
                 try (FileOutputStream fos = new FileOutputStream(thumbnailFile)) {
                     fos.write(thumbnailData);
                     fos.flush();
-                    FLog.v(TAG, "Saved thumbnail to disk: " + filename);
                 }
             } catch (Exception e) {
                 FLog.e(TAG, "Error saving thumbnail to disk", e);
@@ -539,7 +511,6 @@ public class VideoSessionCache {
             try (FileInputStream fis = new FileInputStream(thumbnailFile)) {
                 byte[] data = new byte[(int) thumbnailFile.length()];
                 fis.read(data);
-                FLog.v(TAG, "Loaded thumbnail from disk: " + filename);
                 return data;
             }
         } catch (Exception e) {

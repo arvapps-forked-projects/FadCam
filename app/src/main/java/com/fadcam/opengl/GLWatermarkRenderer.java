@@ -455,10 +455,8 @@ public class GLWatermarkRenderer {
         synchronized (renderLock) {
             // Check if we need to initialize or reinitialize EGL
             if (!initialized || eglDisplay == EGL14.EGL_NO_DISPLAY) {
-                FLog.e(TAG, "EGL not initialized, attempting to reinitialize");
                 try {
                     setupEGL();
-                    FLog.d(TAG, "Successfully reinitialized EGL");
                 } catch (Exception e) {
                     FLog.e(TAG, "Failed to reinitialize EGL", e);
                     throw new IllegalStateException("EGL not initialized and reinitialization failed");
@@ -778,13 +776,16 @@ public class GLWatermarkRenderer {
                         int eglErr = EGL14.eglGetError();
                         FLog.e(TAG, "Failed to create EGL surface for preview, eglError=0x"
                                 + Integer.toHexString(eglErr));
-                        // Backoff a bit before next attempt
-                        previewCreateRetryDeadlineNs = System.nanoTime() + 200_000_000L; // 200ms
+                        // If the native window is already connected (EGL_BAD_ALLOC /
+                        // EGL_BAD_NATIVE_WINDOW), retrying won't help — wait for the
+                        // caller to provide a fresh surface via setPreviewSurface().
+                        // Use a long backoff to avoid spamming the log.
+                        previewCreateRetryDeadlineNs = System.nanoTime() + 5_000_000_000L; // 5s
                         return;
                     }
                 } catch (Exception e) {
                     FLog.e(TAG, "Exception creating EGL surface for preview", e);
-                    previewCreateRetryDeadlineNs = System.nanoTime() + 200_000_000L;
+                    previewCreateRetryDeadlineNs = System.nanoTime() + 5_000_000_000L; // 5s
                     return;
                 }
             }
@@ -1632,7 +1633,6 @@ public class GLWatermarkRenderer {
             // Clear any existing GL errors before drawing
             int error = GLES20.glGetError();
             if (error != GLES20.GL_NO_ERROR) {
-                FLog.w(TAG, "Clearing GL error before drawing: 0x" + Integer.toHexString(error));
             }
             if (mFullFrameBlit != null) {
                 try {
@@ -1663,7 +1663,6 @@ public class GLWatermarkRenderer {
                             GLES20.glUseProgram(currentProgram);
                             error = GLES20.glGetError();
                             if (error != GLES20.GL_NO_ERROR) {
-                                FLog.w(TAG, "Cleared GL error after matrix setup: 0x" + Integer.toHexString(error));
                             }
                         } catch (Exception e) {
                             FLog.e(TAG, "Error setting MVP matrix", e);
@@ -1695,7 +1694,6 @@ public class GLWatermarkRenderer {
             // Clear any existing errors
             int error = GLES20.glGetError();
             if (error != GLES20.GL_NO_ERROR) {
-                FLog.w(TAG, "Clearing GL error before fallback: 0x" + Integer.toHexString(error));
             }
 
             // Use the basic shader program
@@ -2160,7 +2158,6 @@ public class GLWatermarkRenderer {
     public void updatePipConfig(@NonNull DualCameraConfig newConfig) {
         this.pipConfig = newConfig;
         computePipGeometry();
-        FLog.d(TAG, "PiP config updated: " + newConfig);
     }
 
     /**
@@ -2473,7 +2470,6 @@ public class GLWatermarkRenderer {
 
     public void setSurfaceDimensions(int width, int height) {
         if (mSurfaceWidth != width || mSurfaceHeight != height) {
-            FLog.d(TAG, "Surface dimensions updated: " + width + "x" + height);
             mSurfaceWidth = width;
             mSurfaceHeight = height;
             updateMatrices();
@@ -2590,7 +2586,6 @@ public class GLWatermarkRenderer {
         }
 
         synchronized (renderLock) {
-            FLog.d(TAG, "Updating encoder output surface");
 
             // Save the new surface
             this.outputSurface = newSurface;
@@ -2625,12 +2620,10 @@ public class GLWatermarkRenderer {
                         return;
                     }
 
-                    FLog.d(TAG, "Successfully updated encoder EGL surface");
                 } catch (Exception e) {
                     FLog.e(TAG, "Error updating encoder surface", e);
                 }
             } else {
-                FLog.d(TAG, "EGL not initialized yet, just updating surface reference");
             }
         }
     }
@@ -2667,10 +2660,8 @@ public class GLWatermarkRenderer {
         }
         // Watermark texture dimensions are calculated from text metrics in
         // updateWatermarkTexture() to prevent squeeze/stretch artifacts.
-        // FLog.d(TAG, "updateMatrices: rotationDegrees=" + rotationDegrees +
         // ", deviceOrientation=" + deviceOrientation +
         // ", sensorOrientation=" + sensorOrientation);
-        // FLog.d("FAD-MATRIX", "Applying rotation: " + rotationDegrees);
 
         Matrix.setIdentityM(recordingMvpMatrix, 0);
         Matrix.rotateM(recordingMvpMatrix, 0, rotationDegrees, 0f, 0f, 1f);
@@ -2814,7 +2805,6 @@ public class GLWatermarkRenderer {
             // Just use the existing context if it's valid
             if (!initialized || eglDisplay == EGL14.EGL_NO_DISPLAY ||
                     eglContext == EGL14.EGL_NO_CONTEXT || eglSurface == EGL14.EGL_NO_SURFACE) {
-                FLog.d(TAG, "Cannot render black frame - EGL not initialized and we won't reinitialize");
                 return;
             }
             boolean contextMadeCurrent = false;
